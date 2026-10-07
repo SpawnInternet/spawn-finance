@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.3 · 2026-10-07 · expense grid like VendoMonitor -->
+<!-- SPAWN Finance v1.4 · 2026-10-07 · collector check: Spawn Harvest vs hand-ins -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -74,6 +74,13 @@ button{cursor:pointer;border:0;background:none}
 .t-sc{background:#fff;color:var(--blue);border:1.5px solid var(--blue-l)}.t-own{background:#fff;color:var(--ink-2);border:1.5px dashed #c5cdd9}
 .tile.wide{grid-column:1/-1}
 .sec{font-size:13px;font-weight:800;color:var(--ink-2);margin:20px 2px 8px}
+.coll{background:#fff;border:1px solid var(--line);border-radius:14px}
+.coll button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:11px 14px;border-top:1px solid var(--line);text-align:left}
+.coll button:first-child{border-top:0}
+.coll b.n{font-size:15px}.coll small{display:block;font-size:12px;color:var(--muted);font-weight:500}
+.coll .amt{font-size:16px;font-weight:900;white-space:nowrap}.coll .amt.ok{color:#1d7a70;font-size:13px}
+.hv{background:var(--blue-l);border-radius:12px;padding:10px 12px;margin:-4px 0 12px;font-size:13px;color:#244c9c}
+.hv b{font-weight:900}.hv div{display:flex;justify-content:space-between;padding:2px 0}
 .owed{background:#fff;border:1px solid var(--line);border-radius:14px}
 .owed div{display:flex;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--line);font-size:14px}
 .owed div:first-child{border-top:0}
@@ -262,6 +269,8 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
         <div><b>Owner settings</b><br><span>Opening, posting</span></div></button>
     </div>
+    <div class="sec" id="h-coll-sec">Collectors still to hand in <span id="h-coll-start" style="font-weight:600;color:var(--muted)"></span></div>
+    <div class="coll" id="h-coll"><div class="empty">Loading…</div></div>
     <div class="sec">Who owes the office cash</div>
     <div class="owed" id="h-owed"><div class="empty">Nobody owes cash right now.</div></div>
   </div>
@@ -361,7 +370,8 @@ const ERR = {
   closing_count_is_locked:'The closing count belongs to a closed day.',
   negative_amount:"Amounts can't be negative.",
   range_too_long:'Pick a shorter date range.',
-  not_found:'That line no longer exists. Refresh the book.'
+  not_found:'That line no longer exists. Refresh the book.',
+  setting_not_allowed:'That setting cannot be changed here.'
 };
 function errText(code){
   const c = String(code || '');
@@ -453,11 +463,12 @@ async function refresh(){
   const t = todayPH();
   const from = addDays(t, -(Math.max(S.range, 31) - 1));
   try {
-    const [book, look] = await Promise.all([
+    const [book, look, coll] = await Promise.all([
       rpc('fin_cash_book', { p_pin:S.pin, p_from:from, p_to:t }),
-      rpc('fin_lookups', { p_pin:S.pin })
+      rpc('fin_lookups', { p_pin:S.pin }),
+      rpc('fin_collector_status', { p_pin:S.pin }).catch(() => null)
     ]);
-    S.book = book; S.look = look;
+    S.book = book; S.look = look; S.coll = coll;
   } catch (e) { toast(e.message, 4000); }
   renderHome();
   if (!$('v-book').classList.contains('hide')) renderBook();
@@ -495,9 +506,36 @@ function renderHome(){
   const nextClose = openDays()[0] || t;
   $('close-lbl').textContent = nextClose === t ? 'Close today' : 'Close ' + dLabel(nextClose);
   $('close-sub').textContent = nextClose === t ? 'Final count and PIN sign-off' : 'This day is still open. Close it first.';
+  const C = S.coll;
+  $('h-coll-sec').classList.toggle('hide', !C); $('h-coll').classList.toggle('hide', !C);
+  if (C) {
+    $('h-coll-start').textContent = '· since ' + dLabel(C.start);
+    const list = C.collectors.filter(c => Math.abs(Number(c.unremitted)) >= 1);
+    $('h-coll').innerHTML = list.length ? list.map(c => {
+      const u = Number(c.unremitted), days = c.open_days || [];
+      const sub = u > 0
+        ? days.map(d => `${dLabel(d.date)} · ${d.vendos} vendo${d.vendos > 1 ? 's' : ''}${Number(d.pending) < Number(d.spawn) ? ' (part)' : ''}`).join(', ')
+        : `Handed in ${peso(-u)} more than harvested since ${dLabel(C.start)}`;
+      return `<button type="button" data-coll="${esc(c.collector)}"><span><b class="n">${esc(c.collector)}</b><small>${sub}</small></span>
+        <span class="amt ${u <= 0 ? 'ok' : ''}">${u > 0 ? peso(u) : 'ahead'}</span></button>`; }).join('')
+      : '<div class="empty">Everyone has handed in their Spawn share. ✓</div>';
+  }
   $('h-owed').innerHTML = B.owed.length
     ? B.owed.map(o => `<div><span>${esc(o.party)}</span><b>${peso(o.outstanding)}</b></div>`).join('')
     : '<div class="empty">Nobody owes cash right now.</div>';
+}
+$('h-coll').addEventListener('click', e => {
+  const b = e.target.closest('[data-coll]'); if (!b || !S.book) return;
+  openSheet('collect', { mode:'collection' }); pickCollector(b.dataset.coll);
+});
+function collStatus(name){ return S.coll && S.coll.collectors.find(c => c.collector.toLowerCase() === String(name || '').toLowerCase()); }
+function pickCollector(name){
+  const F = S.form; keep(); F.collector = name;
+  if (F.recon && F.recon.collector !== name) F.recon = null;
+  const st = collStatus(name);
+  if (!F.recon && (F.htAuto || !F.ht)) { F.ht = st && Number(st.unremitted) > 0 ? String(Number(st.unremitted)) : ''; F.htAuto = true; }
+  renderSheet();
+  const a = $('f-amt'); if (a) a.focus({preventScroll:true});
 }
 document.querySelector('.tiles').addEventListener('click', e => {
   const b = e.target.closest('[data-go]'); if (!b) return;
@@ -598,7 +636,7 @@ function openSheet(kind, preset){
   S.form = { kind, cid:uuid(), mode:null, ...(preset || {}) };
   $('sh-body').innerHTML = ''; renderSheet();
   $('scrim').classList.add('on'); $('sheet').classList.add('on');
-  setTimeout(() => { const f = $('sh-body').querySelector('input.money,input,select'); if (f && kind !== 'detail') f.focus({preventScroll:true}); }, 260);
+  setTimeout(() => { if (!S.form || S.form.kind !== kind) return; const f = (kind === 'collect' && S.form.collector && $('f-amt')) || $('sh-body').querySelector('input.money,input,select'); if (f && kind !== 'detail') f.focus({preventScroll:true}); }, 260);
 }
 function closeSheet(){ $('scrim').classList.remove('on'); $('sheet').classList.remove('on'); S.form = null; }
 $('scrim').addEventListener('click', closeSheet); $('sh-x').addEventListener('click', closeSheet);
@@ -622,8 +660,17 @@ function renderSheet(){
       const rc = (L.recons || []);
       if (rc.length) h += `<div class="f"><label>From Spawn Count (confirmed, not yet in the book)</label>${rc.map(r =>
         `<button type="button" class="recon ${F.recon && F.recon.id === r.id ? 'on' : ''}" data-recon="${r.id}">${esc(r.collector)} · ${dLabel(r.date)} · remit ${peso(r.net_to_remit)} <span style="font-weight:500">(${r.vendos} vendos, by ${esc(r.confirmed_by)})</span></button>`).join('')}</div>`;
-      h += `<div class="f"><label>Collector</label><div class="chips" id="col-chips">${(L.collectors || []).map(c =>
-        `<button type="button" data-col="${esc(c.name)}" class="${F.collector === c.name ? 'on' : ''}">${esc(c.name)}</button>`).join('')}</div></div>`;
+      const names = [...new Set([...(S.coll ? S.coll.collectors.filter(c => Number(c.unremitted) > 0).map(c => c.collector) : []), ...(L.collectors || []).map(c => c.name)])];
+      h += `<div class="f"><label>Collector</label><div class="chips" id="col-chips">${names.map(n => { const st = collStatus(n), u = st ? Number(st.unremitted) : 0;
+        return `<button type="button" data-col="${esc(n)}" class="${F.collector === n ? 'on' : ''}">${esc(n)}${u > 0 ? ` · ${peso(u)}` : ''}</button>`; }).join('')}</div></div>`;
+      const st = F.collector ? collStatus(F.collector) : null;
+      if (st && !F.recon) {
+        const u = Number(st.unremitted);
+        h += `<div class="hv">${u > 0
+          ? `<div><span>From Spawn Harvest, not yet handed in</span><b>${peso(u)}</b></div>` + (st.open_days || []).map(d =>
+              `<div><span>${dLabel(d.date)} · ${d.vendos} vendo${d.vendos > 1 ? 's' : ''}</span><span>${peso(d.pending)}${Number(d.pending) < Number(d.spawn) ? ' of ' + peso(d.spawn) : ''}</span></div>`).join('')
+          : `<div><span>Nothing unremitted in Spawn Harvest since ${dLabel(S.coll.start)}</span><b>${u < 0 ? 'ahead ' + peso(-u) : '✓'}</b></div>`}</div>`;
+      }
       h += money('f-ht', 'Harvest total (Spawn share)', F.ht ?? '');
       h += `<div class="two">${money('f-le', 'Less expense', F.le ?? '')}${money('f-lb', 'Less bugi', F.lb ?? '')}</div>`;
       h += money('f-amt', 'Cash counted from collector', F.amt ?? '');
@@ -717,6 +764,10 @@ function renderSheet(){
     h += `<div class="sec" style="margin-top:0">Opening balance</div>`;
     if (hasOpening) h += `<div class="calc"><div><span>Already set</span><b>${peso(S.book.entries.find(e => e.kind === 'opening').amount)}</b></div></div>`;
     else h += `<div class="note">Count the office cash once, then enter it here. The running balance starts from this amount.</div>${money('f-open', 'Cash counted now')}<button class="go" type="button" id="own-open">Set opening balance</button>`;
+    h += `<div class="sec">Collector check</div>
+      <div class="note">Spawn Harvest's Spawn share (75%) is compared with hand-ins from this date. Harvests before it were handed in through the notebook.</div>
+      <div class="f"><label for="f-cstart">Check collectors from</label><input id="f-cstart" type="date" max="${todayPH()}" value="${esc(S.coll ? S.coll.start : todayPH())}"></div>
+      <button class="go alt" type="button" id="own-cstart">Save start date</button>`;
     h += `<div class="sec">Posting to the books</div>`;
     h += `<div class="note">${cut
       ? `On since <b>${dLabel(cut)}</b>. Closed days from that date post to the ledger from this book; the daily expense book and cash receipts sheet no longer count for those days.`
@@ -771,7 +822,8 @@ function keep(){ // remember typed values when switching modes
 function wireSheet(){
   const F = S.form, body = $('sh-body');
   body.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { keep(); F.mode = b.dataset.mode; F.cid = uuid(); renderSheet(); });
-  body.querySelectorAll('[data-col]').forEach(b => b.onclick = () => { keep(); F.collector = b.dataset.col; if (F.recon && F.recon.collector !== F.collector) F.recon = null; renderSheet(); });
+  body.querySelectorAll('[data-col]').forEach(b => b.onclick = () => pickCollector(b.dataset.col));
+  if ($('f-ht')) $('f-ht').addEventListener('input', () => { F.htAuto = false; });
   body.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { keep(); F.cat = b.dataset.cat; F.catAuto = false; renderSheet(); });
   body.querySelectorAll('[data-amt]').forEach(b => b.onclick = () => { $('f-amt').value = b.dataset.amt; liveCalc(); });
   if ($('picks')) { drawPicks(); $('f-q').addEventListener('input', drawPicks); }
@@ -791,6 +843,11 @@ function wireSheet(){
   if ($('own-open')) $('own-open').onclick = ownerOpening;
   if ($('own-cut')) $('own-cut').onclick = () => ownerCutover(v('f-cut') || null);
   if ($('own-off')) $('own-off').onclick = () => ownerCutover(null);
+  if ($('own-cstart')) $('own-cstart').onclick = async () => {
+    const btn = $('own-cstart');
+    try { busy(btn, true); await rpc('fin_owner_set', { p_pin:S.pin, p_key:'collector_recon_start', p_value:v('f-cstart') });
+      toast('Collector check start saved.'); closeSheet(); await refresh(); } catch (e) { say(e.message); busy(btn, false); }
+  };
   if ($('rs-adjust')) $('rs-adjust').onclick = adjustFromCount;
   if ($('rs-done')) $('rs-done').onclick = closeSheet;
   if ($('dt-void')) $('dt-void').onclick = doVoid;
