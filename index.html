@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.4 · 2026-10-07 · collector check: Spawn Harvest vs hand-ins -->
+<!-- SPAWN Finance v1.5 · 2026-10-07 · simple expense form (amount, what, name, auto category) -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -188,6 +188,13 @@ button{cursor:pointer;border:0;background:none}
 .picks .none{grid-column:1/-1;font-size:13px;color:var(--muted);padding:4px 2px}
 .amts{margin:-4px 0 12px}.amts button{padding:6px 10px;font-size:13px}
 .auto{font-size:11px;font-weight:700;color:var(--teal);margin-left:6px}
+.catline{margin:-2px 0 14px;font-size:14px}
+.catline .ok{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--teal-l);color:#1d6a61;border-radius:11px;padding:9px 12px}
+.catline .ok b{font-weight:800}.catline .ok button{margin-left:auto;font-size:13px;font-weight:800;color:var(--blue)}
+.catline .ask{background:var(--gold-l);border-radius:11px;padding:9px 12px;color:#7a5306}
+.catline .ask label{display:block;font-size:13px;font-weight:800;margin-bottom:6px}
+.catline select{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px;font-size:16px;background:#fff}
+.catline .hint{color:var(--muted);font-size:13px;padding:2px 2px}
 details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:700;color:var(--blue);cursor:pointer;padding:4px 0}
 .saved{background:var(--teal-l);color:#1d6a61;border-radius:11px;padding:9px 12px;font-size:13px;font-weight:700;margin-bottom:12px}
 .calc{background:var(--bg);border-radius:12px;padding:10px 12px;margin:4px 0 12px}
@@ -246,7 +253,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
         <div><b>Record collection</b><br><span>Collector hand-in, office, GCash</span></div></button>
       <button class="tile t-exp" data-go="expense" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-        <div><b>Record expense</b><br><span>Grid, copy a day, quick add</span></div></button>
+        <div><b>Record expense</b><br><span>Amount, what, name</span></div></button>
       <button class="tile t-cnt" data-go="count" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
         <div><b>Count / Handover</b><br><span>Check cash against the book</span></div></button>
@@ -542,7 +549,7 @@ document.querySelector('.tiles').addEventListener('click', e => {
   const g = b.dataset.go;
   if (!S.book) { toast('Still loading. Try again in a moment.'); return; }
   if (g === 'book') { show('book'); renderBook(); return; }
-  if (g === 'expense') { openGrid(); return; }
+  if (g === 'expense') { openSheet('expense'); return; }
   openSheet(g);
 });
 
@@ -576,7 +583,7 @@ function lineText(e){
     case 'other_in': return [m || 'Other cash in', p];
     case 'other_out': return [m || 'Other cash out', p];
     case 'expense': return [m || esc(e.category), [m ? esc(e.category) : '', p].filter(Boolean).join(' · ')];
-    case 'advance': return [`Cash advance · ${p}`, m];
+    case 'advance': return [`Cash advance · ${p}`, /^\s*cash\s*advance\s*$/i.test(e.memo || '') ? '' : m];
     case 'co': return [`c/o · ${p}`, m];
     case 'deposit': return [m || 'Bank deposit', ''];
   }
@@ -683,29 +690,14 @@ function renderSheet(){
     h += actions('Save collection');
   }
   else if (F.kind === 'expense') {
-    F.mode = F.mode || 'expense';
     title = 'Record expense';
-    h += seg([['expense','Expense'],['other_out','Other cash out']], F.mode);
-    if (F.saved) h += `<div class="saved">✓ ${F.saved} saved · last: ${esc(F.lastSaved)}</div>`;
-    if (F.mode === 'expense') {
-      h += `<input id="f-q" class="search" autocomplete="off" placeholder="Find: gas, snack, wrapper, name…" value="${esc(F.q || '')}">
-            <div class="picks" id="picks"></div>`;
-    }
+    if (F.saved) h += `<div class="saved">✓ Saved ${F.saved} · last: ${esc(F.lastSaved)}</div>`;
     h += money('f-amt', 'Amount', F.amt ?? '');
-    h += `<div class="chips amts">${[20,30,50,100,150,200,250,300,500,1000].map(a => `<button type="button" data-amt="${a}">${a.toLocaleString()}</button>`).join('')}</div>`;
-    if (F.mode === 'expense') {
-      const cats = L.categories || [];
-      const top = cats.slice(0, 9);
-      if (F.cat && !top.includes(F.cat)) top.push(F.cat);
-      h += `<div class="f"><label>Category<span class="auto" id="cat-auto">${F.catAuto ? 'picked for you' : ''}</span></label><div class="chips" id="cat-chips">${top.map(c =>
-        `<button type="button" data-cat="${esc(c)}" class="${F.cat === c ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
-        ${cats.length > 9 ? `<select id="f-cat-more" style="margin-top:8px"><option value="">More categories…</option>${cats.slice(9).map(c => `<option ${F.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>` : ''}</div>`;
-    }
-    const memos = [...new Set((L.expense_picks || []).map(p => p.d))];
-    h += text('f-memo', 'Description', F.memo || '', 'list="dl-memos" placeholder="e.g. Gas Bao, Snack, Ice Wrapper"') + dlist('dl-memos', memos);
-    h += text('f-party', 'c/o (who took it)', F.party || '', 'list="dl-parties" placeholder="Name"') + dlist('dl-parties', L.parties);
-    h += `<details class="more" ${F.area ? 'open' : ''}><summary>Area (optional)</summary><div class="f" style="margin-top:6px"><select id="f-area"><option value=""></option>${AREAS.map(a => `<option ${F.area === a ? 'selected' : ''}>${a}</option>`).join('')}</select></div></details>`;
-    h += `<div class="two"><button class="go alt" type="button" id="sh-save">Save</button><button class="go" type="button" id="sh-next">Save + next</button></div><div class="msg" id="sh-msg" role="alert"></div>`;
+    h += text('f-memo', 'Expense (what)', F.memo || '', 'list="dl-memos" enterkeyhint="next" placeholder="Gas Bao, Snack, Ice Wrapper"') + dlist('dl-memos', [...new Set(picksAll().map(p => p.d))]);
+    h += text('f-party', 'Name (who took it)', F.party || '', 'list="dl-parties" enterkeyhint="done" placeholder="Jericho"') + dlist('dl-parties', L.parties);
+    h += `<div class="catline" id="catline"></div>`;
+    h += `<button class="go" type="button" id="sh-save">Save</button><div class="msg" id="sh-msg" role="alert"></div>`;
+    h += `<div class="sec">Saved today</div><div class="xsaved" id="sx-saved"></div>`;
   }
   else if (F.kind === 'advance') {
     F.mode = F.mode || 'advance';
@@ -826,8 +818,15 @@ function wireSheet(){
   if ($('f-ht')) $('f-ht').addEventListener('input', () => { F.htAuto = false; });
   body.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { keep(); F.cat = b.dataset.cat; F.catAuto = false; renderSheet(); });
   body.querySelectorAll('[data-amt]').forEach(b => b.onclick = () => { $('f-amt').value = b.dataset.amt; liveCalc(); });
-  if ($('picks')) { drawPicks(); $('f-q').addEventListener('input', drawPicks); }
-  if (F.kind === 'expense' && F.mode === 'expense' && $('f-memo')) $('f-memo').addEventListener('input', autoCategory);
+  if (F.kind === 'expense') {
+    const recat = () => { if (!F.catManual) { F.cat = guessCat(v('f-memo'), v('f-party')); F.catEdit = false; } drawCat(); };
+    $('f-memo').addEventListener('input', recat); $('f-party').addEventListener('input', recat);
+    $('f-memo').addEventListener('change', recat);
+    $('f-amt').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('f-memo').focus(); } });
+    $('f-memo').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('f-party').focus(); } });
+    $('f-party').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('sh-save').click(); } });
+    drawCat(); drawTodaySaved();
+  }
   if ($('sh-next')) $('sh-next').onclick = () => submit($('sh-next'), true);
   body.querySelectorAll('[data-to]').forEach(b => b.onclick = () => { keep(); F.to = b.dataset.to; renderSheet(); });
   body.querySelectorAll('[data-recon]').forEach(b => b.onclick = () => {
@@ -855,6 +854,48 @@ function wireSheet(){
 
 function busy(btn, on, label){ btn.disabled = on; if (on) { btn.dataset.l = btn.textContent; btn.innerHTML = '<span class="spin"></span> Saving'; } else btn.textContent = label || btn.dataset.l; }
 function say(m, ok){ const x = $('sh-msg'); if (x) { x.textContent = m; x.className = 'msg ' + (ok ? 'ok' : 'bad'); } }
+
+function guessCat(d, co){
+  const all = picksAll(), dl = String(d || '').trim().toLowerCase(), cl = String(co || '').trim().toLowerCase();
+  if (!dl) return '';
+  if (/cash\s*advance|^c\.?a\.?$/.test(dl)) return ADV;
+  let hit = all.find(p => p.d.toLowerCase() === dl && (p.co || '').toLowerCase() === cl) || all.find(p => p.d.toLowerCase() === dl);
+  if (hit) return hit.cat;
+  const words = dl.split(/[^a-z0-9ñ]+/).filter(w => w.length >= 3), score = {};
+  for (const p of all) {
+    const pd = p.d.toLowerCase(), pw = pd.split(/[^a-z0-9ñ]+/);
+    let s = 0;
+    if (dl.length >= 3 && pd.startsWith(dl)) s += 2;
+    for (const w of words) if (pw.includes(w)) s += 1;
+    if (s) score[p.cat] = (score[p.cat] || 0) + s * (p.n || 1);
+  }
+  const best = Object.entries(score).sort((a, b) => b[1] - a[1])[0];
+  return best ? best[0] : '';
+}
+function catSelect(sel){
+  const cats = ((S.look && S.look.categories) || []).filter(c => !/^cash\s*advance$/i.test(c));
+  return `<select id="f-cat"><option value="">Choose…</option>${cats.map(c => `<option ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+    <option ${sel === ADV ? 'selected' : ''}>${ADV}</option><option ${sel === OTH ? 'selected' : ''}>${OTH}</option></select>`;
+}
+function drawCat(){
+  const F = S.form, el = $('catline'); if (!F || !el) return;
+  if (F.catEdit) el.innerHTML = `<div class="ask"><label for="f-cat">Category</label>${catSelect(F.cat)}</div>`;
+  else if (F.cat) el.innerHTML = `<div class="ok">Category: <b>${esc(F.cat)}</b>${F.catManual ? '' : ' <span style="font-weight:600">(automatic)</span>'}<button type="button" id="cat-change">Change</button></div>`;
+  else if (v('f-memo')) el.innerHTML = `<div class="ask"><label for="f-cat">New expense — what kind is it?</label>${catSelect('')}</div>`;
+  else el.innerHTML = `<div class="hint">The category is picked automatically from the expense.</div>`;
+  const sel = $('f-cat'); if (sel) sel.onchange = () => { F.cat = sel.value; F.catManual = !!sel.value; F.catEdit = false; drawCat(); };
+  const ch = $('cat-change'); if (ch) ch.onclick = () => { F.catEdit = true; drawCat(); const s2 = $('f-cat'); if (s2) s2.focus(); };
+}
+function drawTodaySaved(){
+  const el = $('sx-saved'); if (!el || !S.book) return;
+  const t = todayPH();
+  const rows = S.book.entries.filter(e => e.entry_date === t && ['expense','advance','other_out'].includes(e.kind)).slice().reverse();
+  el.innerHTML = rows.length ? rows.slice(0, 12).map(e => { const [ti, sub] = lineText(e);
+    return `<button type="button" data-e="${e.id}"><span>${ti}<small>${sub ? ' · ' + sub : ''}</small></span><b>${peso(e.amount)}</b></button>`; }).join('')
+    + (rows.length > 12 ? `<div class="empty" style="padding:6px 0">+ ${rows.length - 12} more in the Book</div>` : '')
+    : '<div class="empty" style="padding:6px 0">Nothing yet today.</div>';
+  el.querySelectorAll('[data-e]').forEach(b => b.onclick = () => openDetail('e', +b.dataset.e));
+}
 
 function drawPicks(){
   const F = S.form, el = $('picks'); if (!el) return;
@@ -909,20 +950,20 @@ async function submit(btn, next){
       toast(so ? `Saved. ${so < 0 ? 'Short' : 'Over'} ${peso(Math.abs(so))}.` : 'Collection saved.');
     }
     else if (F.kind === 'expense') {
-      if (!num(v('f-amt'))) throw new Error(ERR.amount_must_be_positive);
-      if (F.mode === 'expense' && !F.cat) throw new Error(ERR.category_required);
-      const det = { memo:v('f-memo') || null, party:v('f-party') || null, area:v('f-area') || null };
-      if (F.mode === 'expense') det.category = F.cat;
-      r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode, p_amount:num(v('f-amt')), p_detail:det });
-      if (next) {
-        F.saved = (F.saved || 0) + 1;
-        F.lastSaved = `${v('f-memo') || F.cat || 'Expense'}${v('f-party') ? ' · ' + v('f-party') : ''} ${peso(num(v('f-amt')))}`;
-        Object.assign(F, { cid:uuid(), amt:'', memo:'', party:'', cat:null, catAuto:false, area:'', q:'', pick:null });
-        renderSheet(); refresh();
-        const q = $('f-q') || $('f-amt'); if (q) q.focus({preventScroll:true});
-        return;
-      }
-      toast('Expense saved.');
+      if (!(num(v('f-amt')) > 0)) { $('f-amt').focus(); throw new Error('Enter the amount.'); }
+      if (!v('f-memo')) { $('f-memo').focus(); throw new Error('Enter what the expense is for.'); }
+      if (!F.cat) { F.catEdit = true; drawCat(); throw new Error('Choose the category for this new expense.'); }
+      if (F.cat === ADV && !v('f-party')) { $('f-party').focus(); throw new Error('A cash advance needs the name of who took it.'); }
+      const kind = F.cat === ADV ? 'advance' : F.cat === OTH ? 'other_out' : 'expense';
+      const det = { memo:v('f-memo'), party:v('f-party') || null };
+      if (kind === 'expense') det.category = F.cat;
+      r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:kind, p_amount:num(v('f-amt')), p_detail:det });
+      F.saved = (F.saved || 0) + 1;
+      F.lastSaved = `${v('f-memo')}${v('f-party') ? ' · ' + v('f-party') : ''} ${peso(num(v('f-amt')))}`;
+      Object.assign(F, { cid:uuid(), amt:'', memo:'', party:'', cat:'', catManual:false, catEdit:false });
+      renderSheet(); refresh().then(drawTodaySaved);
+      const a = $('f-amt'); if (a) a.focus({preventScroll:true});
+      return;
     }
     else if (F.kind === 'advance') {
       r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode, p_amount:num(v('f-amt')), p_detail:{ party:v('f-party'), memo:v('f-memo') || null } });
