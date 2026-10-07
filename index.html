@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.2 · 2026-10-07 · fast expense entry -->
+<!-- SPAWN Finance v1.3 · 2026-10-07 · expense grid like VendoMonitor -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -107,12 +107,53 @@ button{cursor:pointer;border:0;background:none}
 .carry{padding:8px 12px 10px 42px;font-size:13px;color:var(--muted);display:flex;justify-content:space-between}
 .carry b{color:var(--ink)}
 
+/* expense grid (like the VendoMonitor daily expense book) */
+.xwrap{max-width:980px;margin:0 auto;padding:14px 14px calc(var(--safe-b) + 120px)}
+.xtop{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:10px}
+.xtop .f{margin:0}.xtop .f input{padding:9px 10px;font-size:15px}
+.xbtn{padding:9px 12px;border-radius:10px;border:1.5px solid var(--line);background:#fff;font-size:13px;font-weight:800}
+.xbtn.pri{background:var(--ink);border-color:var(--ink);color:#fff}
+.xdays{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px}
+.xdays button{flex:none;text-align:left;padding:7px 10px;border-radius:10px;border:1.5px solid var(--line);background:#fff;font-size:12px;font-weight:700;line-height:1.25}
+.xdays button small{display:block;font-weight:500;color:var(--muted)}
+.xcard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+.xcard h3{font-size:14px;font-weight:900;margin-bottom:8px;display:flex;justify-content:space-between;gap:8px}
+.xwarn{background:var(--gold-l);border:1px solid var(--gold);border-radius:10px;padding:8px 10px;font-size:12px;color:#7a5306;margin-bottom:8px}
+.xhdr,.xr{display:grid;gap:6px;grid-template-columns:1fr 1fr 92px;grid-template-areas:"d d a" "co cat x"}
+.xhdr{display:none}
+.xr{padding:8px 0;border-top:1px solid var(--rule)}
+.xr:first-child{border-top:0}
+.xr input,.xr select{width:100%;min-width:0;border:1.5px solid var(--line);border-radius:9px;padding:9px 9px;font-size:15px;background:#fff}
+.xr input:focus,.xr select:focus{border-color:var(--ink);outline:none;background:#fbfcff}
+.xr .x-d{grid-area:d}.xr .x-co{grid-area:co}.xr .x-cat{grid-area:cat}.xr .x-amt{grid-area:a;text-align:right;font-weight:800}
+.xr .acts{grid-area:x;display:flex;gap:4px;justify-content:flex-end}
+.xr .acts button{width:36px;border-radius:9px;border:1.5px solid var(--line);background:#fff;font-size:14px;color:var(--ink-2)}
+.xr.copied{box-shadow:inset 3px 0 0 var(--gold);padding-left:8px}
+.xr .bad{border-color:var(--red)!important;background:var(--red-l)!important}
+.xr .rowerr{grid-column:1/-1;font-size:12px;color:var(--red);font-weight:700}
+.xr.adv .x-cat{color:var(--purple);font-weight:800}
+.xfoot{position:fixed;left:0;right:0;bottom:0;z-index:40;background:#fff;border-top:1px solid var(--line);padding:10px 14px calc(var(--safe-b) + 10px);display:flex;align-items:center;gap:10px;justify-content:center}
+.xfoot .tot{font-size:13px;color:var(--muted);font-weight:700}.xfoot .tot b{display:block;font-size:19px;color:var(--ink)}
+.xfoot .go{width:auto;margin:0;padding:13px 18px}
+.xsaved{width:100%;font-size:14px}
+.xsaved button{display:flex;justify-content:space-between;width:100%;padding:8px 2px;border-top:1px solid var(--rule);text-align:left;gap:10px}
+.xsaved small{color:var(--muted)}
+.keys{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6}
+.keys kbd{background:var(--bg);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;font-size:11px;font-family:inherit}
+@media (min-width:720px){
+  .xhdr{display:grid;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;padding:0 0 4px}
+  .xhdr,.xr{grid-template-columns:2fr 1.2fr 1.4fr 110px 78px;grid-template-areas:"d co cat a x"}
+  .xr{padding:4px 0;border-top:0}
+  .xr input,.xr select{padding:8px 9px;font-size:14px}
+}
+@media (max-width:719px){.keys{display:none}}
+
 /* sheet */
 .scrim{position:fixed;inset:0;background:rgba(45,53,71,.45);z-index:90;opacity:0;pointer-events:none;transition:opacity .2s}
 .scrim.on{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:100;background:#fff;border-radius:20px 20px 0 0;max-height:92vh;overflow:auto;
-  transform:translateY(105%);transition:transform .25s ease;padding:0 18px calc(var(--safe-b) + 18px);max-width:520px;margin:0 auto}
-.sheet.on{transform:none}
+  transform:translateY(105%);visibility:hidden;transition:transform .25s ease,visibility 0s linear .25s;padding:0 18px calc(var(--safe-b) + 18px);max-width:520px;margin:0 auto}
+.sheet.on{transform:none;visibility:visible;transition:transform .25s ease}
 .sh-hd{position:sticky;top:0;background:#fff;padding:14px 0 10px;display:flex;align-items:center;gap:10px;z-index:2}
 .sh-hd h2{font-size:19px;font-weight:900;flex:1}
 .sh-hd .x{width:34px;height:34px;border-radius:50%;background:var(--bg);font-size:20px;line-height:1}
@@ -198,7 +239,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
         <div><b>Record collection</b><br><span>Collector hand-in, office, GCash</span></div></button>
       <button class="tile t-exp" data-go="expense" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-        <div><b>Record expense</b><br><span>Gas, supplies, salaries</span></div></button>
+        <div><b>Record expense</b><br><span>Grid, copy a day, quick add</span></div></button>
       <button class="tile t-cnt" data-go="count" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
         <div><b>Count / Handover</b><br><span>Check cash against the book</span></div></button>
@@ -237,6 +278,36 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
     </div>
     <div id="book"></div>
   </div>
+</section>
+
+<!-- EXPENSE GRID -->
+<section id="v-exp" class="hide">
+  <div class="xwrap">
+    <div class="xtop">
+      <div class="f"><label for="x-date">Date of these expenses</label><input type="date" id="x-date"></div>
+      <button class="xbtn" type="button" id="x-paste">📋 Paste lines</button>
+      <button class="xbtn" type="button" id="x-clear">Clear grid</button>
+    </div>
+    <div class="sec" style="margin-top:4px">Copy a previous day (a starting point, then fix the amounts)</div>
+    <div class="xdays" id="x-days"><span class="empty">Loading…</span></div>
+    <div class="xcard">
+      <h3><span>Quick add</span><small style="font-weight:600;color:var(--muted)">tap to add a row</small></h3>
+      <input id="x-q" class="search" autocomplete="off" placeholder="Find: gas, snack, wrapper, name…">
+      <div class="picks" id="x-picks"></div>
+    </div>
+    <div class="xcard">
+      <h3><span>New entries for <span id="x-lbl"></span></span><span id="x-count" style="color:var(--muted);font-weight:700"></span></h3>
+      <div class="xwarn hide" id="x-copywarn"><b>Some rows were copied from another day</b> (gold edge). The amounts came with them. Check every amount against the receipts and delete anything that didn't happen before saving.</div>
+      <div class="xhdr"><div>Description</div><div>c/o (who took it)</div><div>Category</div><div style="text-align:right">Amount</div><div></div></div>
+      <div id="x-rows"></div>
+      <div class="keys"><kbd>Enter</kbd> next cell · <kbd>↑</kbd><kbd>↓</kbd> move row · <kbd>Ctrl</kbd>+<kbd>D</kbd> copy cell above · <kbd>Ctrl</kbd>+<kbd>⌫</kbd> delete row · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> save all. Past entries are suggested as you type.</div>
+    </div>
+    <div class="xcard">
+      <h3><span>Saved for <span id="x-lbl2"></span></span><span id="x-savedtot"></span></h3>
+      <div class="xsaved" id="x-saved"></div>
+    </div>
+  </div>
+  <div class="xfoot"><div class="tot">Grid total<b id="x-total">₱0</b></div><button class="go" type="button" id="x-save">Save all rows</button></div>
 </section>
 
 <div class="scrim" id="scrim"></div>
@@ -317,10 +388,10 @@ async function rpc(fn, args = {}){
 
 /* ---------- views ---------- */
 function show(v){
-  ['pin','home','book'].forEach(x => $('v-' + x).classList.toggle('hide', x !== v));
-  $('btn-home').classList.toggle('hide', v !== 'book');
+  ['pin','home','book','exp'].forEach(x => $('v-' + x).classList.toggle('hide', x !== v));
+  $('btn-home').classList.toggle('hide', v !== 'book' && v !== 'exp');
   $('btn-user').classList.toggle('hide', v === 'pin');
-  $('bar-sub').textContent = v === 'book' ? 'Book' : 'Cash book';
+  $('bar-sub').textContent = v === 'book' ? 'Book' : v === 'exp' ? 'Expenses' : 'Cash book';
   window.scrollTo(0, 0);
 }
 
@@ -367,6 +438,7 @@ async function pinKey(k){
   }
 }
 function lockApp(msg){
+  if (X.rows) { stashDraft(); X.rows = null; }
   S.user = null; S.pin = ''; S.book = null; S.look = null; closeSheet(); drawDots();
   document.querySelectorAll('.acc').forEach(x => x.classList.remove('on')); S.name = null;
   show('pin'); $('pin-err').textContent = msg || '';
@@ -389,6 +461,7 @@ async function refresh(){
   } catch (e) { toast(e.message, 4000); }
   renderHome();
   if (!$('v-book').classList.contains('hide')) renderBook();
+  if (!$('v-exp').classList.contains('hide')) drawSaved();
 }
 
 function openDays(){
@@ -431,6 +504,7 @@ document.querySelector('.tiles').addEventListener('click', e => {
   const g = b.dataset.go;
   if (!S.book) { toast('Still loading. Try again in a moment.'); return; }
   if (g === 'book') { show('book'); renderBook(); return; }
+  if (g === 'expense') { openGrid(); return; }
   openSheet(g);
 });
 
@@ -913,6 +987,250 @@ async function ownerCutover(date){
     S.user.cutover = r.cutover; toast(date ? 'Posting is on.' : 'Posting is off.'); closeSheet(); await refresh();
   } catch (e) { say(e.message); busy(btn, false); }
 }
+
+/* ---------- expense grid ---------- */
+const ADV = '↪ Cash advance (owed)', OTH = '↪ Other cash out';
+const X = { rows:null, date:null, days:null, saving:false };
+const draftKey = () => 'sf-draft-' + (S.user ? S.user.name : '');
+function stashDraft(){ try { localStorage.setItem(draftKey(), JSON.stringify({ date:X.date, rows:X.rows.filter(rowHasData) })); } catch (e) {} }
+function loadDraft(){ try { return JSON.parse(localStorage.getItem(draftKey()) || 'null'); } catch (e) { return null; } }
+const newRow = (o = {}) => ({ cid:uuid(), d:'', co:'', cat:'', amt:'', auto:false, copied:false, err:'', ...o });
+const rowHasData = r => !!(String(r.d).trim() || String(r.co).trim() || r.cat || String(r.amt).trim());
+const picksAll = () => (S.look && S.look.expense_picks) || [];
+function catFor(d, co){
+  const all = picksAll(), dl = String(d || '').trim().toLowerCase(), cl = String(co || '').trim().toLowerCase();
+  if (!dl) return '';
+  if (/cash\s*advance/.test(dl)) return ADV;
+  const hit = all.find(p => p.d.toLowerCase() === dl && (p.co || '').toLowerCase() === cl) || all.find(p => p.d.toLowerCase() === dl);
+  return hit ? hit.cat : '';
+}
+function ensureTail(){ if (!X.rows.length || rowHasData(X.rows[X.rows.length - 1])) X.rows.push(newRow()); }
+
+async function openGrid(){
+  if (!X.rows) {
+    const dr = loadDraft();
+    X.rows = (dr && dr.rows && dr.rows.length) ? dr.rows.map(r => newRow(r)) : [];
+    X.date = (dr && dr.date) || todayPH();
+    if (dr && dr.rows && dr.rows.length) toast(`Restored ${dr.rows.length} unsaved row${dr.rows.length > 1 ? 's' : ''}.`);
+  }
+  ensureTail();
+  show('exp');
+  $('x-date').max = todayPH(); $('x-date').value = X.date;
+  drawGrid(); drawXPicks(); drawSaved(); loadDays();
+  const first = X.rows.findIndex(r => !rowHasData(r)); focusCell(first < 0 ? 0 : first, 'd');
+}
+async function loadDays(){
+  try {
+    const r = await rpc('fin_expense_recent', { p_pin:S.pin });
+    X.days = r.days || [];
+    $('x-days').innerHTML = X.days.length ? X.days.map((d, i) =>
+      `<button type="button" data-day="${i}">${d.date === todayPH() ? 'Today' : dLabel(d.date)}<small>${d.n} lines · ${peso(d.total)}${d.source === 'book' ? ' · old book' : ''}</small></button>`).join('')
+      : '<span class="empty">No earlier days yet.</span>';
+  } catch (e) { $('x-days').innerHTML = `<span class="empty">${esc(e.message)}</span>`; }
+}
+$('x-days').addEventListener('click', e => {
+  const b = e.target.closest('[data-day]'); if (!b) return;
+  const day = X.days[+b.dataset.day];
+  const have = X.rows.filter(rowHasData).length;
+  if (have && !confirm(`Add ${day.n} rows from ${dLabel(day.date)} below your ${have} unsaved row${have > 1 ? 's' : ''}?`)) return;
+  X.rows = X.rows.filter(rowHasData);
+  day.lines.forEach(l => {
+    const cat = l.kind === 'advance' ? ADV : l.kind === 'other_out' ? OTH : (l.cat || catFor(l.d, l.co));
+    X.rows.push(newRow({ d:l.d || '', co:l.co || '', cat, amt:String(Number(l.amt)), copied:true }));
+  });
+  ensureTail(); drawGrid(); stashDraft(); toast(`Added ${day.n} rows from ${dLabel(day.date)}. Check the amounts.`);
+});
+
+function catOptions(sel){
+  const cats = ((S.look && S.look.categories) || []).filter(c => !/^cash\s*advance$/i.test(c));
+  return `<option value="">Category…</option>${cats.map(c => `<option ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+    <option ${sel === ADV ? 'selected' : ''}>${ADV}</option><option ${sel === OTH ? 'selected' : ''}>${OTH}</option>
+    ${sel && sel !== ADV && sel !== OTH && !cats.includes(sel) ? `<option selected>${esc(sel)}</option>` : ''}`;
+}
+function rowHtml(r, i){
+  const b = f => r.err && r.bad && r.bad.includes(f) ? 'bad' : '';
+  return `<div class="xr ${r.copied ? 'copied' : ''} ${r.cat === ADV ? 'adv' : ''}" data-i="${i}">
+    <input class="x-d ${b('d')}" data-f="d" value="${esc(r.d)}" list="x-dl-memos" placeholder="Description" autocomplete="off">
+    <input class="x-co ${b('co')}" data-f="co" value="${esc(r.co)}" list="x-dl-parties" placeholder="c/o" autocomplete="off">
+    <select class="x-cat ${b('cat')}" data-f="cat">${catOptions(r.cat)}</select>
+    <input class="x-amt ${b('amt')}" data-f="amt" value="${esc(r.amt)}" inputmode="decimal" placeholder="0" autocomplete="off">
+    <div class="acts"><button type="button" data-act="dup" title="Repeat this row" aria-label="Repeat row">⧉</button><button type="button" data-act="del" title="Delete row" aria-label="Delete row">✕</button></div>
+    ${r.err ? `<div class="rowerr">${esc(r.err)}</div>` : ''}
+  </div>`;
+}
+function drawGrid(){
+  const L = S.look || {};
+  $('x-rows').innerHTML = X.rows.map(rowHtml).join('') +
+    dlist('x-dl-memos', [...new Set(picksAll().map(p => p.d))]) + dlist('x-dl-parties', L.parties);
+  $('x-copywarn').classList.toggle('hide', !X.rows.some(r => r.copied && rowHasData(r)));
+  $('x-lbl').textContent = X.date === todayPH() ? 'today' : dLabel(X.date);
+  gridTotals();
+}
+function gridTotals(){
+  const live = X.rows.filter(rowHasData);
+  const tot = live.reduce((s, r) => s + num(r.amt), 0);
+  $('x-total').textContent = peso(tot);
+  $('x-count').textContent = live.length ? `${live.length} row${live.length > 1 ? 's' : ''}` : '';
+  $('x-save').textContent = live.length ? `Save all ${live.length} row${live.length > 1 ? 's' : ''}` : 'Save all rows';
+  $('x-save').disabled = !live.length || X.saving;
+}
+function focusCell(i, f){
+  const el = document.querySelector(`#x-rows .xr[data-i="${i}"] [data-f="${f}"]`);
+  if (el) { el.focus({preventScroll:false}); if (el.select && f !== 'cat') el.select(); }
+}
+const FIELDS = ['d','co','cat','amt'];
+
+$('x-rows').addEventListener('input', e => {
+  const el = e.target.closest('[data-f]'); if (!el) return;
+  const rowEl = el.closest('.xr'), i = +rowEl.dataset.i, r = X.rows[i], f = el.dataset.f;
+  r[f] = el.value; r.err = ''; el.classList.remove('bad');
+  if (f === 'cat') { r.auto = false; rowEl.classList.toggle('adv', r.cat === ADV); }
+  if ((f === 'd' || f === 'co') && (!r.cat || r.auto)) {
+    const c = catFor(r.d, r.co);
+    if (c && c !== r.cat) { r.cat = c; r.auto = true; const sel = rowEl.querySelector('[data-f="cat"]'); sel.innerHTML = catOptions(c); rowEl.classList.toggle('adv', c === ADV); }
+  }
+  if (f === 'd' && !r.amt) {   // suggest the usual amount for this description + person
+    const p = picksAll().find(p => p.d.toLowerCase() === r.d.trim().toLowerCase() && (p.co || '').toLowerCase() === r.co.trim().toLowerCase());
+    if (p) { r.amt = String(p.amt); rowEl.querySelector('[data-f="amt"]').value = r.amt; }
+  }
+  if (i === X.rows.length - 1 && rowHasData(r)) { X.rows.push(newRow()); $('x-rows').insertAdjacentHTML('beforeend', rowHtml(X.rows[X.rows.length - 1], X.rows.length - 1)); }
+  gridTotals(); clearTimeout(X.st); X.st = setTimeout(stashDraft, 400);
+});
+$('x-rows').addEventListener('change', e => {   // datalist pick on c/o can change the usual amount/category too
+  const el = e.target.closest('[data-f="co"]'); if (!el) return;
+  const rowEl = el.closest('.xr'), r = X.rows[+rowEl.dataset.i];
+  const p = picksAll().find(p => p.d.toLowerCase() === r.d.trim().toLowerCase() && (p.co || '').toLowerCase() === r.co.trim().toLowerCase());
+  if (p && !r.amt) { r.amt = String(p.amt); rowEl.querySelector('[data-f="amt"]').value = r.amt; gridTotals(); }
+});
+$('x-rows').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const i = +b.closest('.xr').dataset.i;
+  if (b.dataset.act === 'dup') { const r = X.rows[i]; X.rows.splice(i + 1, 0, newRow({ d:r.d, co:r.co, cat:r.cat, amt:r.amt })); drawGrid(); focusCell(i + 1, 'amt'); }
+  else { X.rows.splice(i, 1); ensureTail(); drawGrid(); focusCell(Math.min(i, X.rows.length - 1), 'd'); }
+  stashDraft();
+});
+$('x-rows').addEventListener('keydown', e => {
+  const el = e.target.closest('[data-f]'); if (!el) return;
+  const i = +el.closest('.xr').dataset.i, f = el.dataset.f, fi = FIELDS.indexOf(f);
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveGrid(); return; }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (fi < FIELDS.length - 1) focusCell(i, FIELDS[fi + 1]);
+    else { if (i === X.rows.length - 1) { X.rows.push(newRow()); drawGrid(); } focusCell(i + 1, 'd'); }
+    return;
+  }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && f !== 'cat' && !e.altKey) {
+    const j = i + (e.key === 'ArrowDown' ? 1 : -1);
+    if (j >= 0 && j < X.rows.length) { e.preventDefault(); focusCell(j, f); }
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D') && i > 0) {
+    e.preventDefault(); const above = X.rows[i - 1][f]; X.rows[i][f] = above; el.value = above;
+    el.dispatchEvent(new Event('input', { bubbles:true })); return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace') {
+    e.preventDefault(); X.rows.splice(i, 1); ensureTail(); drawGrid(); focusCell(Math.min(i, X.rows.length - 1), f); stashDraft();
+  }
+});
+$('x-date').addEventListener('change', e => { X.date = e.target.value || todayPH(); $('x-lbl').textContent = X.date === todayPH() ? 'today' : dLabel(X.date); drawSaved(); stashDraft(); });
+$('x-clear').addEventListener('click', () => {
+  const n = X.rows.filter(rowHasData).length; if (!n) return;
+  if (!confirm(`Clear ${n} unsaved row${n > 1 ? 's' : ''}?`)) return;
+  X.rows = []; ensureTail(); drawGrid(); stashDraft();
+});
+
+function drawXPicks(){
+  const all = picksAll(), q = ($('x-q').value || '').toLowerCase().split(/\s+/).filter(Boolean), hits = [];
+  for (let i = 0; i < all.length && hits.length < 8; i++) {
+    const p = all[i], hay = `${p.d} ${p.co || ''} ${p.cat}`.toLowerCase();
+    if (q.every(w => hay.includes(w))) hits.push(i);
+  }
+  $('x-picks').innerHTML = hits.length ? hits.map(i => { const p = all[i];
+    return `<button type="button" class="pick" data-pick="${i}"><b>${esc(p.d)}${p.co ? ' · ' + esc(p.co) : ''}</b><span>${peso(p.amt)} · ${esc(p.cat)}</span></button>`; }).join('')
+    : '<div class="none">No match. Type it in the grid — it will be suggested next time.</div>';
+}
+$('x-q').addEventListener('input', drawXPicks);
+$('x-picks').addEventListener('click', e => {
+  const b = e.target.closest('[data-pick]'); if (!b) return;
+  const p = picksAll()[+b.dataset.pick];
+  let i = X.rows.findIndex(r => !rowHasData(r)); if (i < 0) { X.rows.push(newRow()); i = X.rows.length - 1; }
+  Object.assign(X.rows[i], { d:p.d, co:p.co || '', cat:p.cat, amt:String(p.amt), auto:false, err:'' });
+  ensureTail(); drawGrid(); stashDraft();
+  const el = document.querySelector(`#x-rows .xr[data-i="${i}"]`); if (el) { el.style.background = 'var(--pink-l)'; setTimeout(() => el.style.background = '', 600); }
+  toast(`Added ${p.d}${p.co ? ' · ' + p.co : ''} ${peso(p.amt)}`, 1400);
+});
+
+$('x-paste').addEventListener('click', () => {
+  openSheet('detail', { title:'Paste lines', html:
+    `<div class="note">One expense per line: <b>description, c/o, amount</b> (or just <b>description amount</b>). Tabs from Excel work too.<br>Example: <i>Gas Bao, Jericho, 300</i></div>
+     <div class="f"><textarea id="f-paste" rows="9" placeholder="Gas Bao, Jericho, 300&#10;Snack, Tandoy, 30&#10;Connector 20 pcs 1000"></textarea></div>
+     <button class="go" type="button" id="paste-go">Add to grid</button><div class="msg" id="sh-msg"></div>` });
+  $('paste-go').onclick = () => {
+    const lines = v('f-paste').split(/\n+/).map(l => l.trim()).filter(Boolean); let added = 0, skipped = 0;
+    X.rows = X.rows.filter(rowHasData);
+    lines.forEach(l => {
+      let parts = (l.includes('\t') ? l.split('\t') : l.split(',')).map(x => x.trim()).filter(x => x !== '');
+      if (parts.length === 1) { const m = parts[0].match(/^(.*?)\s+₱?\s*([\d,]+(?:\.\d+)?)$/); if (m) parts = [m[1].trim(), m[2]]; }
+      const ai = parts.map(x => /^[₱]?\s*[\d,]+(\.\d+)?$/.test(x)).lastIndexOf(true);
+      if (ai < 1) { skipped++; return; }
+      const amt = String(num(parts[ai])), rest = parts.slice(0, ai), d = rest[0] || '', co = rest[1] || '';
+      X.rows.push(newRow({ d, co, cat:catFor(d, co), amt, auto:true })); added++;
+    });
+    ensureTail(); drawGrid(); stashDraft(); closeSheet();
+    const needCat = X.rows.filter(r => rowHasData(r) && !r.cat).length;
+    toast(`Added ${added} row${added === 1 ? '' : 's'}${skipped ? ` · ${skipped} skipped (no amount)` : ''}${needCat ? ` · ${needCat} need a category` : ''}`, 3500);
+  };
+});
+
+function drawSaved(){
+  if (!S.book || !X.date) return;
+  const rows = S.book.entries.filter(e => e.entry_date === X.date && ['expense','advance','other_out','co'].includes(e.kind)).slice().reverse();
+  const tot = rows.reduce((s, e) => s - Number(e.signed_amount), 0);
+  $('x-lbl2').textContent = X.date === todayPH() ? 'today' : dLabel(X.date);
+  $('x-savedtot').textContent = rows.length ? `${rows.length} · ${peso(tot)}` : '';
+  $('x-saved').innerHTML = rows.length ? rows.map(e => { const [t, sub] = lineText(e);
+    return `<button type="button" data-e="${e.id}"><span>${t}<small>${sub ? ' · ' + sub : ''}</small></span><b>${peso(e.amount)}</b></button>`; }).join('')
+    : '<div class="empty" style="padding:6px 0">Nothing saved for this day yet.</div>';
+}
+$('x-saved').addEventListener('click', e => { const b = e.target.closest('[data-e]'); if (b) openDetail('e', +b.dataset.e); });
+
+async function saveGrid(){
+  if (X.saving) return;
+  const live = X.rows.filter(rowHasData); if (!live.length) return;
+  let bad = 0;
+  live.forEach(r => {
+    r.bad = [];
+    if (!(num(r.amt) > 0)) r.bad.push('amt');
+    if (!r.cat) r.bad.push('cat');
+    if (r.cat === ADV && !String(r.co).trim()) r.bad.push('co');
+    if (!String(r.d).trim() && r.cat !== ADV) r.bad.push('d');
+    r.err = r.bad.length ? (r.bad.includes('amt') ? 'Needs an amount. ' : '') + (r.bad.includes('cat') ? 'Needs a category. ' : '') + (r.bad.includes('co') ? 'Cash advance needs the person in c/o. ' : '') + (r.bad.includes('d') ? 'Needs a description.' : '') : '';
+    if (r.bad.length) bad++;
+  });
+  const good = live.filter(r => !r.bad.length);
+  if (!good.length) { drawGrid(); toast('Nothing saved. Fix the rows marked in red.', 3000); return; }
+  if (bad && !confirm(`${bad} row${bad > 1 ? 's are' : ' is'} incomplete and will stay in the grid. Save the other ${good.length}?`)) { drawGrid(); return; }
+  X.saving = true; const btn = $('x-save'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Saving';
+  let ok = 0, stop = null;
+  for (const r of good) {
+    const kind = r.cat === ADV ? 'advance' : r.cat === OTH ? 'other_out' : 'expense';
+    const det = { memo:String(r.d).trim() || null, party:String(r.co).trim() || null };
+    if (kind === 'expense') det.category = r.cat;
+    try {
+      await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:r.cid, p_kind:kind, p_amount:num(r.amt), p_entry_date:X.date, p_detail:det });
+      r.saved = true; ok++;
+    } catch (e) {
+      r.err = e.message; r.bad = [];
+      if (e.network || /closed|PIN|session/i.test(e.message)) { stop = e.message; break; }
+    }
+  }
+  X.rows = X.rows.filter(r => !r.saved); ensureTail();
+  X.saving = false; drawGrid(); stashDraft();
+  const left = X.rows.filter(rowHasData).length;
+  toast(stop ? `Saved ${ok}. Stopped: ${stop}` : `Saved ${ok} row${ok === 1 ? '' : 's'}${left ? ` · ${left} still in the grid` : ''}.`, 3500);
+  await refresh(); drawSaved();
+}
+$('x-save').addEventListener('click', saveGrid);
 
 /* ---------- start ---------- */
 loadRoster();
