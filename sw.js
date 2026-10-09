@@ -1,6 +1,6 @@
 // SPAWN Finance service worker — network first, so staff always get the latest app.
 // Only caches this app's own files; database calls are never cached.
-const CACHE = 'spawn-finance-v1';
+const CACHE = 'spawn-finance-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
