@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.8 · 2026-10-09 · choose the date: record on past days (from the opening date), owner can date the opening -->
+<!-- SPAWN Finance v1.8.1 · 2026-10-09 · Yesterday/Today switch in every form, home date bar with ◀ ▶, [ ] keys -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -287,6 +287,23 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .datebar.past{background:var(--gold-l);box-shadow:inset 0 0 0 2px var(--gold)}
 .datebar.past .dl{color:#7a5306}
 .pill.wd{background:var(--gold);color:#3d2a06;cursor:pointer}
+
+/* quick date switch + home date bar */
+.qd{display:inline-flex;background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:2px;gap:2px}
+.qd button{padding:6px 11px;border-radius:8px;font-size:13px;font-weight:800;color:var(--ink-2)}
+.qd button.on{background:var(--ink);color:#fff}
+.qd button:disabled{opacity:.35;cursor:not-allowed}
+.datebar.past .qd button.on{background:#9a6408}
+.hdate{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;padding:8px 10px;border-radius:12px;background:var(--bg)}
+.hdate.past{background:var(--gold-l);box-shadow:inset 0 0 0 2px var(--gold)}
+.hdate .nav{width:34px;height:34px;border-radius:9px;background:#fff;border:1.5px solid var(--line);font-size:13px;color:var(--ink-2)}
+.hdate .nav:disabled{opacity:.35;cursor:not-allowed}
+.hdate .mid{display:flex;flex-direction:column;gap:2px;flex:1;min-width:150px}
+.hdate .mid span{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.hdate.past .mid span{color:#7a5306}
+.hdate input{border:1.5px solid var(--line);border-radius:9px;padding:5px 8px;font-size:15px;font-weight:800;background:#fff;width:100%}
+.hdate.past .qd button.on{background:#9a6408}
+@media (max-width:420px){ .hdate .qd{width:100%} .hdate .qd button{flex:1} .datebar .qd{width:100%} .datebar .qd button{flex:1} }
 </style>
 </head>
 <body>
@@ -318,6 +335,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
     <div class="cash">
       <div class="lbl" id="h-lbl">Cash on hand</div>
       <div class="amt" id="h-bal"><small>₱</small>0</div>
+      <div class="hdate" id="h-date"></div>
       <div class="row" id="h-pills"></div>
       <button type="button" class="gcw hide" id="h-gc"><span>GCash wallet</span><b id="h-gcbal">₱0</b></button>
     </div>
@@ -353,7 +371,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
         <div><b>Owner settings</b><br><span>Opening, posting</span></div></button>
     </div>
-    <div class="kbd-hint"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close · in forms <kbd>Enter</kbd> goes to the next box</div>
+    <div class="kbd-hint"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close · <kbd>[</kbd><kbd>]</kbd> day before / after · in forms <kbd>Enter</kbd> goes to the next box</div>
    </div>
    <aside class="home-side">
     <div class="sec" id="h-coll-sec">Collectors still to hand in <span id="h-coll-start" style="font-weight:600;color:var(--muted)"></span></div>
@@ -603,18 +621,29 @@ function renderHome(){
   const B = S.book; if (!B) return;
   const t = todayPH();
   $('h-bal').innerHTML = '<small>₱</small>' + Number(B.balance_now).toLocaleString('en-PH', {maximumFractionDigits:2});
-  const todays = B.entries.filter(e => e.entry_date === t);
+  const wd = workDate(), past = wd !== t, mn = minWorkDate();
+  const todays = B.entries.filter(e => e.entry_date === wd);
   const inT = todays.filter(e => e.signed_amount > 0).reduce((s, e) => s + Number(e.signed_amount), 0);
   const outT = todays.filter(e => e.signed_amount < 0).reduce((s, e) => s - Number(e.signed_amount), 0);
+  const yd = addDays(t, -1);
+  $('h-date').className = 'hdate' + (past ? ' past' : '');
+  $('h-date').innerHTML = `<button type="button" class="nav" id="hd-prev" aria-label="Previous day" ${wd <= mn ? 'disabled' : ''}>◀</button>
+    <label class="mid"><span>${past ? 'Recording for' : 'Recording for today'}</span><input type="date" id="hd-in" max="${t}" min="${mn}" value="${wd}" aria-label="Pick a date"></label>
+    <button type="button" class="nav" id="hd-next" aria-label="Next day" ${!past ? 'disabled' : ''}>▶</button>
+    <div class="qd"><button type="button" data-hq="${yd}" class="${wd === yd ? 'on' : ''}" ${mn > yd ? 'disabled' : ''}>Yesterday</button><button type="button" data-hq="${t}" class="${!past ? 'on' : ''}">Today</button></div>`;
+  $('hd-prev').onclick = () => { setWorkDate(addDays(wd, -1)); const b = $('hd-prev'); if (b && !b.disabled) b.focus({preventScroll:true}); };
+  $('hd-next').onclick = () => { setWorkDate(addDays(wd, 1)); const b = $('hd-next'); if (b && !b.disabled) b.focus({preventScroll:true}); else if ($('hd-prev')) $('hd-prev').focus({preventScroll:true}); };
+  $('hd-in').onchange = () => setWorkDate($('hd-in').value);
+  $('h-date').querySelectorAll('[data-hq]').forEach(b => b.onclick = () => setWorkDate(b.dataset.hq));
   const od = openDays().filter(d => d < t);
   const lastDep = [...B.deposits].filter(d => !d.voided_at).pop();
-  let pills = `<span class="pill in">In today ${peso(inT)}</span><span class="pill out">Out today ${peso(outT)}</span>`;
+  const dw = past ? dLabel(wd) : 'today';
+  let pills = `<span class="pill in">In ${dw} ${peso(inT)}</span><span class="pill out">Out ${dw} ${peso(outT)}</span>`;
+  if (past) pills += `<span class="pill">Balance end of ${dLabel(wd)} ${peso(balanceAt(wd))}</span>`;
   if (lastDep) pills += `<span class="pill">Last deposit ${peso(lastDep.amount)} · ${dLabel(lastDep.deposit_date)}</span>`;
   if (od.length) pills += `<span class="pill warn">${od.length} day${od.length > 1 ? 's' : ''} not closed</span>`;
   if (!B.entries.length && B.balance_now == 0) pills = `<span class="pill warn">No entries yet. Sir Wendell sets the opening balance first.</span>`;
-  if (S.workDate) pills = `<button type="button" class="pill wd" id="h-wd">Recording for ${dLabel(S.workDate)} · back to today</button>` + pills;
   $('h-pills').innerHTML = pills;
-  if ($('h-wd')) $('h-wd').onclick = () => { S.workDate = null; renderHome(); toast('Back to today.'); };
   $('h-gc').classList.toggle('hide', !S.gc);
   if (S.gc) $('h-gcbal').textContent = pesoN(S.gc.closing_balance);
   const nextClose = openDays()[0] || t;
@@ -770,13 +799,39 @@ const seg = (opts, cur) => `<div class="seg">${opts.map(([k, l]) => `<button typ
 const money = (id, label, val = '') => `<div class="f"><label for="${id}">${label}</label><input id="${id}" class="money" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(val)}"></div>`;
 const text = (id, label, val = '', extra = '') => `<div class="f"><label for="${id}">${label}</label><input id="${id}" autocomplete="off" value="${esc(val)}" ${extra}></div>`;
 const dlist = (id, arr) => `<datalist id="${id}">${(arr || []).map(x => `<option value="${esc(x)}">`).join('')}</datalist>`;
+const dateWord = d => d === todayPH() ? 'Today' : d === addDays(todayPH(), -1) ? 'Yesterday' : dLabel(d);
 const dateBar = () => {
-  const t = todayPH(), d = workDate(), od = S.book && S.book.opening_date;
-  return `<div class="datebar ${d !== t ? 'past' : ''}" id="datebar"><label for="f-date">Date</label>
-    <input type="date" id="f-date" max="${t}" ${od ? `min="${od}"` : ''} value="${d}">
-    <span class="dl" id="f-date-l">${d === t ? 'Today' : 'Recording for ' + dLabel(d)}</span>
-    <button type="button" id="f-today" class="${d === t ? 'hide' : ''}">Back to today</button></div>`;
+  const t = todayPH(), y = addDays(t, -1), d = workDate(), od = minWorkDate();
+  return `<div class="datebar ${d !== t ? 'past' : ''}" id="datebar">
+    <div class="qd" role="group" aria-label="Date"><button type="button" data-qd="${y}" class="${d === y ? 'on' : ''}" ${od > y ? 'disabled' : ''}>Yesterday</button><button type="button" data-qd="${t}" class="${d === t ? 'on' : ''}">Today</button></div>
+    <input type="date" id="f-date" max="${t}" min="${od}" value="${d}" aria-label="Other date">
+    <span class="dl" id="f-date-l">${d === t ? 'Recording for today' : 'Recording for ' + dLabel(d)}</span></div>`;
 };
+function minWorkDate(){ return (S.book && S.book.opening_date) || addDays(todayPH(), -62); }
+function setWorkDate(val){
+  const t = todayPH(); let d = val || t;
+  if (d > t) d = t;
+  const mn = minWorkDate(); if (d < mn) d = mn;
+  S.workDate = d === t ? null : d;
+  syncDateBars();
+  return d;
+}
+function syncDateBars(){
+  const d = workDate(), t = todayPH(), past = d !== t;
+  if ($('datebar')) {
+    $('datebar').classList.toggle('past', past);
+    $('f-date').value = d;
+    $('f-date-l').textContent = past ? 'Recording for ' + dLabel(d) : 'Recording for today';
+    $('datebar').querySelectorAll('[data-qd]').forEach(b => b.classList.toggle('on', b.dataset.qd === d));
+    const F = S.form;
+    if (F) {
+      F.cid = uuid();
+      if (F.kind === 'expense') { const l = $('sx-lbl'); if (l) l.textContent = past ? 'Saved for ' + dLabel(d) : 'Saved today'; drawTodaySaved(); }
+      if (F.kind === 'parts') { if (S.parts) S.parts.recent = { rows:[], totals:[] }; loadParts(); }
+    }
+  }
+  renderHome();
+}
 const actions = (label, cls = '') => `<button class="go ${cls}" type="button" id="sh-save">${label}</button><div class="msg" id="sh-msg" role="alert"></div>`;
 
 function renderSheet(){
@@ -1033,21 +1088,11 @@ function wireSheet(){
       toast('Collector check start saved.'); closeSheet(); await refresh(); } catch (e) { say(e.message); busy(btn, false); }
   };
   if ($('f-date')) {
-    const setD = val => {
-      const t = todayPH(); let d = val || t;
-      if (d > t) d = t;
-      S.workDate = d === t ? null : d;
-      $('f-date').value = workDate();
-      $('datebar').classList.toggle('past', !!S.workDate);
-      $('f-date-l').textContent = S.workDate ? 'Recording for ' + dLabel(S.workDate) : 'Today';
-      $('f-today').classList.toggle('hide', !S.workDate);
-      F.cid = uuid();
-      if (F.kind === 'expense') { const l = $('sx-lbl'); if (l) l.textContent = S.workDate ? 'Saved for ' + dLabel(S.workDate) : 'Saved today'; drawTodaySaved(); }
-      if (F.kind === 'parts') { S.parts && (S.parts.recent = { rows:[], totals:[] }); loadParts(); }
-      renderHome();
-    };
-    $('f-date').addEventListener('change', () => setD($('f-date').value));
-    $('f-today').onclick = () => setD(null);
+    $('f-date').addEventListener('change', () => setWorkDate($('f-date').value));
+    $('datebar').querySelectorAll('[data-qd]').forEach(b => b.onclick = () => {
+      setWorkDate(b.dataset.qd);
+      const first = $('f-amt') || $('f-cust') || $('f-part') || $('f-party'); if (first) first.focus({preventScroll:true});
+    });
   }
   ['pv','cv','ga'].forEach(n => body.querySelectorAll(`[data-${n}]`).forEach(b => b.onclick = () => {
     F[n] = b.dataset[n]; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); liveCalc();
@@ -1405,6 +1450,9 @@ document.addEventListener('keydown', e => {
   if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
   const a = document.activeElement;
 
+  if ((e.key === '[' || e.key === ']') && S.user && !(a && a.matches('input, textarea, select'))) {
+    e.preventDefault(); setWorkDate(addDays(workDate(), e.key === '[' ? -1 : 1)); toast(dateWord(workDate()) === 'Today' ? 'Today' : 'Recording for ' + dLabel(workDate()), 1200); return;
+  }
   /* PIN screen: arrows pick the name */
   if (!$('v-pin').classList.contains('hide')) {
     if (!ARROWS.includes(e.key)) return;
