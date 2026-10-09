@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.8.2 · 2026-10-09 · GCash opening can be dated (defaults to the cash opening date); clearer opening labels -->
+<!-- SPAWN Finance v1.9 · 2026-10-09 · Bugi found (old coins found at the office): minus from cash, kept in the Bugi box -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -304,6 +304,11 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .hdate input{border:1.5px solid var(--line);border-radius:9px;padding:5px 8px;font-size:15px;font-weight:800;background:#fff;width:100%}
 .hdate.past .qd button.on{background:#9a6408}
 @media (max-width:420px){ .hdate .qd{width:100%} .hdate .qd button{flex:1} .datebar .qd{width:100%} .datebar .qd button{flex:1} }
+
+.t-bugi{background:#fff;color:#7a5306;border:1.5px solid var(--gold)}
+.bugw{background:var(--gold-l);color:#7a5306}
+.bugw small{font-weight:600;opacity:.8;margin-left:4px;font-size:12px}
+.tiles{grid-auto-flow:row dense}
 </style>
 </head>
 <body>
@@ -338,6 +343,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
       <div class="hdate" id="h-date"></div>
       <div class="row" id="h-pills"></div>
       <button type="button" class="gcw hide" id="h-gc"><span>GCash wallet</span><b id="h-gcbal">₱0</b></button>
+      <button type="button" class="gcw bugw" id="h-bugi"><span>Bugi box <small>old coins kept</small></span><b id="h-bugibal">₱0</b></button>
     </div>
     <div class="tiles">
       <button class="tile t-col" data-go="collect" type="button">
@@ -361,6 +367,9 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
       <button class="tile t-parts wide small" data-go="parts" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg>
         <div><b>Parts released</b><br><span>Router, connectors, fiber · who took how many</span></div></button>
+      <button class="tile t-bugi small" data-go="bugi" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M4 20l16-16"/></svg>
+        <div><b>Bugi found</b><br><span>Old coins found while counting</span></div></button>
       <button class="tile t-close wide small" data-go="close" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
         <div><b id="close-lbl">Close day</b><br><span id="close-sub">Final count and PIN sign-off</span></div></button>
@@ -645,6 +654,7 @@ function renderHome(){
   if (!B.entries.length && B.balance_now == 0) pills = `<span class="pill warn">No entries yet. Sir Wendell sets the opening balance first.</span>`;
   $('h-pills').innerHTML = pills;
   $('h-gc').classList.toggle('hide', !S.gc);
+  $('h-bugibal').textContent = peso(B.bugi_total || 0);
   if (S.gc) $('h-gcbal').textContent = pesoN(S.gc.closing_balance);
   const nextClose = openDays()[0] || t;
   $('close-lbl').textContent = nextClose === t ? 'Close today' : 'Close ' + dLabel(nextClose);
@@ -668,6 +678,7 @@ function renderHome(){
     : '<div class="empty">Nobody owes cash right now.</div>';
 }
 $('h-gc').addEventListener('click', () => { if (S.gc) openSheet('gcash'); });
+$('h-bugi').addEventListener('click', () => { if (S.book) openSheet('bugi'); });
 $('h-coll').addEventListener('click', e => {
   const b = e.target.closest('[data-coll]'); if (!b || !S.book) return;
   openSheet('collect', { mode:'collection' }); pickCollector(b.dataset.coll);
@@ -716,6 +727,7 @@ function lineText(e){
     }
     case 'office_collection': return e.payment_id ? ['Payment', m] : ['Office collection', [p, m].filter(Boolean).join(' · ')];
     case 'sukli_out': return ['Sukli given (cash)', m];
+    case 'bugi_found': return [`Bugi found${e.collector ? ' · ' + esc(e.collector) + ' hand-in' : ''}`, m || 'old coins moved to the Bugi box'];
     case 'gcash_cashout': return ['GCash cash-out', m];
     case 'repay': return [`${p} repaid`, m];
     case 'adjust_in': case 'adjust_out': return ['Adjustment', m];
@@ -904,7 +916,7 @@ function renderSheet(){
     if (F.result) { h = countResult(F.result); }
     else {
       h += seg([['count','Count'],['handover','Handover']], F.mode);
-      if (S.gc) h += `<div class="note">Count cash only. GCash (${pesoN(S.gc.closing_balance)}) is kept in its own wallet, not in this count.</div>`;
+      h += `<div class="note">Count good cash only.${S.gc ? ` GCash (${pesoN(S.gc.closing_balance)}) is in its own wallet.` : ''} Old coins (bugi) are not cash: record them with <b>Bugi found</b> and keep them in the bugi bag.</div>`;
       if (F.mode === 'handover') {
         h += `<div class="f"><label>Hand cash to</label><div class="chips" id="to-chips">${(L.accounts || []).filter(a => a !== S.user.name).map(a =>
           `<button type="button" data-to="${esc(a)}" class="${F.to === a ? 'on' : ''}">${esc(a)}</button>`).join('')}</div></div>`;
@@ -984,6 +996,20 @@ function renderSheet(){
     h += text('f-purpose', 'What for (optional)', F.purpose || '', 'placeholder="New install, repair, vendo"');
     h += `<button class="go" type="button" id="sh-save">Save</button><div class="msg" id="sh-msg" role="alert"></div>`;
     h += `<div class="sec">${workDate() === todayPH() ? 'Released today' : 'Released on ' + dLabel(workDate())}</div><div id="parts-today">${partsToday()}</div>`;
+  }
+  else if (F.kind === 'bugi') {
+    title = 'Bugi found';
+    h += dateBar();
+    h += `<div class="note">Old coins found while counting. Saving takes the amount <b>off the cash box</b> and adds it to the <b>Bugi box</b>. Spawn carries it; the collector is not charged.</div>`;
+    h += money('f-amt', 'Amount of old coins (face value)', F.amt ?? '');
+    const cols = [...new Set((L.collectors || []).map(c => c.name))];
+    h += `<div class="f"><label>From whose hand-in (optional)</label><div class="chips">${cols.map(n => `<button type="button" data-bc="${esc(n)}" class="${F.bcol === n ? 'on' : ''}">${esc(n)}</button>`).join('')}<button type="button" data-bc="" class="${!F.bcol ? 'on' : ''}">Not sure</button></div></div>`;
+    h += text('f-memo', 'Note (optional)', F.memo || '', 'placeholder="e.g. found in ₱5 packs during recount"');
+    h += actions('Save bugi');
+    const B = S.book, rows = B ? B.entries.filter(e => e.kind === 'bugi_found' || (e.kind === 'collection' && Number(e.less_bugi) > 0)).slice().reverse() : [];
+    h += `<div class="calc" style="margin-top:14px"><div class="big" style="border:0;margin:0;padding:0"><span>Bugi box (all time)</span><b>${peso(B ? B.bugi_total : 0)}</b></div></div>`;
+    h += rows.length ? `<div class="plist">${rows.slice(0, 20).map(e => `<button type="button" data-e="${e.id}"><span>${e.kind === 'bugi_found' ? 'Found' : 'At hand-in'}${e.collector ? ' · ' + esc(e.collector) : ''}<small>${dLabel(e.entry_date)} · ${tLabel(e.entered_at)}${e.memo && e.kind === 'bugi_found' ? ' · ' + esc(e.memo) : ''}</small></span><b>${peso(e.kind === 'bugi_found' ? e.amount : e.less_bugi)}</b></button>`).join('')}</div>`
+      : '<div class="empty" style="padding:6px 0">No bugi recorded in the last 31 days.</div>';
   }
   else if (F.kind === 'gcash') {
     title = 'GCash wallet';
@@ -1098,6 +1124,8 @@ function wireSheet(){
     F[n] = b.dataset[n]; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); liveCalc();
   }));
   if ($('f-gave')) $('f-gave').placeholder = 'Same as bill';
+  body.querySelectorAll('[data-bc]').forEach(b => b.onclick = () => { F.bcol = b.dataset.bc || null; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); });
+  if (F.kind === 'bugi') body.querySelectorAll('.plist [data-e]').forEach(b => b.onclick = () => openDetail('e', +b.dataset.e));
   if (F.kind === 'parts') {
     const setUnit = () => { const hit = S.parts && S.parts.names.find(n => n.part.toLowerCase() === v('f-part').toLowerCase());
       if (hit && (!v('f-unit') || F.unitAuto)) { $('f-unit').value = hit.unit; F.unitAuto = true; } };
@@ -1206,6 +1234,13 @@ async function submit(btn, next){
         p_paid_via:F.pv, p_change_via:ch > 0 ? F.cv : null,
         p_detail:{ memo:v('f-memo') || null, gcash_ref:(F.pv === 'gcash' || (ch > 0 && F.cv === 'gcash')) ? (v('f-gref') || null) : null } });
       toast(`Payment saved${S.workDate ? ' for ' + dLabel(S.workDate) : ''} · cash ${pesoS(Number(r.cash_effect))} · GCash ${pesoS(Number(r.gcash_effect))}`, 3200);
+    }
+    else if (F.kind === 'bugi') {
+      const amt = num(v('f-amt'));
+      if (!(amt > 0)) { $('f-amt').focus(); throw new Error('Enter the amount of old coins.'); }
+      await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:'bugi_found', p_amount:amt, p_entry_date:workDate(),
+        p_detail:{ collector:F.bcol || null, memo:v('f-memo') || null } });
+      toast(`Bugi saved${S.workDate ? ' for ' + dLabel(S.workDate) : ''} · cash box −${peso(amt)} · Bugi box +${peso(amt)}`, 3200);
     }
     else if (F.kind === 'parts') {
       if (!v('f-part')) { $('f-part').focus(); throw new Error(ERR.part_required); }
