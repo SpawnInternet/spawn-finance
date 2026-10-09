@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.8.1 · 2026-10-09 · Yesterday/Today switch in every form, home date bar with ◀ ▶, [ ] keys -->
+<!-- SPAWN Finance v1.8.2 · 2026-10-09 · GCash opening can be dated (defaults to the cash opening date); clearer opening labels -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -946,14 +946,14 @@ function renderSheet(){
     const hasOpening = S.book.entries.some(e => e.kind === 'opening');
     h += `<div class="sec" style="margin-top:0">Opening balance</div>`;
     if (hasOpening) h += `<div class="calc"><div><span>Already set</span><b>${peso(S.book.entries.find(e => e.kind === 'opening').amount)}</b></div></div>`;
-    else h += `<div class="note">Count the office cash once, then enter it here. The running balance starts from this amount.</div>${money('f-open', 'Cash counted')}<div class="f"><label for="f-odate">Opening date (the first day you will record)</label><input type="date" id="f-odate" max="${todayPH()}" value="${todayPH()}"></div><button class="go" type="button" id="own-open">Set opening balance</button>`;
+    else h += `<div class="note">Enter the cash the office had at the <b>start</b> of the opening date (the notebook's balance carried in from the day before). The running balance starts from this amount.</div>${money('f-open', 'Cash at the start of the opening date')}<div class="f"><label for="f-odate">Opening date (the first day you will record)</label><input type="date" id="f-odate" max="${todayPH()}" value="${todayPH()}"></div><button class="go" type="button" id="own-open">Set opening balance</button>`;
     h += `<div class="sec">Collector check</div>
       <div class="note">Spawn Harvest's Spawn share (75%) is compared with hand-ins from this date. Harvests before it were handed in through the notebook.</div>
       <div class="f"><label for="f-cstart">Check collectors from</label><input id="f-cstart" type="date" max="${todayPH()}" value="${esc(S.coll ? S.coll.start : todayPH())}"></div>
       <button class="go alt" type="button" id="own-cstart">Save start date</button>`;
     h += `<div class="sec">GCash wallet</div>`;
     const gcHasOpening = S.gc && (S.gc.rows.some(r => r.kind === 'opening' && !r.voided_at) || Number(S.gc.opening_balance) !== 0);
-    if (!gcHasOpening) h += `<div class="note">Check the GCash app, then enter the balance here. The GCash wallet starts from this amount.</div>${money('f-gopen', 'GCash balance now')}<button class="go" type="button" id="own-gopen">Set GCash opening balance</button>`;
+    if (!gcHasOpening) h += `<div class="note">Check the GCash app, then enter the balance here. The GCash wallet starts from this amount.</div>${money('f-gopen', 'GCash balance on the opening date')}<div class="f"><label for="f-gdate">GCash opening date</label><input type="date" id="f-gdate" max="${todayPH()}" value="${(S.book && S.book.opening_date) || todayPH()}"></div><button class="go" type="button" id="own-gopen">Set GCash opening balance</button>`;
     else {
       F.ga = F.ga || 'adjust_in';
       h += `<div class="calc"><div><span>GCash wallet now</span><b>${pesoN(S.gc.closing_balance)}</b></div></div>
@@ -1380,7 +1380,7 @@ async function ownerGcashOpening(){
   try {
     if (v('f-gopen') === '') throw new Error('Enter the GCash balance (0 is fine).');
     busy(btn, true);
-    await rpc('fin_gcash_add', { p_pin:S.pin, p_client_id:F.gcid, p_kind:'opening', p_amount:num(v('f-gopen')), p_detail:{ memo:'Opening GCash balance' } });
+    await rpc('fin_gcash_add', { p_pin:S.pin, p_client_id:F.gcid, p_kind:'opening', p_amount:num(v('f-gopen')), p_entry_date:v('f-gdate') || null, p_detail:{ memo:'Opening GCash balance' } });
     toast('GCash opening balance set.'); closeSheet(); await refresh();
   } catch (e) { say(e.message); busy(btn, false); }
 }
