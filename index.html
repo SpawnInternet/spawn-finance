@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.6 · 2026-10-09 · customer payments with sukli (cash/GCash), GCash wallet, parts released -->
+<!-- SPAWN Finance v1.6.1 · 2026-10-09 · fixes: void GCash-only payments, keyboard kept in Parts, opening required -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -402,6 +402,7 @@ const ERR = {
   job_order_not_found:'That job order no longer exists. Pick another.',
   kind_must_be_opening_or_adjust:'That GCash entry is not allowed here.',
   memo_required:'Write a note for the adjustment.',
+  no_opening_yet:'Sir Wendell sets the opening balance first. Nothing can be recorded until the cash is counted and set in Owner settings.',
   setting_not_allowed:'That setting cannot be changed here.'
 };
 function errText(code){
@@ -840,8 +841,8 @@ function renderSheet(){
     const lbl = { opening:'Opening balance', payment_in:'Payment in', sukli_out:'Sukli given (GCash)', adjust_in:'Adjustment (add)', adjust_out:'Adjustment (subtract)' };
     h += `<div class="calc"><div class="big" style="border:0;margin:0;padding:0"><span>GCash wallet now</span><b>${pesoN(G.closing_balance)}</b></div></div>`;
     h += `<div class="note">Payments and sukli through GCash land here automatically. The cash box and handover counts never include GCash.</div>`;
-    h += rows.length ? `<div class="plist">${rows.map(r => `<div class="r"><span>${esc(lbl[r.kind] || r.kind)}<small>${dLabel(r.entry_date)} · ${tLabel(r.entered_at)}${r.memo ? ' · ' + esc(r.memo) : ''}${r.gcash_ref ? ' · ref ' + esc(r.gcash_ref) : ''}</small></span>
-      <span style="text-align:right"><b style="color:${Number(r.signed_amount) >= 0 ? '#1d7a70' : '#b02a2a'}">${pesoS(Number(r.signed_amount))}</b><small>${pesoN(r.running_balance)}</small></span></div>`).join('')}</div>`
+    h += rows.length ? `<div class="plist">${rows.map(r => `<${r.payment_id ? `button type="button" data-gp="${r.payment_id}"` : 'div'} class="r"><span>${esc(lbl[r.kind] || r.kind)}<small>${dLabel(r.entry_date)} · ${tLabel(r.entered_at)}${r.memo ? ' · ' + esc(r.memo) : ''}${r.gcash_ref ? ' · ref ' + esc(r.gcash_ref) : ''}</small></span>
+      <span style="text-align:right"><b style="color:${Number(r.signed_amount) >= 0 ? '#1d7a70' : '#b02a2a'}">${pesoS(Number(r.signed_amount))}</b><small>${pesoN(r.running_balance)}</small></span></${r.payment_id ? 'button' : 'div'}>`).join('')}</div>`
       : '<div class="empty">No GCash lines in the last 31 days.</div>';
   }
   else if (F.kind === 'detail') {
@@ -948,6 +949,7 @@ function wireSheet(){
     $('f-qty').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('f-taker').focus(); } });
     wirePartsToday();
   }
+  body.querySelectorAll('[data-gp]').forEach(b => b.onclick = () => openPaymentVoid(+b.dataset.gp));
   if ($('own-gopen')) $('own-gopen').onclick = ownerGcashOpening;
   if ($('own-gadj')) $('own-gadj').onclick = ownerGcashAdjust;
   if ($('rs-adjust')) $('rs-adjust').onclick = adjustFromCount;
@@ -1043,7 +1045,8 @@ async function submit(btn, next){
       if (!(bill > 0)) { $('f-bill').focus(); throw new Error(ERR.bill_must_be_positive); }
       if (gave < bill) { $('f-gave').focus(); throw new Error(ERR.given_less_than_bill); }
       r = await rpc('fin_payment_add', { p_pin:S.pin, p_client_id:F.cid, p_customer:v('f-cust'), p_bill:bill, p_tendered:gave,
-        p_paid_via:F.pv, p_change_via:ch > 0 ? F.cv : null, p_detail:{ memo:v('f-memo') || null, gcash_ref:v('f-gref') || null } });
+        p_paid_via:F.pv, p_change_via:ch > 0 ? F.cv : null,
+        p_detail:{ memo:v('f-memo') || null, gcash_ref:(F.pv === 'gcash' || (ch > 0 && F.cv === 'gcash')) ? (v('f-gref') || null) : null } });
       toast(`Payment saved · cash ${pesoS(Number(r.cash_effect))} · GCash ${pesoS(Number(r.gcash_effect))}`, 3200);
     }
     else if (F.kind === 'parts') {
@@ -1232,6 +1235,25 @@ async function ownerGcashAdjust(){
   } catch (e) { say(e.message); busy(btn, false); }
 }
 
+function openPaymentVoid(pid){
+  const lines = (S.gc ? S.gc.rows : []).filter(r => r.payment_id === pid);
+  const r = lines[0]; if (!r) return;
+  const date = r.entry_date, locked = S.book && S.book.days.some(d => d.entry_date === date && d.locked_at);
+  let html = `<dl class="kv"><dt>Payment</dt><dd>${esc(r.memo || '')}</dd><dt>GCash</dt><dd>${pesoS(Number(r.signed_amount))}</dd>
+    <dt>Date</dt><dd>${dLabel(date)} · ${tLabel(r.entered_at)}</dd><dt>Entered by</dt><dd>${esc(r.created_by)}</dd>${r.gcash_ref ? `<dt>GCash ref</dt><dd>${esc(r.gcash_ref)}</dd>` : ''}</dl>`;
+  if (r.voided_at) html += `<div class="note">Voided by ${esc(r.voided_by)}: ${esc(r.void_reason)}</div>`;
+  else if (locked) html += `<div class="note">This day is closed, so this payment can't be changed.</div>`;
+  else html += `<div class="note">Voiding removes the whole payment: the GCash line and any cash line with it.</div>
+    <div class="f"><label for="f-reason">Reason for voiding</label><input id="f-reason" autocomplete="off" placeholder="e.g. Double entry, wrong amount"></div>
+    <button class="go danger" type="button" id="gp-void">Void this payment</button><div class="msg" id="sh-msg" role="alert"></div>`;
+  openSheet('detail', { title:'GCash payment', html });
+  if ($('gp-void')) $('gp-void').onclick = async () => {
+    const btn = $('gp-void');
+    try { busy(btn, true); await rpc('fin_payment_void', { p_pin:S.pin, p_id:pid, p_reason:v('f-reason') });
+      toast('Payment voided.'); closeSheet(); await refresh(); } catch (e) { say(e.message); busy(btn, false); }
+  };
+}
+
 /* ---------- parts released ---------- */
 async function loadParts(){
   try {
@@ -1243,7 +1265,13 @@ async function loadParts(){
     ]);
     S.parts = { names:n.rows, jos:j.rows, recent:r };
   } catch (e) { toast(e.message, 4000); }
-  if (S.form && S.form.kind === 'parts') { keep(); renderSheet(); }
+  if (S.form && S.form.kind === 'parts') {
+    const a = document.activeElement, id = a && a.id && $('sh-body').contains(a) ? a.id : null;
+    const pos = id && typeof a.selectionStart === 'number' ? a.selectionStart : null;
+    keep(); renderSheet();
+    const n = id && $(id);
+    if (n) { n.focus({preventScroll:true}); if (pos != null && n.setSelectionRange) try { n.setSelectionRange(pos, pos); } catch (e) {} }
+  }
 }
 function partsToday(){
   const P = S.parts; if (!P) return '<div class="empty" style="padding:6px 0"><span class="spin"></span></div>';
