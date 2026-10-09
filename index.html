@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.7 · 2026-10-09 · phone + desktop layout (two columns, centered dialogs, wider book) -->
+<!-- SPAWN Finance v1.7.1 · 2026-10-09 · keyboard: arrows on PIN names, tiles, forms and book; Enter goes to next box -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -270,6 +270,13 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
+
+/* keyboard hints: desktop only */
+.kbd-hint{display:none;font-size:12px;color:var(--muted);margin-top:14px;line-height:1.9}
+.kbd-hint kbd{display:inline-block;min-width:20px;text-align:center;background:#fff;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;margin:0 1px;font:inherit;font-size:11px;font-weight:700;color:var(--ink-2)}
+@media (hover:hover) and (pointer:fine) and (min-width:960px){ .kbd-hint{display:block} }
+.tile:focus-visible,.acc:focus-visible,.ln:focus-visible,.box:focus-visible,.coll button:focus-visible,.gcw:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+.seg button:focus-visible,.chips button:focus-visible{outline:3px solid var(--blue);outline-offset:1px}
 </style>
 </head>
 <body>
@@ -290,6 +297,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
     <div class="dots" id="dots"><i></i><i></i><i></i><i></i></div>
     <div class="pad" id="pad"></div>
     <div class="err" id="pin-err" role="alert"></div>
+    <div class="kbd-hint"><kbd>←</kbd><kbd>→</kbd> pick your name, then type your PIN · <kbd>Esc</kbd> clears</div>
   </div>
 </section>
 
@@ -335,6 +343,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
         <div><b>Owner settings</b><br><span>Opening, posting</span></div></button>
     </div>
+    <div class="kbd-hint"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close · in forms <kbd>Enter</kbd> goes to the next box</div>
    </div>
    <aside class="home-side">
     <div class="sec" id="h-coll-sec">Collectors still to hand in <span id="h-coll-start" style="font-weight:600;color:var(--muted)"></span></div>
@@ -495,6 +504,9 @@ async function loadRoster(){
     roster = await rpc('fin_roster');
     $('accs').innerHTML = roster.map(a => `<button class="acc" type="button" data-n="${esc(a.name)}">${esc(a.name)}</button>`).join('') ||
       '<span class="err">No accounts found.</span>';
+    let last = null; try { last = localStorage.getItem('sf-last-name'); } catch (e) {}
+    const pre = last && [...document.querySelectorAll('.acc')].find(b => b.dataset.n === last);
+    if (pre) pre.click();
   } catch (e) { $('accs').innerHTML = `<span class="err">${esc(e.message)}</span> <button class="acc" type="button" id="retry-roster">Retry</button>`; }
 }
 $('accs').addEventListener('click', e => {
@@ -510,7 +522,7 @@ $('pad').innerHTML = [1,2,3,4,5,6,7,8,9].map(n => `<button type="button" data-k=
 $('pad').addEventListener('click', e => { const b = e.target.closest('button'); if (b) pinKey(b.dataset.k); });
 document.addEventListener('keydown', e => {
   if ($('v-pin').classList.contains('hide')) return;
-  if (/^\d$/.test(e.key)) pinKey(e.key); else if (e.key === 'Backspace') pinKey('b');
+  if (/^\d$/.test(e.key)) pinKey(e.key); else if (e.key === 'Backspace') pinKey('b'); else if (e.key === 'Escape') pinKey('c');
 });
 let pinBusy = false;
 async function pinKey(k){
@@ -523,9 +535,11 @@ async function pinKey(k){
     try {
       const r = await rpc('fin_login', { p_pin:S.pin, p_name:S.name });
       S.user = r; $('pin-err').textContent = '';
+      try { localStorage.setItem('sf-last-name', S.name); } catch (e) {}
       $('btn-user').textContent = r.name + ' · Log out';
       $('tile-owner').classList.toggle('hide', !r.is_owner);
       show('home'); bumpIdle(); await refresh();
+      if (DESK.matches) { const t = document.querySelector('.tiles .tile'); if (t) t.focus({preventScroll:true}); }
     } catch (e) { $('pin-err').textContent = e.message; S.pin = ''; drawDots(); }
     pinBusy = false;
   }
@@ -722,14 +736,19 @@ $('book').addEventListener('click', e => {
 
 /* ---------- sheet ---------- */
 function openSheet(kind, preset){
+  if (!$('sheet').classList.contains('on')) S.opener = document.activeElement;
   S.form = { kind, cid:uuid(), mode:null, ...(preset || {}) };
   $('sh-body').innerHTML = ''; renderSheet();
   $('scrim').classList.add('on'); $('sheet').classList.add('on');
-  setTimeout(() => { if (!S.form || S.form.kind !== kind) return; const f = (kind === 'collect' && S.form.collector && $('f-amt')) || $('sh-body').querySelector('input.money,input,select'); if (f && kind !== 'detail') f.focus({preventScroll:true}); }, 260);
+  setTimeout(() => { if (!S.form || S.form.kind !== kind) return; const f = (kind === 'collect' && S.form.collector && $('f-amt')) || (kind === 'collect' && S.form.mode === 'collection' && !S.form.recon && $('sh-body').querySelector('#col-chips button')) || $('sh-body').querySelector('input.money,input,select'); if (f && kind !== 'detail') f.focus({preventScroll:true}); }, 260);
 }
-function closeSheet(){ $('scrim').classList.remove('on'); $('sheet').classList.remove('on'); S.form = null; }
+function closeSheet(){
+  $('scrim').classList.remove('on'); $('sheet').classList.remove('on'); S.form = null;
+  const o = S.opener; S.opener = null;
+  if (o && document.contains(o) && o.offsetParent && !$('sheet').contains(o)) o.focus({preventScroll:true});
+}
 $('scrim').addEventListener('click', closeSheet); $('sh-x').addEventListener('click', closeSheet);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.form) closeSheet(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.form) { closeSheet(); e.preventDefault(); } });
 
 const v = id => { const x = $(id); return x ? x.value.trim() : ''; };
 const seg2 = (name, opts, cur) => `<div class="seg" style="margin-bottom:0">${opts.map(([k, l]) => `<button type="button" data-${name}="${k}" class="${k === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`;
@@ -1304,6 +1323,112 @@ function openPaymentVoid(pid){
       toast('Payment voided.'); closeSheet(); await refresh(); } catch (e) { say(e.message); busy(btn, false); }
   };
 }
+
+
+/* ---------- keyboard: fewer mouse trips on desktop ---------- */
+const DESK = matchMedia('(hover:hover) and (pointer:fine)');
+const ARROWS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'];
+function spatialNext(items, cur, key){
+  const r0 = cur.getBoundingClientRect(), cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
+  const horiz = key === 'ArrowLeft' || key === 'ArrowRight';
+  let best = null, bd = Infinity;
+  for (const el of items) {
+    if (el === cur || !el.offsetParent) continue;
+    const r = el.getBoundingClientRect(), dx = r.left + r.width / 2 - cx, dy = r.top + r.height / 2 - cy;
+    const ok = key === 'ArrowRight' ? dx > 4 : key === 'ArrowLeft' ? dx < -4 : key === 'ArrowDown' ? dy > 4 : dy < -4;
+    if (!ok) continue;
+    const d = horiz ? Math.abs(dx) + Math.abs(dy) * 3 : Math.abs(dy) + Math.abs(dx) * 0.6;
+    if (d < bd) { bd = d; best = el; }
+  }
+  return best;
+}
+function sheetStops(){
+  const out = [];
+  $('sh-body').querySelectorAll('input:not([type=checkbox]):not([type=hidden]), select, .seg, .chips, button.go').forEach(el => {
+    if (!el.offsetParent || el.disabled) return;
+    if (el.matches('.seg, .chips')) { const b = el.querySelector('button.on') || el.querySelector('button'); if (b) out.push(b); }
+    else out.push(el);
+  });
+  return out;
+}
+function dataAttr(b){ return [...b.attributes].find(x => x.name.startsWith('data-')); }
+function clickKeepFocus(b){
+  const at = dataAttr(b); b.click();
+  if (!at) return;
+  const n = $('sh-body').querySelector(`[${at.name}="${CSS.escape(at.value)}"]`);
+  if (n) n.focus({preventScroll:true});
+}
+document.addEventListener('keydown', e => {
+  if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+  const a = document.activeElement;
+
+  /* PIN screen: arrows pick the name */
+  if (!$('v-pin').classList.contains('hide')) {
+    if (!ARROWS.includes(e.key)) return;
+    const accs = [...document.querySelectorAll('.acc')]; if (!accs.length) return;
+    e.preventDefault();
+    let i = accs.findIndex(x => x.classList.contains('on'));
+    const step = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1 : -1;
+    i = i < 0 ? (step > 0 ? 0 : accs.length - 1) : (i + step + accs.length) % accs.length;
+    accs[i].click(); accs[i].focus({preventScroll:true});
+    return;
+  }
+
+  /* open form or dialog */
+  if ($('sheet').classList.contains('on')) {
+    if (!a || !$('sh-body').contains(a)) {
+      if (e.key === 'ArrowDown' || e.key === 'Tab') { const f = sheetStops()[0]; if (f && e.key === 'ArrowDown') { e.preventDefault(); f.focus(); } }
+      return;
+    }
+    const grp = a.closest('.seg, .chips');
+    if (grp && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      const bs = [...grp.querySelectorAll('button')], i = bs.indexOf(a);
+      const n = bs[(i + (e.key === 'ArrowRight' ? 1 : -1) + bs.length) % bs.length];
+      if (grp.classList.contains('seg')) clickKeepFocus(n); else n.focus();
+      return;
+    }
+    if (e.key !== 'Enter' || e.isComposing) return;
+    if (grp) {
+      if (a.dataset.col) return;                       // collector chip: its own click moves on to the amount
+      if (!a.classList.contains('on')) { e.preventDefault(); clickKeepFocus(a); return; }
+    } else if (!a.matches('input:not([type=checkbox]), select')) return;
+    e.preventDefault();
+    const st = sheetStops(); const i = st.indexOf(a);
+    const n = st[i + (e.shiftKey ? -1 : 1)];
+    if (!n) return;
+    if (n.matches('button.go') && !e.shiftKey) n.click(); else n.focus();
+    return;
+  }
+
+  /* home: arrows move across tiles and the side lists */
+  if (!$('v-home').classList.contains('hide') && ARROWS.includes(e.key)) {
+    const items = [...document.querySelectorAll('.tiles .tile, #h-gc, #h-coll button')].filter(x => x.offsetParent);
+    if (!items.length) return;
+    e.preventDefault();
+    if (!items.includes(a)) { items[0].focus(); return; }
+    const n = spatialNext(items, a, e.key); if (n) n.focus();
+    return;
+  }
+
+  /* book: up/down through the lines, Esc back home */
+  if (!$('v-book').classList.contains('hide')) {
+    if (e.key === 'Escape') { $('btn-home').click(); setTimeout(() => { const t = document.querySelector('[data-go="book"]'); if (t && DESK.matches) t.focus(); }, 0); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const ls = [...document.querySelectorAll('#book .ln, #book .box')]; if (!ls.length) return;
+      e.preventDefault();
+      let i = ls.indexOf(a);
+      i = i < 0 ? 0 : Math.max(0, Math.min(ls.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+      ls[i].focus(); ls[i].scrollIntoView({block:'nearest'});
+      return;
+    }
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && a && a.closest('#range')) {
+      e.preventDefault();
+      const bs = [...document.querySelectorAll('#range button')], i = bs.indexOf(a);
+      const n = bs[Math.max(0, Math.min(bs.length - 1, i + (e.key === 'ArrowRight' ? 1 : -1)))]; n.click(); n.focus();
+    }
+  }
+});
 
 /* ---------- parts released ---------- */
 async function loadParts(){
