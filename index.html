@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.7.1 · 2026-10-09 · keyboard: arrows on PIN names, tiles, forms and book; Enter goes to next box -->
+<!-- SPAWN Finance v1.8 · 2026-10-09 · choose the date: record on past days (from the opening date), owner can date the opening -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -277,6 +277,16 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 @media (hover:hover) and (pointer:fine) and (min-width:960px){ .kbd-hint{display:block} }
 .tile:focus-visible,.acc:focus-visible,.ln:focus-visible,.box:focus-visible,.coll button:focus-visible,.gcw:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 .seg button:focus-visible,.chips button:focus-visible{outline:3px solid var(--blue);outline-offset:1px}
+
+/* date picker in forms */
+.datebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg);border-radius:12px;padding:8px 10px;margin-bottom:14px}
+.datebar label{font-size:13px;font-weight:800;color:var(--ink-2)}
+.datebar input{border:1.5px solid var(--line);border-radius:9px;padding:6px 8px;font-size:15px;background:#fff;font-weight:700}
+.datebar .dl{font-size:13px;font-weight:700;color:var(--muted);flex:1;min-width:120px}
+.datebar button{font-size:13px;font-weight:800;color:var(--blue);padding:4px 6px}
+.datebar.past{background:var(--gold-l);box-shadow:inset 0 0 0 2px var(--gold)}
+.datebar.past .dl{color:#7a5306}
+.pill.wd{background:var(--gold);color:#3d2a06;cursor:pointer}
 </style>
 </head>
 <body>
@@ -422,6 +432,7 @@ const peso = n => '₱' + Number(n || 0).toLocaleString('en-PH', {minimumFractio
 const pesoN = n => (Number(n) < 0 ? '−' : '') + peso(Math.abs(Number(n || 0)));
 const pesoS = n => (n > 0 ? '+' : n < 0 ? '−' : '') + peso(Math.abs(n));
 const todayPH = () => new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Manila'});
+const workDate = () => S.workDate || todayPH();
 const addDays = (d, n) => { const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0,10); };
 const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', {weekday:'short', month:'short', day:'numeric', timeZone:'UTC'});
 const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', {hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila'}) : '';
@@ -462,6 +473,7 @@ const ERR = {
   job_order_not_found:'That job order no longer exists. Pick another.',
   kind_must_be_opening_or_adjust:'That GCash entry is not allowed here.',
   memo_required:'Write a note for the adjustment.',
+  before_opening:'That date is before the opening balance. Pick a date on or after the opening.',
   no_opening_yet:'Sir Wendell sets the opening balance first. Nothing can be recorded until the cash is counted and set in Owner settings.',
   setting_not_allowed:'That setting cannot be changed here.'
 };
@@ -546,7 +558,7 @@ async function pinKey(k){
 }
 function lockApp(msg){
   if (X.rows) { stashDraft(); X.rows = null; }
-  S.user = null; S.pin = ''; S.book = null; S.look = null; S.gc = null; S.parts = null; closeSheet(); drawDots();
+  S.user = null; S.pin = ''; S.book = null; S.look = null; S.gc = null; S.parts = null; S.workDate = null; closeSheet(); drawDots();
   document.querySelectorAll('.acc').forEach(x => x.classList.remove('on')); S.name = null;
   show('pin'); $('pin-err').textContent = msg || '';
 }
@@ -600,7 +612,9 @@ function renderHome(){
   if (lastDep) pills += `<span class="pill">Last deposit ${peso(lastDep.amount)} · ${dLabel(lastDep.deposit_date)}</span>`;
   if (od.length) pills += `<span class="pill warn">${od.length} day${od.length > 1 ? 's' : ''} not closed</span>`;
   if (!B.entries.length && B.balance_now == 0) pills = `<span class="pill warn">No entries yet. Sir Wendell sets the opening balance first.</span>`;
+  if (S.workDate) pills = `<button type="button" class="pill wd" id="h-wd">Recording for ${dLabel(S.workDate)} · back to today</button>` + pills;
   $('h-pills').innerHTML = pills;
+  if ($('h-wd')) $('h-wd').onclick = () => { S.workDate = null; renderHome(); toast('Back to today.'); };
   $('h-gc').classList.toggle('hide', !S.gc);
   if (S.gc) $('h-gcbal').textContent = pesoN(S.gc.closing_balance);
   const nextClose = openDays()[0] || t;
@@ -740,7 +754,7 @@ function openSheet(kind, preset){
   S.form = { kind, cid:uuid(), mode:null, ...(preset || {}) };
   $('sh-body').innerHTML = ''; renderSheet();
   $('scrim').classList.add('on'); $('sheet').classList.add('on');
-  setTimeout(() => { if (!S.form || S.form.kind !== kind) return; const f = (kind === 'collect' && S.form.collector && $('f-amt')) || (kind === 'collect' && S.form.mode === 'collection' && !S.form.recon && $('sh-body').querySelector('#col-chips button')) || $('sh-body').querySelector('input.money,input,select'); if (f && kind !== 'detail') f.focus({preventScroll:true}); }, 260);
+  setTimeout(() => { if (!S.form || S.form.kind !== kind) return; const f = (kind === 'collect' && S.form.collector && $('f-amt')) || (kind === 'collect' && S.form.mode === 'collection' && !S.form.recon && $('sh-body').querySelector('#col-chips button')) || $('sh-body').querySelector('input.money,input:not(#f-date),select'); if (f && kind !== 'detail') f.focus({preventScroll:true}); }, 260);
 }
 function closeSheet(){
   $('scrim').classList.remove('on'); $('sheet').classList.remove('on'); S.form = null;
@@ -756,6 +770,13 @@ const seg = (opts, cur) => `<div class="seg">${opts.map(([k, l]) => `<button typ
 const money = (id, label, val = '') => `<div class="f"><label for="${id}">${label}</label><input id="${id}" class="money" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(val)}"></div>`;
 const text = (id, label, val = '', extra = '') => `<div class="f"><label for="${id}">${label}</label><input id="${id}" autocomplete="off" value="${esc(val)}" ${extra}></div>`;
 const dlist = (id, arr) => `<datalist id="${id}">${(arr || []).map(x => `<option value="${esc(x)}">`).join('')}</datalist>`;
+const dateBar = () => {
+  const t = todayPH(), d = workDate(), od = S.book && S.book.opening_date;
+  return `<div class="datebar ${d !== t ? 'past' : ''}" id="datebar"><label for="f-date">Date</label>
+    <input type="date" id="f-date" max="${t}" ${od ? `min="${od}"` : ''} value="${d}">
+    <span class="dl" id="f-date-l">${d === t ? 'Today' : 'Recording for ' + dLabel(d)}</span>
+    <button type="button" id="f-today" class="${d === t ? 'hide' : ''}">Back to today</button></div>`;
+};
 const actions = (label, cls = '') => `<button class="go ${cls}" type="button" id="sh-save">${label}</button><div class="msg" id="sh-msg" role="alert"></div>`;
 
 function renderSheet(){
@@ -764,6 +785,7 @@ function renderSheet(){
   if (F.kind === 'collect') {
     F.mode = F.mode || 'collection';
     title = 'Record collection';
+    h += dateBar();
     h += seg([['collection','Collector'],['office_collection','Customer pays'],['gcash_cashout','GCash'],['other_in','Other']], F.mode);
     if (F.mode === 'collection') {
       const rc = (L.recons || []);
@@ -801,17 +823,19 @@ function renderSheet(){
   }
   else if (F.kind === 'expense') {
     title = 'Record expense';
+    h += dateBar();
     if (F.saved) h += `<div class="saved">✓ Saved ${F.saved} · last: ${esc(F.lastSaved)}</div>`;
     h += money('f-amt', 'Amount', F.amt ?? '');
     h += text('f-memo', 'Expense (what)', F.memo || '', 'list="dl-memos" enterkeyhint="next" placeholder="Gas Bao, Snack, Ice Wrapper"') + dlist('dl-memos', [...new Set(picksAll().map(p => p.d))]);
     h += text('f-party', 'Name (who took it)', F.party || '', 'list="dl-parties" enterkeyhint="done" placeholder="Jericho"') + dlist('dl-parties', L.parties);
     h += `<div class="catline" id="catline"></div>`;
     h += `<button class="go" type="button" id="sh-save">Save</button><div class="msg" id="sh-msg" role="alert"></div>`;
-    h += `<div class="sec">Saved today</div><div class="xsaved" id="sx-saved"></div>`;
+    h += `<div class="sec" id="sx-lbl">${workDate() === todayPH() ? 'Saved today' : 'Saved for ' + dLabel(workDate())}</div><div class="xsaved" id="sx-saved"></div>`;
   }
   else if (F.kind === 'advance') {
     F.mode = F.mode || 'advance';
     title = 'Cash advance / c/o';
+    h += dateBar();
     h += seg([['advance','Cash advance'],['co','c/o'],['repay','Repayment']], F.mode);
     h += text('f-party', 'Person', F.party || '', 'list="dl-parties" placeholder="Name"') + dlist('dl-parties', L.parties);
     h += `<div class="calc hide" id="owed-now"></div>`;
@@ -838,6 +862,7 @@ function renderSheet(){
   }
   else if (F.kind === 'deposit') {
     title = 'Bank deposit';
+    h += dateBar();
     const banks = [...new Set([...(L.banks || []), ...BANK_DEFAULTS])];
     h += text('f-bank', 'Bank', F.bank || (L.banks || [])[0] || '', 'list="dl-banks"') + dlist('dl-banks', banks);
     h += money('f-amt', 'Amount deposited', F.amt ?? '');
@@ -866,7 +891,7 @@ function renderSheet(){
     const hasOpening = S.book.entries.some(e => e.kind === 'opening');
     h += `<div class="sec" style="margin-top:0">Opening balance</div>`;
     if (hasOpening) h += `<div class="calc"><div><span>Already set</span><b>${peso(S.book.entries.find(e => e.kind === 'opening').amount)}</b></div></div>`;
-    else h += `<div class="note">Count the office cash once, then enter it here. The running balance starts from this amount.</div>${money('f-open', 'Cash counted now')}<button class="go" type="button" id="own-open">Set opening balance</button>`;
+    else h += `<div class="note">Count the office cash once, then enter it here. The running balance starts from this amount.</div>${money('f-open', 'Cash counted')}<div class="f"><label for="f-odate">Opening date (the first day you will record)</label><input type="date" id="f-odate" max="${todayPH()}" value="${todayPH()}"></div><button class="go" type="button" id="own-open">Set opening balance</button>`;
     h += `<div class="sec">Collector check</div>
       <div class="note">Spawn Harvest's Spawn share (75%) is compared with hand-ins from this date. Harvests before it were handed in through the notebook.</div>
       <div class="f"><label for="f-cstart">Check collectors from</label><input id="f-cstart" type="date" max="${todayPH()}" value="${esc(S.coll ? S.coll.start : todayPH())}"></div>
@@ -893,6 +918,7 @@ function renderSheet(){
   }
   else if (F.kind === 'parts') {
     title = 'Parts released';
+    h += dateBar();
     const P = S.parts;
     if (F.saved) h += `<div class="saved">✓ Saved ${F.saved} · last: ${esc(F.lastSaved)}</div>`;
     h += text('f-part', 'Part', F.part || '', 'list="dl-parts" placeholder="Fiber drop cable, Router, Fast connector"') + dlist('dl-parts', P ? P.names.map(n => n.part) : []);
@@ -902,7 +928,7 @@ function renderSheet(){
       `<option value="${esc(j.id)}" ${F.jo === j.id ? 'selected' : ''}>${j.date ? esc(dLabel(j.date)) + ' · ' : ''}${esc(j.customer || 'No name')}${j.area ? ' · ' + esc(j.area) : ''}${j.type ? ' · ' + esc(String(j.type).replace(/_/g, ' ')) : ''}</option>`).join('')}</select></div>`;
     h += text('f-purpose', 'What for (optional)', F.purpose || '', 'placeholder="New install, repair, vendo"');
     h += `<button class="go" type="button" id="sh-save">Save</button><div class="msg" id="sh-msg" role="alert"></div>`;
-    h += `<div class="sec">Released today</div><div id="parts-today">${partsToday()}</div>`;
+    h += `<div class="sec">${workDate() === todayPH() ? 'Released today' : 'Released on ' + dLabel(workDate())}</div><div id="parts-today">${partsToday()}</div>`;
   }
   else if (F.kind === 'gcash') {
     title = 'GCash wallet';
@@ -1006,6 +1032,23 @@ function wireSheet(){
     try { busy(btn, true); await rpc('fin_owner_set', { p_pin:S.pin, p_key:'collector_recon_start', p_value:v('f-cstart') });
       toast('Collector check start saved.'); closeSheet(); await refresh(); } catch (e) { say(e.message); busy(btn, false); }
   };
+  if ($('f-date')) {
+    const setD = val => {
+      const t = todayPH(); let d = val || t;
+      if (d > t) d = t;
+      S.workDate = d === t ? null : d;
+      $('f-date').value = workDate();
+      $('datebar').classList.toggle('past', !!S.workDate);
+      $('f-date-l').textContent = S.workDate ? 'Recording for ' + dLabel(S.workDate) : 'Today';
+      $('f-today').classList.toggle('hide', !S.workDate);
+      F.cid = uuid();
+      if (F.kind === 'expense') { const l = $('sx-lbl'); if (l) l.textContent = S.workDate ? 'Saved for ' + dLabel(S.workDate) : 'Saved today'; drawTodaySaved(); }
+      if (F.kind === 'parts') { S.parts && (S.parts.recent = { rows:[], totals:[] }); loadParts(); }
+      renderHome();
+    };
+    $('f-date').addEventListener('change', () => setD($('f-date').value));
+    $('f-today').onclick = () => setD(null);
+  }
   ['pv','cv','ga'].forEach(n => body.querySelectorAll(`[data-${n}]`).forEach(b => b.onclick = () => {
     F[n] = b.dataset[n]; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); liveCalc();
   }));
@@ -1063,12 +1106,12 @@ function drawCat(){
 }
 function drawTodaySaved(){
   const el = $('sx-saved'); if (!el || !S.book) return;
-  const t = todayPH();
+  const t = workDate();
   const rows = S.book.entries.filter(e => e.entry_date === t && ['expense','advance','other_out'].includes(e.kind)).slice().reverse();
   el.innerHTML = rows.length ? rows.slice(0, 12).map(e => { const [ti, sub] = lineText(e);
     return `<button type="button" data-e="${e.id}"><span>${ti}<small>${sub ? ' · ' + sub : ''}</small></span><b>${peso(e.amount)}</b></button>`; }).join('')
     + (rows.length > 12 ? `<div class="empty" style="padding:6px 0">+ ${rows.length - 12} more in the Book</div>` : '')
-    : '<div class="empty" style="padding:6px 0">Nothing yet today.</div>';
+    : `<div class="empty" style="padding:6px 0">Nothing yet ${t === todayPH() ? 'today' : 'on ' + dLabel(t)}.</div>`;
   el.querySelectorAll('[data-e]').forEach(b => b.onclick = () => openDetail('e', +b.dataset.e));
 }
 
@@ -1114,16 +1157,16 @@ async function submit(btn, next){
       if (!v('f-cust')) { $('f-cust').focus(); throw new Error(ERR.customer_required); }
       if (!(bill > 0)) { $('f-bill').focus(); throw new Error(ERR.bill_must_be_positive); }
       if (gave < bill) { $('f-gave').focus(); throw new Error(ERR.given_less_than_bill); }
-      r = await rpc('fin_payment_add', { p_pin:S.pin, p_client_id:F.cid, p_customer:v('f-cust'), p_bill:bill, p_tendered:gave,
+      r = await rpc('fin_payment_add', { p_pin:S.pin, p_client_id:F.cid, p_entry_date:workDate(), p_customer:v('f-cust'), p_bill:bill, p_tendered:gave,
         p_paid_via:F.pv, p_change_via:ch > 0 ? F.cv : null,
         p_detail:{ memo:v('f-memo') || null, gcash_ref:(F.pv === 'gcash' || (ch > 0 && F.cv === 'gcash')) ? (v('f-gref') || null) : null } });
-      toast(`Payment saved · cash ${pesoS(Number(r.cash_effect))} · GCash ${pesoS(Number(r.gcash_effect))}`, 3200);
+      toast(`Payment saved${S.workDate ? ' for ' + dLabel(S.workDate) : ''} · cash ${pesoS(Number(r.cash_effect))} · GCash ${pesoS(Number(r.gcash_effect))}`, 3200);
     }
     else if (F.kind === 'parts') {
       if (!v('f-part')) { $('f-part').focus(); throw new Error(ERR.part_required); }
       if (!(num(v('f-qty')) > 0)) { $('f-qty').focus(); throw new Error(ERR.qty_must_be_positive); }
       if (!v('f-taker')) { $('f-taker').focus(); throw new Error(ERR.taken_by_required); }
-      await rpc('fin_parts_add', { p_pin:S.pin, p_client_id:F.cid, p_part:v('f-part'), p_qty:num(v('f-qty')), p_unit:v('f-unit') || 'pc',
+      await rpc('fin_parts_add', { p_pin:S.pin, p_client_id:F.cid, p_release_date:workDate(), p_part:v('f-part'), p_qty:num(v('f-qty')), p_unit:v('f-unit') || 'pc',
         p_taken_by:v('f-taker'), p_detail:{ job_order_id:v('f-jo') || null, purpose:v('f-purpose') || null } });
       F.saved = (F.saved || 0) + 1;
       F.lastSaved = `${v('f-part')} × ${num(v('f-qty'))} ${v('f-unit') || 'pc'} · ${v('f-taker')}`;
@@ -1144,9 +1187,9 @@ async function submit(btn, next){
         if (v('f-party')) det.party = v('f-party');
         if (v('f-memo')) det.memo = v('f-memo');
       }
-      r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode, p_amount:num(v('f-amt')), p_detail:det });
+      r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode, p_amount:num(v('f-amt')), p_entry_date:workDate(), p_detail:det });
       const so = Number(r.short_over || 0);
-      toast(so ? `Saved. ${so < 0 ? 'Short' : 'Over'} ${peso(Math.abs(so))}.` : 'Collection saved.');
+      toast((so ? `Saved. ${so < 0 ? 'Short' : 'Over'} ${peso(Math.abs(so))}.` : 'Collection saved.') + (S.workDate ? ' (' + dLabel(S.workDate) + ')' : ''));
     }
     else if (F.kind === 'expense') {
       if (!(num(v('f-amt')) > 0)) { $('f-amt').focus(); throw new Error('Enter the amount.'); }
@@ -1156,7 +1199,7 @@ async function submit(btn, next){
       const kind = F.cat === ADV ? 'advance' : F.cat === OTH ? 'other_out' : 'expense';
       const det = { memo:v('f-memo'), party:v('f-party') || null };
       if (kind === 'expense') det.category = F.cat;
-      r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:kind, p_amount:num(v('f-amt')), p_detail:det });
+      r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:kind, p_amount:num(v('f-amt')), p_entry_date:workDate(), p_detail:det });
       F.saved = (F.saved || 0) + 1;
       F.lastSaved = `${v('f-memo')}${v('f-party') ? ' · ' + v('f-party') : ''} ${peso(num(v('f-amt')))}`;
       Object.assign(F, { cid:uuid(), amt:'', memo:'', party:'', cat:'', catManual:false, catEdit:false });
@@ -1165,7 +1208,7 @@ async function submit(btn, next){
       return;
     }
     else if (F.kind === 'advance') {
-      r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode, p_amount:num(v('f-amt')), p_detail:{ party:v('f-party'), memo:v('f-memo') || null } });
+      r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode, p_amount:num(v('f-amt')), p_entry_date:workDate(), p_detail:{ party:v('f-party'), memo:v('f-memo') || null } });
       toast(F.mode === 'repay' ? 'Repayment saved.' : F.mode === 'co' ? 'c/o saved.' : 'Cash advance saved.');
     }
     else if (F.kind === 'count') {
@@ -1175,7 +1218,7 @@ async function submit(btn, next){
       F.result = r; await refresh(); renderSheet(); return;
     }
     else if (F.kind === 'deposit') {
-      r = await rpc('fin_deposit_add', { p_pin:S.pin, p_client_id:F.cid, p_amount:num(v('f-amt')), p_bank:v('f-bank'), p_reference_no:v('f-ref') || null,
+      r = await rpc('fin_deposit_add', { p_pin:S.pin, p_client_id:F.cid, p_deposit_date:workDate(), p_amount:num(v('f-amt')), p_bank:v('f-bank'), p_reference_no:v('f-ref') || null,
         p_covers_from:v('f-cf') || null, p_covers_to:v('f-ct') || null, p_deposited_by:v('f-by') || null });
       toast('Deposit saved.');
     }
@@ -1271,7 +1314,7 @@ async function ownerOpening(){
   const btn = $('own-open'), F = S.form;
   try {
     busy(btn, true);
-    await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:'opening', p_amount:num(v('f-open')), p_detail:{ memo:'Opening count' } });
+    await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:'opening', p_amount:num(v('f-open')), p_entry_date:v('f-odate') || null, p_detail:{ memo:'Opening count' } });
     toast('Opening balance set.'); closeSheet(); await refresh();
   } catch (e) { say(e.message); busy(btn, false); }
 }
@@ -1433,7 +1476,7 @@ document.addEventListener('keydown', e => {
 /* ---------- parts released ---------- */
 async function loadParts(){
   try {
-    const t = todayPH();
+    const t = workDate();
     const [n, j, r] = await Promise.all([
       rpc('fin_parts_names', { p_pin:S.pin }),
       rpc('fin_jo_pick', { p_pin:S.pin }).catch(() => ({ rows:[] })),
@@ -1452,7 +1495,7 @@ async function loadParts(){
 function partsToday(){
   const P = S.parts; if (!P) return '<div class="empty" style="padding:6px 0"><span class="spin"></span></div>';
   const rows = P.recent.rows || [], tot = P.recent.totals || [];
-  if (!rows.length) return '<div class="empty" style="padding:6px 0">Nothing released yet today.</div>';
+  if (!rows.length) return `<div class="empty" style="padding:6px 0">Nothing released yet ${workDate() === todayPH() ? 'today' : 'on ' + dLabel(workDate())}.</div>`;
   return `<div class="plist">${rows.map(r => `<button type="button" data-pr="${r.id}" class="${r.voided_at ? 'void' : ''}"><span>${esc(r.part)} × ${Number(r.qty).toLocaleString('en-PH')} ${esc(r.unit)}
       <small>${esc(r.taken_by)} · ${tLabel(r.entered_at)}${r.jo_customer ? ' · JO ' + esc(r.jo_customer) : ''}${r.purpose ? ' · ' + esc(r.purpose) : ''}${r.voided_at ? ' · voided: ' + esc(r.void_reason) : ''}</small></span></button>`).join('')}</div>
     <div class="calc">${tot.map(x => `<div><span>${esc(x.part)}</span><b>${Number(x.qty).toLocaleString('en-PH')} ${esc(x.unit)}</b></div>`).join('')}</div>`;
