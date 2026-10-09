@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.9 · 2026-10-09 · Bugi found (old coins found at the office): minus from cash, kept in the Bugi box -->
+<!-- SPAWN Finance v1.9.1 · 2026-10-09 · stay logged in on refresh (same tab, 10-min idle lock kept); Sukli back tab -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -546,6 +546,7 @@ async function loadRoster(){
     let last = null; try { last = localStorage.getItem('sf-last-name'); } catch (e) {}
     const pre = last && [...document.querySelectorAll('.acc')].find(b => b.dataset.n === last);
     if (pre) pre.click();
+    resumeSess();
   } catch (e) { $('accs').innerHTML = `<span class="err">${esc(e.message)}</span> <button class="acc" type="button" id="retry-roster">Retry</button>`; }
 }
 $('accs').addEventListener('click', e => {
@@ -575,15 +576,29 @@ async function pinKey(k){
       const r = await rpc('fin_login', { p_pin:S.pin, p_name:S.name });
       S.user = r; $('pin-err').textContent = '';
       try { localStorage.setItem('sf-last-name', S.name); } catch (e) {}
+      saveSess();
       $('btn-user').textContent = r.name + ' · Log out';
       $('tile-owner').classList.toggle('hide', !r.is_owner);
       show('home'); bumpIdle(); await refresh();
       if (DESK.matches) { const t = document.querySelector('.tiles .tile'); if (t) t.focus({preventScroll:true}); }
-    } catch (e) { $('pin-err').textContent = e.message; S.pin = ''; drawDots(); }
+    } catch (e) { $('pin-err').textContent = e.message; S.pin = ''; drawDots(); clearSess(); }
     pinBusy = false;
   }
 }
+const SESS = 'sf-sess';
+function saveSess(){ try { if (S.user && S.pin) sessionStorage.setItem(SESS, JSON.stringify({ n:S.name, p:S.pin, t:Date.now() })); } catch (e) {} }
+function clearSess(){ try { sessionStorage.removeItem(SESS); } catch (e) {} }
+function resumeSess(){
+  let x = null; try { x = JSON.parse(sessionStorage.getItem(SESS) || 'null'); } catch (e) {}
+  if (!x || !x.n || !/^\d{4}$/.test(x.p || '')) return false;
+  if (Date.now() - (x.t || 0) > IDLE_MS) { clearSess(); return false; }
+  const b = [...document.querySelectorAll('.acc')].find(a => a.dataset.n === x.n); if (!b) { clearSess(); return false; }
+  document.querySelectorAll('.acc').forEach(a => a.classList.toggle('on', a === b));
+  S.name = x.n; S.pin = x.p.slice(0, 3); pinKey(x.p[3]);
+  return true;
+}
 function lockApp(msg){
+  clearSess();
   if (X.rows) { stashDraft(); X.rows = null; }
   S.user = null; S.pin = ''; S.book = null; S.look = null; S.gc = null; S.parts = null; S.workDate = null; closeSheet(); drawDots();
   document.querySelectorAll('.acc').forEach(x => x.classList.remove('on')); S.name = null;
@@ -591,7 +606,10 @@ function lockApp(msg){
 }
 $('btn-user').addEventListener('click', () => lockApp(''));
 $('btn-home').addEventListener('click', () => { show('home'); renderHome(); });
-function bumpIdle(){ clearTimeout(S.idle); if (S.user) S.idle = setTimeout(() => lockApp('Locked after 10 minutes of no use.'), IDLE_MS); }
+function bumpIdle(){
+  clearTimeout(S.idle);
+  if (S.user) { S.idle = setTimeout(() => lockApp('Locked after 10 minutes of no use.'), IDLE_MS); if (!bumpIdle.t || Date.now() - bumpIdle.t > 15000) { bumpIdle.t = Date.now(); saveSess(); } }
+}
 ['click','keydown','touchstart'].forEach(ev => document.addEventListener(ev, bumpIdle, {passive:true}));
 
 /* ---------- data ---------- */
@@ -731,7 +749,7 @@ function lineText(e){
     case 'gcash_cashout': return ['GCash cash-out', m];
     case 'repay': return [`${p} repaid`, m];
     case 'adjust_in': case 'adjust_out': return ['Adjustment', m];
-    case 'other_in': return [m || 'Other cash in', p];
+    case 'other_in': return e.category === 'Sukli returned' ? [`Sukli returned${p ? ' · ' + p : ''}`, m] : [m || 'Other cash in', p];
     case 'other_out': return [m || 'Other cash out', p];
     case 'expense': return [m || esc(e.category), [m ? esc(e.category) : '', p].filter(Boolean).join(' · ')];
     case 'advance': return [`Cash advance · ${p}`, /^\s*cash\s*advance\s*$/i.test(e.memo || '') ? '' : m];
@@ -853,7 +871,7 @@ function renderSheet(){
     F.mode = F.mode || 'collection';
     title = 'Record collection';
     h += dateBar();
-    h += seg([['collection','Collector'],['office_collection','Customer pays'],['gcash_cashout','GCash'],['other_in','Other']], F.mode);
+    h += seg([['collection','Collector'],['office_collection','Customer pays'],['sukli_in','Sukli back'],['gcash_cashout','GCash'],['other_in','Other']], F.mode);
     if (F.mode === 'collection') {
       const rc = (L.recons || []);
       if (rc.length) h += `<div class="f"><label>From Spawn Count (confirmed, not yet in the book)</label>${rc.map(r =>
@@ -882,11 +900,16 @@ function renderSheet(){
       h += `<div class="hide" id="gref-wrap">${text('f-gref', 'GCash reference no. (optional)', F.gref || '', 'inputmode="numeric"')}</div>`;
       h += text('f-memo', 'Note (optional)', F.memo || '', 'placeholder="Month paid, account, etc."');
       h += `<div class="calc" id="calc"></div>`;
+    } else if (F.mode === 'sukli_in') {
+      h += `<div class="note">Cash that comes back to the office, e.g. someone took ₱1,000 for gas, used ₱300 and returned ₱700. It <b>adds to the balance</b>.</div>`;
+      h += money('f-amt', 'Sukli returned', F.amt ?? '');
+      h += text('f-party', 'From whom', F.party || '', 'list="dl-parties" placeholder="Jericho"') + dlist('dl-parties', L.parties);
+      h += text('f-memo', 'For what (optional)', F.memo || '', 'placeholder="Gas ₱1,000, used ₱300"');
     } else {
       h += money('f-amt', 'Amount', F.amt ?? '');
       h += text('f-memo', 'Note', F.memo || '', F.mode === 'other_in' ? 'placeholder="What is this cash?"' : '');
     }
-    h += actions(F.mode === 'office_collection' ? 'Save payment' : 'Save collection');
+    h += actions(F.mode === 'office_collection' ? 'Save payment' : F.mode === 'sukli_in' ? 'Save sukli' : 'Save collection');
   }
   else if (F.kind === 'expense') {
     title = 'Record expense';
@@ -1267,9 +1290,14 @@ async function submit(btn, next){
         if (v('f-party')) det.party = v('f-party');
         if (v('f-memo')) det.memo = v('f-memo');
       }
-      r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode, p_amount:num(v('f-amt')), p_entry_date:workDate(), p_detail:det });
+      if (F.mode === 'sukli_in') {
+        if (!(num(v('f-amt')) > 0)) { $('f-amt').focus(); throw new Error('Enter the sukli returned.'); }
+        if (!v('f-party')) { $('f-party').focus(); throw new Error('Enter who returned the sukli.'); }
+        det.category = 'Sukli returned';
+      }
+      r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode === 'sukli_in' ? 'other_in' : F.mode, p_amount:num(v('f-amt')), p_entry_date:workDate(), p_detail:det });
       const so = Number(r.short_over || 0);
-      toast((so ? `Saved. ${so < 0 ? 'Short' : 'Over'} ${peso(Math.abs(so))}.` : 'Collection saved.') + (S.workDate ? ' (' + dLabel(S.workDate) + ')' : ''));
+      toast((F.mode === 'sukli_in' ? `Sukli saved · +${peso(num(v('f-amt')))} to the balance.` : so ? `Saved. ${so < 0 ? 'Short' : 'Over'} ${peso(Math.abs(so))}.` : 'Collection saved.') + (S.workDate ? ' (' + dLabel(S.workDate) + ')' : ''));
     }
     else if (F.kind === 'expense') {
       if (!(num(v('f-amt')) > 0)) { $('f-amt').focus(); throw new Error('Enter the amount.'); }
