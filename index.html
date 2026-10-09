@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.10 · 2026-10-09 · Match names: attach old payments to the right subscriber (one tap, keyboard 1-3/N/S/U) -->
+<!-- SPAWN Finance v1.11 · 2026-10-09 · Customer pays: pick the subscriber, tap the unpaid months, type the OR — one save updates cash, months and the Auto sheet -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -335,6 +335,25 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .mlast{font-size:13px;margin-top:12px;color:var(--ink-2);background:var(--teal-l);border-radius:10px;padding:8px 12px;display:flex;justify-content:space-between;gap:8px;align-items:center}
 .mlast button{font-weight:800;color:var(--blue);font-size:13px}
 @media (hover:hover) and (pointer:fine){ .cand:hover,.mact button:hover{border-color:var(--ink-2)} }
+
+.subres{display:grid;gap:6px;margin:-4px 0 10px}
+.subres button{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;border:1.5px solid var(--line);border-radius:11px;padding:9px 12px;background:#fff;width:100%}
+.subres button.first{border-color:var(--teal)}
+.subres b{display:block;font-size:15px}.subres small{display:block;font-size:12px;color:var(--muted)}
+.subres .amt{font-weight:800;font-size:13px;color:var(--ink-2);white-space:nowrap}
+.subres .hint{font-size:13px;color:var(--muted);padding:2px}
+.linkbtn{font-size:13px;font-weight:800;color:var(--blue);padding:4px 0;margin-bottom:12px}
+.subcard{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--blue-l);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+.subcard b{font-size:16px;display:block}.subcard small{display:block;font-size:12px;color:#244c9c}
+.subcard.cut{background:var(--red-l)}.subcard.cut small{color:#b02a2a}
+.subcard button{font-weight:800;color:var(--blue);font-size:13px;white-space:nowrap}
+.mchips{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+.mc{border:1.5px solid var(--line);border-radius:10px;padding:6px 4px;background:#fff;text-align:center;line-height:1.2}
+.mc b{display:block;font-size:13px}.mc small{display:block;font-size:10.5px;color:var(--muted);text-transform:capitalize}
+.mc.paid{background:var(--bg);opacity:.55;cursor:default}
+.mc.unpaid{border-color:#f0a5a5;background:var(--red-l)}.mc.unpaid small{color:#b02a2a}
+.mc.due{border-color:var(--gold);background:var(--gold-l)}.mc.due small{color:#9a6408}
+.mc.on{background:var(--ink);border-color:var(--ink);color:#fff;opacity:1}.mc.on small{color:#dfe5ee}
 </style>
 </head>
 <body>
@@ -538,6 +557,12 @@ const ERR = {
   kind_must_be_opening_or_adjust:'That GCash entry is not allowed here.',
   memo_required:'Write a note for the adjustment.',
   before_opening:'That date is before the opening balance. Pick a date on or after the opening.',
+  or_required:'Type the OR number (or the GCash reference).',
+  or_already_used:'That OR number is already used. Check the receipt.',
+  bad_months:'Tap the month or months being paid.',
+  bad_month:'Tap the month or months being paid.',
+  no_subscriber:'Pick the subscriber again.',
+  duplicate_payment:'This payment is already saved.',
   no_opening_yet:'Sir Wendell sets the opening balance first. Nothing can be recorded until the cash is counted and set in Owner settings.',
   setting_not_allowed:'That setting cannot be changed here.'
 };
@@ -931,12 +956,33 @@ function renderSheet(){
       h += `<div class="calc" id="calc"></div>`;
     } else if (F.mode === 'office_collection') {
       F.pv = F.pv || 'cash'; F.cv = F.cv || 'cash';
-      h += text('f-cust', 'Customer / subscriber', F.cust || '', 'list="dl-parties" placeholder="Earl Ditucalan"') + dlist('dl-parties', L.parties);
+      if (!F.free) {
+        if (!F.sub) {
+          h += `<div class="f"><label for="f-sq">Subscriber</label><input id="f-sq" autocomplete="off" placeholder="Name, address or account no." value="${esc(F.sq || '')}"></div>`;
+          h += `<div class="subres" id="subres">${subResults()}</div>`;
+          h += `<button type="button" class="linkbtn" id="f-free">Not a subscriber? Type a name instead</button>`;
+        } else {
+          const sb = F.sub, SM = F.subMonths, cy = Number(todayPH().slice(0, 4));
+          h += `<div class="subcard ${sb.status === 'cutoff' ? 'cut' : ''}"><div><b>${esc(sb.name)}</b><small>${[sb.area, sb.address].filter(Boolean).map(esc).join(' · ')}${sb.monthly ? ' · ' + peso(sb.monthly) + '/mo' : ''}${sb.due_day ? ' · due every ' + sb.due_day : ''}${sb.status === 'cutoff' ? ' · CUT OFF' : ''}</small></div><button type="button" id="f-subx">Change</button></div>`;
+          if (!SM) h += `<div class="empty"><span class="spin"></span> Loading months…</div>`;
+          else {
+            h += `<div class="f"><label>Months being paid <small style="font-weight:600;color:var(--muted)">(tap to pick)</small></label><div class="mchips">${SM.months.map(m =>
+              `<button type="button" data-mym="${m.month}" class="mc ${m.state} ${(F.sel || []).includes(m.month) ? 'on' : ''}" ${m.state === 'paid' ? 'disabled' : ''}><b>${m.label}${m.year !== cy ? " '" + String(m.year).slice(2) : ''}</b><small>${m.state === 'paid' ? (m.paid_on || 'paid') : m.state}</small></button>`).join('')}</div></div>`;
+            const unpaid = SM.months.filter(m => m.state === 'unpaid' || m.state === 'due');
+            h += unpaid.length ? `<div class="note">Not yet paid: <b>${unpaid.map(m => m.label + (m.year !== cy ? " '" + String(m.year).slice(2) : '')).join(', ')}</b>${Number(SM.unpaid_total) ? ' · ' + peso(SM.unpaid_total) : ''}</div>`
+                               : `<div class="note" style="background:var(--teal-l);color:#1d6a61">All months up to now are paid ✓</div>`;
+          }
+          h += text('f-or', 'OR number / GCash ref', F.or || '', 'autocomplete="off" placeholder="0012457"');
+        }
+      } else {
+        h += text('f-cust', 'Customer name', F.cust || '', 'list="dl-parties" placeholder="Name"') + dlist('dl-parties', L.parties);
+        h += `<button type="button" class="linkbtn" id="f-unfree">← Back to subscriber search</button>`;
+      }
       h += `<div class="two">${money('f-bill', 'Bill (amount due)', F.bill ?? '')}${money('f-gave', 'Customer gave', F.gave ?? '')}</div>`;
       h += `<div class="f"><label>Paid through</label>${seg2('pv', [['cash','Cash'],['gcash','GCash']], F.pv)}</div>`;
       h += `<div class="f hide" id="cv-wrap"><label>Sukli <b id="cv-amt"></b> given through</label>${seg2('cv', [['cash','Cash'],['gcash','GCash']], F.cv)}</div>`;
-      h += `<div class="hide" id="gref-wrap">${text('f-gref', 'GCash reference no. (optional)', F.gref || '', 'inputmode="numeric"')}</div>`;
-      h += text('f-memo', 'Note (optional)', F.memo || '', 'placeholder="Month paid, account, etc."');
+      if (F.free) h += `<div class="hide" id="gref-wrap">${text('f-gref', 'GCash reference no. (optional)', F.gref || '', 'inputmode="numeric"')}</div>`;
+      h += text('f-memo', 'Note (optional)', F.memo || '', F.free ? 'placeholder="What is this payment for?"' : 'placeholder="Optional note"');
       h += `<div class="calc" id="calc"></div>`;
     } else if (F.mode === 'sukli_in') {
       h += `<div class="note">Cash that comes back to the office, e.g. someone took ₱1,000 for gas, used ₱300 and returned ₱700. It <b>adds to the balance</b>.</div>`;
@@ -1110,7 +1156,7 @@ function liveCalc(){
     const bill = num(v('f-bill')), gave = v('f-gave') === '' ? bill : num(v('f-gave')), ch = gave - bill;
     $('cv-wrap').classList.toggle('hide', !(ch > 0));
     $('cv-amt').textContent = ch > 0 ? peso(ch) : '';
-    $('gref-wrap').classList.toggle('hide', !(F.pv === 'gcash' || (ch > 0 && F.cv === 'gcash')));
+    if ($('gref-wrap')) $('gref-wrap').classList.toggle('hide', !(F.pv === 'gcash' || (ch > 0 && F.cv === 'gcash')));
     if (!(bill > 0)) { c.innerHTML = `<div><span>Enter the bill and what the customer gave.</span></div>`; return; }
     if (gave < bill) { c.innerHTML = `<div class="big" style="border:0;margin:0;padding:0"><span>Customer gave less than the bill</span><b class="diffx">${peso(bill - gave)} short</b></div>`; return; }
     const ce = (F.pv === 'cash' ? gave : 0) - (ch > 0 && F.cv === 'cash' ? ch : 0);
@@ -1134,7 +1180,7 @@ function keep(){ // remember typed values when switching modes
   const F = S.form; if (!F) return;
   const map = { 'f-amt':'amt','f-ht':'ht','f-le':'le','f-lb':'lb','f-memo':'memo','f-party':'party','f-bank':'bank','f-ref':'ref','f-cf':'cf','f-ct':'ct','f-by':'by','f-p5':'p5','f-p1':'p1','f-bills':'bills','f-loose':'loose','f-area':'area','f-q':'q',
     'f-cust':'cust','f-bill':'bill','f-gave':'gave','f-gref':'gref','f-part':'part','f-qty':'qty','f-unit':'unit','f-taker':'taker','f-purpose':'purpose','f-jo':'jo',
-    'f-gadj':'gadj','f-gmemo':'gmemo' };
+    'f-gadj':'gadj','f-gmemo':'gmemo','f-or':'or','f-sq':'sq' };
   for (const [id, k] of Object.entries(map)) if ($(id)) F[k] = $(id).value;
 }
 
@@ -1185,6 +1231,7 @@ function wireSheet(){
     F[n] = b.dataset[n]; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); liveCalc();
   }));
   if ($('f-gave')) $('f-gave').placeholder = 'Same as bill';
+  if (F.kind === 'collect' && F.mode === 'office_collection') wireSubPay();
   body.querySelectorAll('[data-bc]').forEach(b => b.onclick = () => { F.bcol = b.dataset.bc || null; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); });
   if (F.kind === 'bugi') body.querySelectorAll('.plist [data-e]').forEach(b => b.onclick = () => openDetail('e', +b.dataset.e));
   if (F.kind === 'parts') {
@@ -1286,7 +1333,20 @@ async function submit(btn, next){
   try {
     busy(btn, true);
     let r;
-    if (F.kind === 'collect' && F.mode === 'office_collection') {
+    if (F.kind === 'collect' && F.mode === 'office_collection' && !F.free) {
+      const bill = num(v('f-bill')), gave = v('f-gave') === '' ? bill : num(v('f-gave')), ch = gave - bill;
+      if (!F.sub) { if ($('f-sq')) $('f-sq').focus(); throw new Error('Pick the subscriber first.'); }
+      const sel = (F.sel || []).slice().sort();
+      if (!sel.length) throw new Error(ERR.bad_months);
+      if (!v('f-or')) { $('f-or').focus(); throw new Error(ERR.or_required); }
+      if (!(bill > 0)) { $('f-bill').focus(); throw new Error(ERR.bill_must_be_positive); }
+      if (gave < bill) { $('f-gave').focus(); throw new Error(ERR.given_less_than_bill); }
+      r = await rpc('fin_sub_payment_add', { p_pin:S.pin, p_client_id:F.cid, p_sub_id:F.sub.id, p_month_from:sel[0], p_months:sel.length,
+        p_bill:bill, p_tendered:gave, p_paid_via:F.pv, p_change_via:ch > 0 ? F.cv : null, p_or_no:v('f-or'),
+        p_entry_date:workDate(), p_detail:{ memo:v('f-memo') || null } });
+      toast(`Paid · ${F.sub.name} · ${r.covers || ''} · OR ${r.or_no || v('f-or')}`, 3600);
+    }
+    else if (F.kind === 'collect' && F.mode === 'office_collection') {
       const bill = num(v('f-bill')), gave = v('f-gave') === '' ? bill : num(v('f-gave')), ch = gave - bill;
       if (!v('f-cust')) { $('f-cust').focus(); throw new Error(ERR.customer_required); }
       if (!(bill > 0)) { $('f-bill').focus(); throw new Error(ERR.bill_must_be_positive); }
@@ -1622,6 +1682,74 @@ document.addEventListener('keydown', e => {
   }
 });
 
+
+/* ---------- customer pays: subscriber, months, OR ---------- */
+function subResults(){
+  const F = S.form; if (!F) return '';
+  if ((F.sq || '').trim().length < 2) return '<div class="hint">Type at least 2 letters of the name, address or account no.</div>';
+  if (!F.results) return '<div class="hint"><span class="spin"></span> Searching…</div>';
+  if (!F.results.length) return '<div class="hint">No subscriber found. Try another spelling, or use "Not a subscriber".</div>';
+  return F.results.map((r, i) => `<button type="button" data-sid="${r.id}" class="${i === 0 ? 'first' : ''}"><span><b>${esc(r.name)}</b><small>${[r.area, r.address].filter(Boolean).map(esc).join(' · ')}${r.status === 'cutoff' ? ' · CUT OFF' : ''}</small></span><span class="amt">${r.monthly_amount ? peso(r.monthly_amount) : ''}</span></button>`).join('');
+}
+function wireSubResults(){
+  document.querySelectorAll('#subres [data-sid]').forEach(b => b.onclick = () => pickSub(+b.dataset.sid));
+}
+async function subSearch(){
+  const F = S.form; if (!F) return;
+  const q = (F.sq || '').trim();
+  if (q.length < 2) { F.results = null; $('subres').innerHTML = subResults(); return; }
+  F.results = null; $('subres').innerHTML = subResults();
+  try { const r = await rpc('fin_sub_search', { p_pin:S.pin, p_q:q, p_limit:8 }); if (S.form === F && (F.sq || '').trim() === q) F.results = r.rows; }
+  catch (e) { F.results = []; toast(e.message); }
+  if (S.form === F && $('subres')) { $('subres').innerHTML = subResults(); wireSubResults(); }
+}
+async function pickSub(id){
+  const F = S.form; if (!F) return;
+  const r0 = (F.results || []).find(x => x.id === id) || { id };
+  keep(); F.sub = { ...r0, monthly:r0.monthly_amount }; F.subMonths = null; F.sel = []; F.billEdited = false; F.cid = uuid();
+  renderSheet();
+  try {
+    const r = await rpc('fin_sub_months', { p_pin:S.pin, p_sub_id:id });
+    if (S.form !== F || !F.sub || F.sub.id !== id) return;
+    F.subMonths = r; F.sub = { ...F.sub, ...r.sub };
+    const first = r.months.find(m => m.state === 'unpaid' || m.state === 'due');
+    F.sel = first ? [first.month] : [];
+    keep(); setAutoBill();
+    renderSheet();
+    const o = $('f-or'); if (o) o.focus({preventScroll:true});
+  } catch (e) { toast(e.message, 4000); }
+}
+function setAutoBill(){
+  const F = S.form; if (!F || F.billEdited || !F.sub) return;
+  const m = Number(F.sub.monthly || 0), n = (F.sel || []).length;
+  F.bill = m && n ? String(m * n) : '';
+  if ($('f-bill')) { $('f-bill').value = F.bill; liveCalc(); }
+}
+function toggleMonth(ym){
+  const F = S.form, all = F.subMonths.months.map(m => m.month);
+  let sel = (F.sel || []).slice().sort();
+  const i = all.indexOf(ym), lo = all.indexOf(sel[0]), hi = all.indexOf(sel[sel.length - 1]);
+  if (!sel.length) sel = [ym];
+  else if (sel.includes(ym)) sel = (ym === sel[0] || ym === sel[sel.length - 1]) ? sel.filter(x => x !== ym) : [ym];
+  else if (i === lo - 1 || i === hi + 1) sel.push(ym);
+  else sel = [ym];
+  F.sel = sel.sort(); keep(); setAutoBill(); renderSheet();
+}
+function wireSubPay(){
+  const F = S.form, sq = $('f-sq');
+  if (sq) {
+    let t = null;
+    sq.addEventListener('input', () => { F.sq = sq.value; clearTimeout(t); t = setTimeout(subSearch, 250); });
+    sq.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const f = (F.results || [])[0]; if (f) pickSub(f.id); } });
+    wireSubResults();
+    if ((F.sq || '').trim().length >= 2 && !F.results) subSearch();
+  }
+  if ($('f-subx')) $('f-subx').onclick = () => { keep(); Object.assign(F, { sub:null, subMonths:null, sel:[], results:null, bill:'', billEdited:false }); renderSheet(); const q = $('f-sq'); if (q) q.focus(); };
+  if ($('f-free')) $('f-free').onclick = () => { keep(); F.free = true; F.bill = ''; renderSheet(); const c = $('f-cust'); if (c) c.focus(); };
+  if ($('f-unfree')) $('f-unfree').onclick = () => { keep(); F.free = false; renderSheet(); const q = $('f-sq'); if (q) q.focus(); };
+  document.querySelectorAll('[data-mym]').forEach(b => b.onclick = () => toggleMonth(b.dataset.mym));
+  if ($('f-bill')) $('f-bill').addEventListener('input', () => { F.billEdited = true; });
+}
 
 /* ---------- match names: attach old payments to the right subscriber ---------- */
 const M = { rows:[], i:0, stats:null, last:null, busy:false, results:null };
