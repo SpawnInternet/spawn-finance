@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.12 · 2026-10-10 · GCash screenshot reader + GCash check by day; subscriber cash from Spawn Collect collectors -->
+<!-- SPAWN Finance v1.13 · 2026-10-10 · screenshot preview in the app, clearer GCash check, GCash wallet counts sheet payments -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -376,6 +376,31 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .gb{display:inline-block;margin-top:3px;font-size:11px;font-weight:800;padding:1px 7px;border-radius:99px;background:var(--bg);color:var(--ink-2)}
 .gb.ok{background:var(--teal-l);color:#1d6a61}.gb.no{background:var(--red-l);color:#b02a2a}
 .sc-row{cursor:pointer}.sc-row input{width:18px;height:18px;vertical-align:-3px;margin-right:6px}
+
+.lightbox{position:fixed;inset:0;z-index:300;background:rgba(20,24,33,.92);display:flex;flex-direction:column}
+.lb-top{display:flex;justify-content:space-between;align-items:center;padding:calc(var(--safe-t) + 10px) 16px 10px;color:#fff}
+.lb-top b{font-size:15px}.lb-top button{color:#fff;font-size:22px;padding:4px 10px}
+.lb-body{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;padding:0 10px 20px}
+.lb-body img{max-width:100%;max-height:100%;border-radius:10px;background:#fff}
+.lb-body .empty{color:#fff}
+.pf-view{padding:0;border-radius:6px;overflow:hidden;border:2px solid var(--blue)}
+.gd-hd{align-items:flex-start}
+.gd-l{display:flex;flex-direction:column;gap:6px}
+.gd-pills{display:flex;gap:6px;flex-wrap:wrap}
+.gd-pills i{font-style:normal;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--bg);color:var(--ink-2)}
+.gd-pills i.ok{background:var(--teal-l);color:#1d6a61}.gd-pills i.no{background:var(--red-l);color:#b02a2a}.gd-pills i.todo{background:var(--gold-l);color:#7a5306}
+.gd-r{display:flex;flex-direction:column;align-items:flex-end}.gd-r b{font-size:20px;font-weight:900}.gd-r small{font-size:11px;color:var(--muted)}.gd-r em{font-style:normal;font-size:11px;color:var(--muted);margin-top:4px}
+.gd-all b{font-weight:900}
+.gi{display:block;padding:10px 12px;border-top:1px solid var(--rule)}
+.gi.confirmed{background:#f3fbf9}.gi.not_found{background:#fff5f5}
+.gi-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.gi-name b{display:block;font-size:15px}.gi-name small{display:block;font-size:12px;color:var(--muted)}
+.gi-name code{display:inline-block;margin-top:3px;font-size:12px;background:var(--bg);padding:1px 6px;border-radius:6px}
+.gi-amt{text-align:right;font-weight:900;font-size:17px;display:flex;flex-direction:column;align-items:flex-end}
+.gi-b{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.gi-b button{width:auto;flex:0 1 auto;border:1.5px solid var(--line);border-radius:9px;padding:6px 10px;font-size:13px;font-weight:800;background:#fff;border-top:1.5px solid var(--line)}
+.gi{padding-top:10px}
+.gi-b button.ok{border-color:var(--teal);color:#1d6a61}.gi-b button.no{border-color:#f0a5a5;color:#b02a2a}
 </style>
 </head>
 <body>
@@ -524,6 +549,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
   <div class="xfoot"><div class="tot">Grid total<b id="x-total">₱0</b></div><button class="go" type="button" id="x-save">Save all rows</button></div>
 </section>
 
+<div class="lightbox hide" id="lightbox" role="dialog" aria-label="Screenshot"><div class="lb-top"><b id="lb-title">Screenshot</b><button type="button" id="lb-x" aria-label="Close">✕</button></div><div class="lb-body"><img id="lb-img" alt="Payment screenshot"><div class="empty hide" id="lb-msg"></div></div></div>
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-title">
   <div class="sh-hd"><h2 id="sh-title"></h2><button class="x" id="sh-x" type="button" aria-label="Close">×</button></div>
@@ -1181,7 +1207,7 @@ function renderSheet(){
     title = 'GCash wallet';
     const G = S.gc || { rows:[], closing_balance:0 };
     const rows = G.rows.filter(r => !r.voided_at).slice().reverse();
-    const lbl = { opening:'Opening balance', payment_in:'Payment in', sukli_out:'Sukli given (GCash)', adjust_in:'Adjustment (add)', adjust_out:'Adjustment (subtract)' };
+    const lbl = { opening:'Opening balance', payment_in:'Payment in (app)', sheet_in:'Payment in (sheet)', sukli_out:'Sukli given (GCash)', adjust_in:'Adjustment (add)', adjust_out:'Adjustment (subtract)' };
     h += `<div class="calc"><div class="big" style="border:0;margin:0;padding:0"><span>GCash wallet now</span><b>${pesoN(G.closing_balance)}</b></div></div>`;
     h += `<div class="note">Payments and sukli through GCash land here automatically. The cash box and handover counts never include GCash.</div>`;
     h += rows.length ? `<div class="plist">${rows.map(r => `<${r.payment_id ? `button type="button" data-gp="${r.payment_id}"` : 'div'} class="r"><span>${esc(lbl[r.kind] || r.kind)}<small>${dLabel(r.entry_date)} · ${tLabel(r.entered_at)}${r.memo ? ' · ' + esc(r.memo) : ''}${r.gcash_ref ? ' · ref ' + esc(r.gcash_ref) : ''}</small></span>
@@ -1576,12 +1602,14 @@ function openDetail(type, id){
     if (c.voided_at) rows.push(['Voided', `${esc(c.voided_by)}: ${esc(c.void_reason)}`]);
   }
   let html = `<dl class="kv">${rows.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join('')}</dl>`;
+  if (e && e.payment_id) html += `<button class="go alt" type="button" id="dt-proof">🖼 View GCash screenshot</button>`;
   if (e && e.payment_id && !e.voided_at && !locked) html += `<div class="note">This line is part of a payment. Voiding it voids the whole payment, including any GCash side.</div>`;
   const canVoid = !rec.voided_at && !locked && !(c && c.kind === 'closing') && !(e && e.kind === 'opening' && !S.user.is_owner);
   if (canVoid) html += `<div class="f"><label for="f-reason">Reason for voiding</label><input id="f-reason" autocomplete="off" placeholder="e.g. Double entry, wrong amount"></div>
     <button class="go danger" type="button" id="dt-void">Void this line</button><div class="msg" id="sh-msg" role="alert"></div>`;
   else if (locked) html += `<div class="note">This day is closed, so this line can't be changed. Fix it with an adjustment on today.</div>`;
   openSheet('detail', { title, html, ref:{ type, id, rec } });
+  if ($('dt-proof')) $('dt-proof').onclick = () => gView('fp:' + e.payment_id, 'Screenshot · ' + (e.party || ''));
 }
 async function doVoid(){
   const F = S.form, btn = $('dt-void'), { type, id, rec } = F.ref;
@@ -1838,7 +1866,7 @@ function proofBox(){
   const sd = sentDate(rd.sent); if (sd && Math.abs((new Date(sd) - new Date(workDate())) / 864e5) > 3) warns.push(`Sent on <b>${dLabel(sd)}</b>, but you are recording for ${dLabel(workDate())}.`);
   const row = (k, val) => `<div><span>${k}</span><b>${val || '<i style="font-weight:500;color:var(--muted)">not found, type it</i>'}</b></div>`;
   return `<div class="proofcard">
-    <div class="pc-top">${P.thumb ? `<img src="${P.thumb}" alt="Screenshot">` : ''}<div>
+    <div class="pc-top">${P.thumb ? `<button type="button" id="pf-view" class="pf-view" aria-label="View screenshot"><img src="${P.thumb}" alt="Screenshot"></button>` : ''}<div>
       <b>${P.state === 'reading' ? '<span class="spin"></span> Reading screenshot…' : P.state === 'error' ? '⚠ ' + esc(P.err || 'Could not read') : '✓ Screenshot attached'}</b>
       <small>${P.path ? 'Saved with the payment' : P.state === 'reading' ? 'Uploading…' : P.upErr ? '⚠ Not uploaded: ' + esc(P.upErr) : ''}</small></div>
       <button type="button" id="pf-x" aria-label="Remove screenshot">✕</button></div>
@@ -1851,6 +1879,7 @@ function wireProof(){
   if ($('pf-pick')) $('pf-pick').onclick = () => $('pf-file').click();
   if ($('pf-file')) $('pf-file').onchange = e => { const f = e.target.files && e.target.files[0]; if (f) attachProof(f); };
   if ($('pf-x')) $('pf-x').onclick = () => { F.proof = null; drawProof(); };
+  if ($('pf-view')) $('pf-view').onclick = () => { if (F.proof && F.proof.full) lightbox(F.proof.full, 'Screenshot (check it is correct)'); };
 }
 async function attachProof(file){
   const F = S.form; if (!F) return;
@@ -1862,6 +1891,7 @@ async function attachProof(file){
   F.proof.thumb = canvasOf(im, 120).toDataURL('image/jpeg', 0.6);
   drawProof();
   const data = small.toDataURL('image/jpeg', 0.72);
+  F.proof.full = data; drawProof();
   const up = fetch(PROOF_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ action:'upload', pin:S.pin, image:data }) })
     .then(r => r.json()).then(j => { if (S.form !== F || !F.proof) return; if (j.ok) F.proof.path = j.path; else F.proof.upErr = j.error || 'upload failed'; })
     .catch(() => { if (F.proof) F.proof.upErr = 'no connection'; });
@@ -1910,18 +1940,23 @@ function drawGcheck(){
   if (!D.days.length) { el.innerHTML = '<div class="empty">No GCash payments in the last 14 days.</div>'; return; }
   el.innerHTML = D.days.map(d => {
     const open = G.open === d.date, left = d.count - d.confirmed;
-    return `<div class="gday ${d.confirmed === d.count ? 'done' : ''}">
-      <button type="button" class="gd-hd" data-gday="${d.date}"><span><b>${dLabel(d.date)}</b><small>${d.count} payment${d.count > 1 ? 's' : ''} · ${d.confirmed} confirmed${d.not_found ? ' · ' + d.not_found + ' not found' : ''}</small></span><span class="amt">${peso(d.total)}</span></button>
-      ${left ? `<button type="button" class="go alt gd-all" data-gall="${d.date}">GCash shows ${peso(d.total)} received on ${dLabel(d.date)} → confirm all ${left}</button>` : ''}
-      ${open ? `<div class="plist">${d.items.map(i => `<div class="r gi"><span><b>${esc(i.name)}</b><small>${esc(i.source)}${i.ref ? ' · ref ' + esc(i.ref) : ''}${i.sent_at ? ' · sent ' + esc(i.sent_at) : ''}${i.app ? ' · ' + esc(i.app) : ''}${i.checked_by ? ' · by ' + esc(i.checked_by) : ''}</small>${gBadge(i.status)}</span>
-        <span class="gi-r"><b>${peso(i.amount)}</b><span class="gi-b">${i.proof ? `<button type="button" data-gview="${i.key}">🖼</button>` : ''}${i.status !== 'confirmed' ? `<button type="button" data-gok="${i.key}">✓</button>` : ''}${i.status !== 'not_found' ? `<button type="button" data-gno="${i.key}">✕</button>` : ''}${i.status !== 'recorded' ? `<button type="button" data-gundo="${i.key}">↺</button>` : ''}</span></span></div>`).join('')}</div>` : ''}
+    const done = d.confirmed === d.count;
+    return `<div class="gday ${done ? 'done' : ''}">
+      <button type="button" class="gd-hd" data-gday="${d.date}">
+        <span class="gd-l"><b>${dLabel(d.date)}</b><span class="gd-pills"><i>${d.count} payment${d.count > 1 ? 's' : ''}</i><i class="${done ? 'ok' : ''}">${d.confirmed} confirmed</i>${d.not_found ? `<i class="no">${d.not_found} not found</i>` : ''}${left && !done ? `<i class="todo">${left} to check</i>` : ''}</span></span>
+        <span class="gd-r"><b>${peso(d.total)}</b><small>${done ? 'all confirmed ✓' : 'total expected in GCash'}</small><em>${open ? '▲' : '▼'}</em></span></button>
+      ${left ? `<button type="button" class="go alt gd-all" data-gall="${d.date}">GCash history shows <b>${peso(d.total)}</b> received on ${dLabel(d.date)}? → Confirm all ${left}</button>` : ''}
+      ${open ? `<div class="plist">${d.items.map(i => `<div class="gi ${i.status}">
+        <div class="gi-top"><span class="gi-name"><b>${esc(i.name)}</b><small>${esc(i.source)}${i.app ? ' · ' + esc(i.app) : ''}${i.sent_at ? ' · sent ' + esc(i.sent_at) : ''}${i.checked_by ? ' · checked by ' + esc(i.checked_by) : ''}</small>${i.ref ? `<code>ref ${esc(i.ref)}</code>` : '<small>no ref no.</small>'}</span><span class="gi-amt">${peso(i.amount)}${gBadge(i.status)}</span></div>
+        <div class="gi-b">${i.proof ? `<button type="button" data-gview="${i.key}" data-gname="${esc(i.name)}">🖼 Screenshot</button>` : ''}${i.status !== 'confirmed' ? `<button type="button" class="ok" data-gok="${i.key}">✓ Found in GCash</button>` : ''}${i.status !== 'not_found' ? `<button type="button" class="no" data-gno="${i.key}">✕ Not found</button>` : ''}${i.status !== 'recorded' ? `<button type="button" data-gundo="${i.key}">↺ Undo</button>` : ''}</div>
+      </div>`).join('')}</div>` : ''}
     </div>`; }).join('');
   el.querySelectorAll('[data-gday]').forEach(b => b.onclick = () => { G.open = G.open === b.dataset.gday ? null : b.dataset.gday; drawGcheck(); });
   el.querySelectorAll('[data-gall]').forEach(b => b.onclick = () => { const d = D.days.find(x => x.date === b.dataset.gall); gMark(d.items.filter(i => i.status !== 'confirmed').map(i => i.key), 'confirmed'); });
   el.querySelectorAll('[data-gok]').forEach(b => b.onclick = () => gMark([b.dataset.gok], 'confirmed'));
   el.querySelectorAll('[data-gno]').forEach(b => b.onclick = () => gMark([b.dataset.gno], 'not_found'));
   el.querySelectorAll('[data-gundo]').forEach(b => b.onclick = () => gMark([b.dataset.gundo], 'recorded'));
-  el.querySelectorAll('[data-gview]').forEach(b => b.onclick = () => gView(b.dataset.gview));
+  el.querySelectorAll('[data-gview]').forEach(b => b.onclick = () => gView(b.dataset.gview, 'Screenshot · ' + (b.dataset.gname || '')));
 }
 async function gMark(keys, status){
   if (G.busy || !keys.length) return; G.busy = true;
@@ -1929,13 +1964,21 @@ async function gMark(keys, status){
   catch (e) { toast(e.message, 3500); }
   G.busy = false;
 }
-async function gView(key){
-  const w = window.open('', '_blank');
+function lightbox(src, title){
+  $('lb-title').textContent = title || 'Screenshot';
+  $('lb-img').src = src || ''; $('lb-img').classList.toggle('hide', !src); $('lb-msg').classList.toggle('hide', !!src);
+  $('lightbox').classList.remove('hide');
+}
+$('lb-x').addEventListener('click', () => { $('lightbox').classList.add('hide'); $('lb-img').src = ''; });
+$('lightbox').addEventListener('click', e => { if (e.target === $('lightbox')) $('lb-x').click(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('lightbox').classList.contains('hide')) { e.preventDefault(); $('lb-x').click(); } });
+async function gView(key, title){
+  $('lb-msg').textContent = 'Loading screenshot…'; lightbox('', title || 'Screenshot');
   try {
     const r = await fetch(PROOF_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ action:'view', pin:S.pin, key }) }).then(x => x.json());
-    if (!r.ok) throw new Error(r.error || 'Could not open');
-    if (w) w.location = r.url; else location.href = r.url;
-  } catch (e) { if (w) w.close(); toast(e.message, 3500); }
+    if (!r.ok) throw new Error(r.error === 'no screenshot' ? 'No screenshot was attached to this payment.' : (r.error || 'Could not open'));
+    lightbox(r.url, title || 'Screenshot');
+  } catch (e) { $('lb-msg').textContent = e.message; }
 }
 document.addEventListener('keydown', e => {
   if ($('v-gcheck').classList.contains('hide') || e.key !== 'Escape' || S.form) return;
