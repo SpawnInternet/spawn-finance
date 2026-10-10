@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.14 · 2026-10-10 · owner can close all past days from the notebook in one tap -->
+<!-- SPAWN Finance v1.15 · 2026-10-10 · Approvals: days-without-internet deductions, plan change requests, balances; Change plan on the subscriber card -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -401,6 +401,8 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .gi-b button{width:auto;flex:0 1 auto;border:1.5px solid var(--line);border-radius:9px;padding:6px 10px;font-size:13px;font-weight:800;background:#fff;border-top:1.5px solid var(--line)}
 .gi{padding-top:10px}
 .gi-b button.ok{border-color:var(--teal);color:#1d6a61}.gi-b button.no{border-color:#f0a5a5;color:#b02a2a}
+
+.t-appr{background:#fff;color:#1f6b3a;border:1.5px solid #9fd9b5}
 </style>
 </head>
 <body>
@@ -462,6 +464,9 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
       <button class="tile t-bugi small" data-go="bugi" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M4 20l16-16"/></svg>
         <div><b>Bugi found</b><br><span>Old coins found while counting</span></div></button>
+      <button class="tile t-appr small" data-go="appr" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3 7-7"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
+        <div><b>Approvals</b><br><span>Deductions, plan changes, balances</span></div></button>
       <button class="tile t-gcheck small" data-go="gcheck" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M9 12.5l2 2 4-4.5"/></svg>
         <div><b>GCash check</b><br><span>Confirm GCash against the account</span></div></button>
@@ -850,6 +855,7 @@ document.querySelector('.tiles').addEventListener('click', e => {
   if (g === 'parts') { openSheet('parts'); loadParts(); return; }
   if (g === 'match') { show('match'); loadMatch(); return; }
   if (g === 'gcheck') { show('gcheck'); loadGcheck(); return; }
+  if (g === 'appr') { openSheet('appr'); loadAppr(); return; }
   openSheet(g);
 });
 
@@ -1033,7 +1039,8 @@ function renderSheet(){
           h += `<button type="button" class="linkbtn" id="f-free">Not a subscriber? Type a name instead</button>`;
         } else {
           const sb = F.sub, SM = F.subMonths, cy = Number(todayPH().slice(0, 4));
-          h += `<div class="subcard ${sb.status === 'cutoff' ? 'cut' : ''}"><div><b>${esc(sb.name)}</b><small>${[sb.area, sb.address].filter(Boolean).map(esc).join(' · ')}${sb.monthly ? ' · ' + peso(sb.monthly) + '/mo' : ''}${sb.due_day ? ' · due every ' + sb.due_day : ''}${sb.status === 'cutoff' ? ' · CUT OFF' : ''}</small></div><button type="button" id="f-subx">Change</button></div>`;
+          h += `<div class="subcard ${sb.status === 'cutoff' ? 'cut' : ''}"><div><b>${esc(sb.name)}</b><small>${[sb.area, sb.address].filter(Boolean).map(esc).join(' · ')}${sb.monthly ? ' · ' + peso(sb.monthly) + '/mo' : ''}${sb.due_day ? ' · due every ' + sb.due_day : ''}${sb.status === 'cutoff' ? ' · CUT OFF' : ''}</small><button type="button" class="linkbtn" id="f-plan" style="margin:4px 0 0">Change plan…</button></div><button type="button" id="f-subx">Change</button></div>`;
+          if (F.planOpen) h += `<div class="proofcard"><b>Change plan for ${esc(sb.name)}</b><div class="f" style="margin-top:8px">${seg2('np', [['1000','₱1,000 · 20'],['1500','₱1,500 · 50'],['2000','₱2,000 · 100']], F.np || '')}</div><div class="two"><div class="f"><label for="f-pym">Starting month</label><input type="month" id="f-pym" value="${F.pym || todayPH().slice(0, 7)}"></div>${money('f-pother', 'Other amount', F.pother ?? '')}</div>${text('f-pnote', 'Note (optional)', F.pnote || '')}<button type="button" class="go alt" id="f-plansave">Save plan change</button></div>`;
           if (!SM) h += `<div class="empty"><span class="spin"></span> Loading months…</div>`;
           else {
             h += `<div class="f"><label>Months being paid <small style="font-weight:600;color:var(--muted)">(tap to pick)</small></label><div class="mchips">${SM.months.map(m =>
@@ -1195,6 +1202,29 @@ function renderSheet(){
       h += actions('Save hand-in');
     }
   }
+  else if (F.kind === 'appr') {
+    title = 'Approvals';
+    const A = S.appr;
+    h += `<div class="sec">Add a deduction · days without internet</div>
+      <div class="note">Rate ÷ 30 per day. The collector then sees the reduced amount to collect for that month.</div>`;
+    if (!F.dsub) {
+      h += `<div class="f"><label for="f-dq">Subscriber</label><input id="f-dq" autocomplete="off" placeholder="Name, address or account no." value="${esc(F.dq || '')}"></div><div class="subres" id="dres">${F.dres ? (F.dres.length ? F.dres.map((r, i) => `<button type="button" data-dsid="${r.id}" class="${i === 0 ? 'first' : ''}"><span><b>${esc(r.name)}</b><small>${[r.area, r.address].filter(Boolean).map(esc).join(' · ')}</small></span><span class="amt">${r.monthly_amount ? peso(r.monthly_amount) : ''}</span></button>`).join('') : '<div class="hint">No subscriber found.</div>') : '<div class="hint">Type at least 2 letters.</div>'}</div>`;
+    } else {
+      h += `<div class="subcard"><div><b>${esc(F.dsub.name)}</b><small>${[F.dsub.area, F.dsub.address].filter(Boolean).map(esc).join(' · ')}${F.dsub.monthly_amount ? ' · ' + peso(F.dsub.monthly_amount) + '/mo' : ''}</small></div><button type="button" id="f-dsubx">Change</button></div>`;
+      h += `<div class="two"><div class="f"><label for="f-dym">Month</label><input type="month" id="f-dym" value="${F.dym || todayPH().slice(0, 7)}"></div>${money('f-ddays', 'Days without internet', F.ddays ?? '')}</div>`;
+      h += text('f-dreason', 'Reason (optional)', F.dreason || '', 'placeholder="e.g. fiber cut, no power at NAP"');
+      h += `<div class="calc" id="dcalc"></div><button class="go" type="button" id="f-dsave">Approve deduction</button><div class="msg" id="sh-msg" role="alert"></div>`;
+    }
+    if (!A) h += '<div class="empty"><span class="spin"></span></div>';
+    else {
+      h += `<div class="sec">Plan change requests from collectors${A.plan_requests.length ? ' · ' + A.plan_requests.length : ''}</div>`;
+      h += A.plan_requests.length ? `<div class="plist">${A.plan_requests.map(r => `<div class="r gi"><span><b>${esc(r.name)}</b><small>${peso(r.old || 0)} → <b>${peso(r.new)}</b> from ${esc(r.from)} · by ${esc(r.by || '')}${r.note ? ' · ' + esc(r.note) : ''}</small></span><span class="gi-b"><button type="button" class="ok" data-pok="${r.id}">✓ Approve</button><button type="button" class="no" data-pno="${r.id}">✕ Decline</button></span></div>`).join('')}</div>` : '<div class="empty" style="padding:4px 0">None waiting.</div>';
+      h += `<div class="sec">Deductions this month and last</div>`;
+      h += A.deductions.length ? `<div class="plist">${A.deductions.map(d => `<div class="r gi"><span><b>${esc(d.name)}</b><small>${esc(d.month)} · ${d.days} day${d.days > 1 ? 's' : ''} · −${peso(d.amount)} of ${peso(d.rate)}${d.reason ? ' · ' + esc(d.reason) : ''} · by ${esc(d.by)}${d.used ? ' · <b>used</b>' : ''}</small></span>${d.used ? '' : `<button type="button" class="linkbtn" data-dvoid="${d.id}" style="margin:0">Remove</button>`}</div>`).join('')}</div>` : '<div class="empty" style="padding:4px 0">None.</div>';
+      h += `<div class="sec">Balances owed (partial payments)</div>`;
+      h += A.balances.length ? `<div class="plist">${A.balances.map(b => `<div class="r"><span><b>${esc(b.name)}</b><small>${esc(b.month)} · paid ${peso(b.paid)} of ${peso(b.due)}${b.by ? ' · ' + esc(b.by) : ''}</small></span><b style="color:#b02a2a">${peso(b.balance)}</b></div>`).join('')}</div>` : '<div class="empty" style="padding:4px 0">No balances. ✓</div>';
+    }
+  }
   else if (F.kind === 'bugi') {
     title = 'Bugi found';
     h += dateBar();
@@ -1276,7 +1306,7 @@ function keep(){ // remember typed values when switching modes
   const F = S.form; if (!F) return;
   const map = { 'f-amt':'amt','f-ht':'ht','f-le':'le','f-lb':'lb','f-memo':'memo','f-party':'party','f-bank':'bank','f-ref':'ref','f-cf':'cf','f-ct':'ct','f-by':'by','f-p5':'p5','f-p1':'p1','f-bills':'bills','f-loose':'loose','f-area':'area','f-q':'q',
     'f-cust':'cust','f-bill':'bill','f-gave':'gave','f-gref':'gref','f-part':'part','f-qty':'qty','f-unit':'unit','f-taker':'taker','f-purpose':'purpose','f-jo':'jo',
-    'f-gadj':'gadj','f-gmemo':'gmemo','f-or':'or','f-sq':'sq' };
+    'f-gadj':'gadj','f-gmemo':'gmemo','f-or':'or','f-sq':'sq','f-dq':'dq','f-ddays':'ddays','f-dreason':'dreason','f-dym':'dym','f-pym':'pym','f-pother':'pother','f-pnote':'pnote' };
   for (const [id, k] of Object.entries(map)) if ($(id)) F[k] = $(id).value;
 }
 
@@ -1323,11 +1353,12 @@ function wireSheet(){
       const first = $('f-amt') || $('f-cust') || $('f-part') || $('f-party'); if (first) first.focus({preventScroll:true});
     });
   }
-  ['pv','cv','ga'].forEach(n => body.querySelectorAll(`[data-${n}]`).forEach(b => b.onclick = () => {
+  ['pv','cv','ga','np'].forEach(n => body.querySelectorAll(`[data-${n}]`).forEach(b => b.onclick = () => {
     F[n] = b.dataset[n]; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); liveCalc();
   }));
   if ($('f-gave')) $('f-gave').placeholder = 'Same as bill';
-  if (F.kind === 'collect' && F.mode === 'office_collection') { wireSubPay(); wireProof(); }
+  if (F.kind === 'collect' && F.mode === 'office_collection') { wireSubPay(); wireProof(); wirePlan(); }
+  if (F.kind === 'appr') wireAppr();
   if (F.kind === 'subcash') {
     body.querySelectorAll('[data-sc]').forEach(b => b.onchange = () => {
       const id = +b.dataset.sc; F.scSel = b.checked ? [...new Set([...F.scSel, id])] : F.scSel.filter(x => x !== id);
@@ -1937,6 +1968,62 @@ function body0(){ return $('sh-body'); }
 function proofDetail(){
   const P = S.form && S.form.proof; if (!P || !P.path) return {};
   return { proof_path:P.path, proof_sent_at:(P.read && P.read.sent) || null, proof_app:(P.read && P.read.app) || null };
+}
+
+/* ---------- plan change (office) ---------- */
+function wirePlan(){
+  const F = S.form;
+  if ($('f-plan')) $('f-plan').onclick = () => { keep(); F.planOpen = !F.planOpen; renderSheet(); };
+  if ($('f-plansave')) $('f-plansave').onclick = async () => {
+    const amt = F.np ? Number(F.np) : num(v('f-pother')); const ym = v('f-pym');
+    if (!(amt > 0)) throw0('Pick a plan or type the amount.');
+    try {
+      busy($('f-plansave'), true);
+      const r = await rpc('fin_plan_change', { p_pin:S.pin, p_sub_id:F.sub.id, p_new:amt, p_effective_ym:ym, p_note:v('f-pnote') || null });
+      toast(`Plan changed: ${peso(r.old || 0)} → ${peso(r.new)} from ${r.from}`, 3500);
+      F.planOpen = false; F.np = ''; keep(); pickSub(F.sub.id);
+    } catch (e) { say(e.message); busy($('f-plansave'), false); }
+  };
+}
+function throw0(m){ say(m); throw new Error(m); }
+
+/* ---------- approvals (office) ---------- */
+async function loadAppr(){
+  try { S.appr = await rpc('fin_approvals', { p_pin:S.pin }); } catch (e) { toast(e.message, 4000); }
+  if (S.form && S.form.kind === 'appr') { keep(); renderSheet(); }
+}
+function wireAppr(){
+  const F = S.form;
+  if ($('f-dq')) {
+    let t = null;
+    $('f-dq').addEventListener('input', () => { F.dq = $('f-dq').value; clearTimeout(t); t = setTimeout(async () => {
+      if ((F.dq || '').trim().length < 2) { F.dres = null; } else { try { F.dres = (await rpc('fin_sub_search', { p_pin:S.pin, p_q:F.dq, p_limit:8 })).rows; } catch (e) { F.dres = []; } }
+      const el = $('dres'); if (el) { keep(); renderSheet(); const q = $('f-dq'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+    }, 250); });
+    $('f-dq').addEventListener('keydown', e => { if (e.key === 'Enter' && F.dres && F.dres[0]) { e.preventDefault(); pickDsub(F.dres[0].id); } });
+  }
+  $('sh-body').querySelectorAll('[data-dsid]').forEach(b => b.onclick = () => pickDsub(+b.dataset.dsid));
+  if ($('f-dsubx')) $('f-dsubx').onclick = () => { keep(); F.dsub = null; F.dres = null; F.dq = ''; renderSheet(); };
+  const dcalc = () => { const c = $('dcalc'); if (!c || !F.dsub) return; const rate = Number(F.dsub.monthly_amount || 0), days = num(v('f-ddays')); const ded = rate ? Math.round(rate / 30 * days) : 0;
+    c.innerHTML = rate ? `<div><span>Rate</span><b>${peso(rate)}</b></div><div><span>${days || 0} day${days === 1 ? '' : 's'} × ${peso(rate / 30)}</span><b>−${peso(ded)}</b></div><div class="big"><span>Collect this month</span><b>${peso(Math.max(0, rate - ded))}</b></div>` : '<div><span>No monthly rate on record for this subscriber.</span></div>'; };
+  if ($('f-ddays')) { $('f-ddays').addEventListener('input', () => { F.ddays = v('f-ddays'); dcalc(); }); dcalc(); }
+  if ($('f-dym')) $('f-dym').addEventListener('change', () => { F.dym = v('f-dym'); });
+  if ($('f-dsave')) $('f-dsave').onclick = async () => {
+    const days = num(v('f-ddays')); if (!(days >= 1)) { say('Enter the days without internet.'); return; }
+    try { busy($('f-dsave'), true);
+      const r = await rpc('fin_deduction_add', { p_pin:S.pin, p_sub_id:F.dsub.id, p_ym:v('f-dym'), p_days:days, p_reason:v('f-dreason') || null });
+      toast(`Deduction approved: −${peso(r.amount)} · collect ${peso(r.due)}`, 3500);
+      F.dsub = null; F.dq = ''; F.dres = null; F.ddays = ''; F.dreason = ''; await loadAppr();
+    } catch (e) { say(e.message); busy($('f-dsave'), false); }
+  };
+  $('sh-body').querySelectorAll('[data-pok]').forEach(b => b.onclick = () => decidePlan(+b.dataset.pok, true));
+  $('sh-body').querySelectorAll('[data-pno]').forEach(b => b.onclick = () => decidePlan(+b.dataset.pno, false));
+  $('sh-body').querySelectorAll('[data-dvoid]').forEach(b => b.onclick = async () => { try { await rpc('fin_deduction_void', { p_pin:S.pin, p_id:+b.dataset.dvoid }); toast('Deduction removed.'); await loadAppr(); } catch (e) { toast(e.message, 3500); } });
+}
+function pickDsub(id){ const F = S.form; const r = (F.dres || []).find(x => x.id === id); if (!r) return; keep(); F.dsub = r; renderSheet(); const d = $('f-ddays'); if (d) d.focus(); }
+async function decidePlan(id, ok){
+  try { await rpc('fin_plan_decide', { p_pin:S.pin, p_id:id, p_approve:ok }); toast(ok ? 'Plan change approved.' : 'Request declined.'); await loadAppr(); }
+  catch (e) { toast(e.message, 3500); }
 }
 
 /* ---------- GCash check by day ---------- */
