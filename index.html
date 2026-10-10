@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.11 · 2026-10-09 · Customer pays: pick the subscriber, tap the unpaid months, type the OR — one save updates cash, months and the Auto sheet -->
+<!-- SPAWN Finance v1.12 · 2026-10-10 · GCash screenshot reader + GCash check by day; subscriber cash from Spawn Collect collectors -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -354,6 +354,28 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .mc.unpaid{border-color:#f0a5a5;background:var(--red-l)}.mc.unpaid small{color:#b02a2a}
 .mc.due{border-color:var(--gold);background:var(--gold-l)}.mc.due small{color:#9a6408}
 .mc.on{background:var(--ink);border-color:var(--ink);color:#fff;opacity:1}.mc.on small{color:#dfe5ee}
+
+.t-gcheck{background:#fff;color:#0c447c;border:1.5px solid #85b7eb}
+.proofbtn{width:100%;text-align:left;border:1.5px dashed var(--blue);border-radius:12px;padding:10px 12px;background:var(--blue-l);color:#244c9c;font-weight:800;font-size:14px;margin-bottom:12px}
+.proofbtn small{display:block;font-weight:600;font-size:12px;opacity:.85}
+.proofcard{border:1.5px solid var(--line);border-radius:12px;padding:10px;margin-bottom:12px;background:#fff}
+.pc-top{display:flex;gap:10px;align-items:center}
+.pc-top img{width:44px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.pc-top div{flex:1;min-width:0}.pc-top b{display:block;font-size:14px}.pc-top small{display:block;font-size:12px;color:var(--muted)}
+.pc-top button{font-size:16px;color:var(--muted);padding:4px 8px}
+.pwarn{margin-top:8px;font-size:13px;background:var(--gold-l);color:#7a5306;border-radius:9px;padding:7px 10px}
+.gday{background:#fff;border:1px solid var(--line);border-radius:14px;padding:4px;margin-bottom:10px}
+.gday.done{border-color:#9fd9cf}
+.gd-hd{display:flex;justify-content:space-between;align-items:center;width:100%;padding:10px 12px;text-align:left}
+.gd-hd b{display:block;font-size:15px}.gd-hd small{display:block;font-size:12px;color:var(--muted)}.gd-hd .amt{font-weight:900;font-size:16px}
+.gd-all{margin:0 8px 8px;width:calc(100% - 16px);font-size:13px}
+.gday .plist{margin:0 8px 8px}
+.gi small{display:block}
+.gi-r{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.gi-b{display:flex;gap:4px}.gi-b button{border:1.5px solid var(--line);border-radius:8px;padding:3px 8px;font-size:13px;font-weight:800;background:#fff}
+.gb{display:inline-block;margin-top:3px;font-size:11px;font-weight:800;padding:1px 7px;border-radius:99px;background:var(--bg);color:var(--ink-2)}
+.gb.ok{background:var(--teal-l);color:#1d6a61}.gb.no{background:var(--red-l);color:#b02a2a}
+.sc-row{cursor:pointer}.sc-row input{width:18px;height:18px;vertical-align:-3px;margin-right:6px}
 </style>
 </head>
 <body>
@@ -415,6 +437,9 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
       <button class="tile t-bugi small" data-go="bugi" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M4 20l16-16"/></svg>
         <div><b>Bugi found</b><br><span>Old coins found while counting</span></div></button>
+      <button class="tile t-gcheck small" data-go="gcheck" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M9 12.5l2 2 4-4.5"/></svg>
+        <div><b>GCash check</b><br><span>Confirm GCash against the account</span></div></button>
       <button class="tile t-match small" data-go="match" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="3.5"/><path d="M2.5 19c0-3 2.5-5.5 5.5-5.5"/><path d="M13 12h8M17 8l4 4-4 4"/></svg>
         <div><b>Match names</b><br><span>Attach payments to subscribers</span></div></button>
@@ -433,6 +458,8 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
    <aside class="home-side">
     <div class="sec" id="h-coll-sec">Collectors still to hand in <span id="h-coll-start" style="font-weight:600;color:var(--muted)"></span></div>
     <div class="coll" id="h-coll"><div class="empty">Loading…</div></div>
+    <div class="sec hide" id="h-scash-sec">Subscriber cash with collectors <span style="font-weight:600;color:var(--muted)">· Spawn Collect</span></div>
+    <div class="coll hide" id="h-scash"></div>
     <div class="sec">Who owes the office cash</div>
     <div class="owed" id="h-owed"><div class="empty">Nobody owes cash right now.</div></div>
    </aside>
@@ -440,6 +467,13 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 </section>
 
 <!-- BOOK -->
+<section id="v-gcheck" class="hide">
+  <div class="wrap mwrap">
+    <div class="note" style="margin-bottom:12px">Compare each day's total with the <b>money received</b> in the GCash history from the account owner. If the day's total matches, confirm the whole day. If not, open the day and tick each payment you can find.</div>
+    <div id="gc-days"><div class="empty"><span class="spin"></span></div></div>
+  </div>
+</section>
+
 <section id="v-match" class="hide">
   <div class="wrap mwrap">
     <div class="mprog"><div class="mbar"><i id="m-bar"></i></div><div class="mstat" id="m-stat">Loading…</div></div>
@@ -591,10 +625,10 @@ async function rpc(fn, args = {}){
 
 /* ---------- views ---------- */
 function show(v){
-  ['pin','home','book','exp','match'].forEach(x => $('v-' + x).classList.toggle('hide', x !== v));
-  $('btn-home').classList.toggle('hide', v !== 'book' && v !== 'exp' && v !== 'match');
+  ['pin','home','book','exp','match','gcheck'].forEach(x => $('v-' + x).classList.toggle('hide', x !== v));
+  $('btn-home').classList.toggle('hide', !['book','exp','match','gcheck'].includes(v));
   $('btn-user').classList.toggle('hide', v === 'pin');
-  $('bar-sub').textContent = v === 'book' ? 'Book' : v === 'exp' ? 'Expenses' : v === 'match' ? 'Match names' : 'Cash book';
+  $('bar-sub').textContent = v === 'book' ? 'Book' : v === 'exp' ? 'Expenses' : v === 'match' ? 'Match names' : v === 'gcheck' ? 'GCash check' : 'Cash book';
   window.scrollTo(0, 0);
 }
 
@@ -679,13 +713,14 @@ async function refresh(){
   const t = todayPH();
   const from = addDays(t, -(Math.max(S.range, 31) - 1));
   try {
-    const [book, look, coll, gc] = await Promise.all([
+    const [book, look, coll, gc, scash] = await Promise.all([
       rpc('fin_cash_book', { p_pin:S.pin, p_from:from, p_to:t }),
       rpc('fin_lookups', { p_pin:S.pin }),
       rpc('fin_collector_status', { p_pin:S.pin }).catch(() => null),
-      rpc('fin_gcash_book', { p_pin:S.pin, p_from:addDays(t, -30), p_to:t }).catch(() => null)
+      rpc('fin_gcash_book', { p_pin:S.pin, p_from:addDays(t, -30), p_to:t }).catch(() => null),
+      rpc('fin_sub_cash_pending', { p_pin:S.pin }).catch(() => null)
     ]);
-    S.book = book; S.look = look; S.coll = coll; S.gc = gc;
+    S.book = book; S.look = look; S.coll = coll; S.gc = gc; S.scash = scash;
   } catch (e) { toast(e.message, 4000); }
   renderHome();
   if (!$('v-book').classList.contains('hide')) renderBook();
@@ -753,12 +788,20 @@ function renderHome(){
         <span class="amt ${u <= 0 ? 'ok' : ''}">${u > 0 ? peso(u) : 'ahead'}</span></button>`; }).join('')
       : '<div class="empty">Everyone has handed in their Spawn share. ✓</div>';
   }
+  const SC = S.scash && S.scash.collectors || [];
+  $('h-scash-sec').classList.toggle('hide', !SC.length); $('h-scash').classList.toggle('hide', !SC.length);
+  $('h-scash').innerHTML = SC.map(c => `<button type="button" data-scash="${esc(c.collector)}"><span><b class="n">${esc(c.collector)}</b><small>${c.n} receipt${c.n > 1 ? 's' : ''} since ${dLabel(c.oldest)}</small></span><span class="amt">${peso(c.total)}</span></button>`).join('');
   $('h-owed').innerHTML = B.owed.length
     ? B.owed.map(o => `<div><span>${esc(o.party)}</span><b>${peso(o.outstanding)}</b></div>`).join('')
     : '<div class="empty">Nobody owes cash right now.</div>';
 }
 $('h-gc').addEventListener('click', () => { if (S.gc) openSheet('gcash'); });
 $('h-bugi').addEventListener('click', () => { if (S.book) openSheet('bugi'); });
+$('h-scash').addEventListener('click', e => {
+  const b = e.target.closest('[data-scash]'); if (!b || !S.scash) return;
+  const c = S.scash.collectors.find(x => x.collector === b.dataset.scash); if (!c) return;
+  openSheet('subcash', { col:c.collector, scSel:c.items.map(i => i.id) });
+});
 $('h-coll').addEventListener('click', e => {
   const b = e.target.closest('[data-coll]'); if (!b || !S.book) return;
   openSheet('collect', { mode:'collection' }); pickCollector(b.dataset.coll);
@@ -780,6 +823,7 @@ document.querySelector('.tiles').addEventListener('click', e => {
   if (g === 'expense') { openSheet('expense'); return; }
   if (g === 'parts') { openSheet('parts'); loadParts(); return; }
   if (g === 'match') { show('match'); loadMatch(); return; }
+  if (g === 'gcheck') { show('gcheck'); loadGcheck(); return; }
   openSheet(g);
 });
 
@@ -973,10 +1017,12 @@ function renderSheet(){
                                : `<div class="note" style="background:var(--teal-l);color:#1d6a61">All months up to now are paid ✓</div>`;
           }
           h += text('f-or', 'OR number / GCash ref', F.or || '', 'autocomplete="off" placeholder="0012457"');
+          h += `<div id="proofbox">${proofBox()}</div>`;
         }
       } else {
         h += text('f-cust', 'Customer name', F.cust || '', 'list="dl-parties" placeholder="Name"') + dlist('dl-parties', L.parties);
         h += `<button type="button" class="linkbtn" id="f-unfree">← Back to subscriber search</button>`;
+        h += `<div id="proofbox">${proofBox()}</div>`;
       }
       h += `<div class="two">${money('f-bill', 'Bill (amount due)', F.bill ?? '')}${money('f-gave', 'Customer gave', F.gave ?? '')}</div>`;
       h += `<div class="f"><label>Paid through</label>${seg2('pv', [['cash','Cash'],['gcash','GCash']], F.pv)}</div>`;
@@ -1104,6 +1150,19 @@ function renderSheet(){
     h += `<button class="go" type="button" id="sh-save">Save</button><div class="msg" id="sh-msg" role="alert"></div>`;
     h += `<div class="sec">${workDate() === todayPH() ? 'Released today' : 'Released on ' + dLabel(workDate())}</div><div id="parts-today">${partsToday()}</div>`;
   }
+  else if (F.kind === 'subcash') {
+    const c = (S.scash && S.scash.collectors || []).find(x => x.collector === F.col);
+    title = 'Subscriber cash · ' + F.col;
+    h += dateBar();
+    if (!c) h += '<div class="empty">Nothing waiting from ' + esc(F.col) + '.</div>';
+    else {
+      h += `<div class="note">Payments ${esc(F.col)} collected in Spawn Collect. Tick what is being handed over now, count the cash, then save.</div>`;
+      h += `<div class="plist">${c.items.map(i => `<label class="r sc-row"><span><input type="checkbox" data-sc="${i.id}" ${F.scSel.includes(i.id) ? 'checked' : ''}> <b>${esc(i.name)}</b><small>${esc(i.receipt)} · ${dLabel(i.date)}${i.covers ? ' · ' + esc(i.covers) : ''}</small></span><b>${peso(i.amount)}</b></label>`).join('')}</div>`;
+      h += money('f-amt', 'Cash counted', F.amt ?? '');
+      h += `<div class="calc" id="calc"></div>`;
+      h += actions('Save hand-in');
+    }
+  }
   else if (F.kind === 'bugi') {
     title = 'Bugi found';
     h += dateBar();
@@ -1162,6 +1221,11 @@ function liveCalc(){
     const ce = (F.pv === 'cash' ? gave : 0) - (ch > 0 && F.cv === 'cash' ? ch : 0);
     const ge = (F.pv === 'gcash' ? gave : 0) - (ch > 0 && F.cv === 'gcash' ? ch : 0);
     c.innerHTML = `<div><span>Income</span><b>${peso(bill)}</b></div><div><span>Cash box</span><b>${pesoS(ce)}</b></div><div><span>GCash wallet</span><b>${pesoS(ge)}</b></div>`;
+  }
+  if (F.kind === 'subcash' && c) {
+    const exp = scExpected(), cnt = v('f-amt') === '' ? exp : num(v('f-amt')), d = cnt - exp;
+    c.innerHTML = `<div><span>Expected (${F.scSel.length} receipt${F.scSel.length === 1 ? '' : 's'})</span><b>${peso(exp)}</b></div><div><span>Counted</span><b>${peso(cnt)}</b></div>
+      <div class="big"><span>${d === 0 ? 'Exact' : d < 0 ? 'Short' : 'Over'}</span><b class="${d === 0 ? 'diff0' : 'diffx'}">${d === 0 ? '✓' : peso(Math.abs(d))}</b></div>`;
   }
   if ((F.kind === 'count' || F.kind === 'close') && c) {
     const tot = denomTotal(), book = F.kind === 'close' ? balanceAt(F.date) : Number(S.book.balance_now), diff = tot - book;
@@ -1231,7 +1295,15 @@ function wireSheet(){
     F[n] = b.dataset[n]; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); liveCalc();
   }));
   if ($('f-gave')) $('f-gave').placeholder = 'Same as bill';
-  if (F.kind === 'collect' && F.mode === 'office_collection') wireSubPay();
+  if (F.kind === 'collect' && F.mode === 'office_collection') { wireSubPay(); wireProof(); }
+  if (F.kind === 'subcash') {
+    body.querySelectorAll('[data-sc]').forEach(b => b.onchange = () => {
+      const id = +b.dataset.sc; F.scSel = b.checked ? [...new Set([...F.scSel, id])] : F.scSel.filter(x => x !== id);
+      if ($('f-amt') && !F.amtEdited) $('f-amt').value = String(scExpected());
+      liveCalc();
+    });
+    if ($('f-amt')) { if (v('f-amt') === '') $('f-amt').value = String(scExpected()); $('f-amt').addEventListener('input', () => { F.amtEdited = true; }); }
+  }
   body.querySelectorAll('[data-bc]').forEach(b => b.onclick = () => { F.bcol = b.dataset.bc || null; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); });
   if (F.kind === 'bugi') body.querySelectorAll('.plist [data-e]').forEach(b => b.onclick = () => openDetail('e', +b.dataset.e));
   if (F.kind === 'parts') {
@@ -1343,7 +1415,7 @@ async function submit(btn, next){
       if (gave < bill) { $('f-gave').focus(); throw new Error(ERR.given_less_than_bill); }
       r = await rpc('fin_sub_payment_add', { p_pin:S.pin, p_client_id:F.cid, p_sub_id:F.sub.id, p_month_from:sel[0], p_months:sel.length,
         p_bill:bill, p_tendered:gave, p_paid_via:F.pv, p_change_via:ch > 0 ? F.cv : null, p_or_no:v('f-or'),
-        p_entry_date:workDate(), p_detail:{ memo:v('f-memo') || null } });
+        p_entry_date:workDate(), p_detail:{ memo:v('f-memo') || null, ...proofDetail() } });
       toast(`Paid · ${F.sub.name} · ${r.covers || ''} · OR ${r.or_no || v('f-or')}`, 3600);
     }
     else if (F.kind === 'collect' && F.mode === 'office_collection') {
@@ -1353,8 +1425,16 @@ async function submit(btn, next){
       if (gave < bill) { $('f-gave').focus(); throw new Error(ERR.given_less_than_bill); }
       r = await rpc('fin_payment_add', { p_pin:S.pin, p_client_id:F.cid, p_entry_date:workDate(), p_customer:v('f-cust'), p_bill:bill, p_tendered:gave,
         p_paid_via:F.pv, p_change_via:ch > 0 ? F.cv : null,
-        p_detail:{ memo:v('f-memo') || null, gcash_ref:(F.pv === 'gcash' || (ch > 0 && F.cv === 'gcash')) ? (v('f-gref') || null) : null } });
+        p_detail:{ memo:v('f-memo') || null, gcash_ref:(F.pv === 'gcash' || (ch > 0 && F.cv === 'gcash')) ? (v('f-gref') || null) : null, ...proofDetail() } });
       toast(`Payment saved${S.workDate ? ' for ' + dLabel(S.workDate) : ''} · cash ${pesoS(Number(r.cash_effect))} · GCash ${pesoS(Number(r.gcash_effect))}`, 3200);
+    }
+    else if (F.kind === 'subcash') {
+      if (!F.scSel.length) throw new Error('Tick the receipts being handed over.');
+      const exp = scExpected(), cnt = v('f-amt') === '' ? exp : num(v('f-amt'));
+      r = await rpc('fin_sub_cash_receive', { p_pin:S.pin, p_client_id:F.cid, p_collector:F.col, p_payment_ids:F.scSel,
+        p_counted:cnt, p_entry_date:workDate() });
+      const so = Number(r.short_over || 0);
+      toast(`Received from ${F.col} · ${peso(cnt)}${so ? (so < 0 ? ' · short ' : ' · over ') + peso(Math.abs(so)) : ' · exact'}`, 3600);
     }
     else if (F.kind === 'bugi') {
       const amt = num(v('f-amt'));
@@ -1682,6 +1762,185 @@ document.addEventListener('keydown', e => {
   }
 });
 
+
+
+/* ---------- subscriber cash from Spawn Collect collectors ---------- */
+function scExpected(){
+  const F = S.form, c = (S.scash && S.scash.collectors || []).find(x => x.collector === F.col);
+  return c ? c.items.filter(i => F.scSel.includes(i.id)).reduce((s, i) => s + Number(i.amount), 0) : 0;
+}
+
+/* ---------- GCash screenshot: shrink, upload, read (free, in the browser) ---------- */
+const PROOF_URL = SB + '/functions/v1/fin-proof';
+const SPAWN_GCASH = '9099900556';
+let tessP = null;
+function loadTess(){
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (!tessP) tessP = new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+    sc.onload = () => res(window.Tesseract); sc.onerror = () => { tessP = null; rej(new Error('Reader could not load. Type the details instead.')); };
+    document.head.appendChild(sc);
+  });
+  return tessP;
+}
+function imgFromFile(file){
+  return new Promise((res, rej) => { const u = URL.createObjectURL(file), im = new Image();
+    im.onload = () => { res(im); setTimeout(() => URL.revokeObjectURL(u), 1000); }; im.onerror = () => rej(new Error('That file is not a picture.')); im.src = u; });
+}
+function canvasOf(im, maxW, mode){
+  const sc = Math.min(1, maxW / im.naturalWidth), w = Math.round(im.naturalWidth * sc), hgt = Math.round(im.naturalHeight * sc);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = hgt;
+  const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0, w, hgt);
+  if (mode === 'bw') {
+    const d = cx.getImageData(0, 0, w, hgt), p = d.data; let lo = 255, hi = 0;
+    for (let i = 0; i < p.length; i += 4) { const g = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]; p[i] = g; if (g < lo) lo = g; if (g > hi) hi = g; }
+    const span = Math.max(1, hi - lo);
+    for (let i = 0; i < p.length; i += 4) { const g = (p[i] - lo) * 255 / span, b = g > 160 ? 255 : 0; p[i] = p[i + 1] = p[i + 2] = b; }
+    cx.putImageData(d, 0, 0);
+  }
+  return cv;
+}
+const MON = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
+function readReceipt(t){
+  const lines = t.split(/\n/).map(x => x.trim()).filter(Boolean), flat = t.replace(/\s+/g, ' ');
+  const money = str => (str.match(/\d{1,3}(?:,\d{3})*\.\d{2}/g) || []).map(x => Number(x.replace(/,/g, '')));
+  let amount = null;
+  for (const l of lines) { const ll = l.toLowerCase();
+    if (ll.includes('amount') && !ll.includes('cash out') && !ll.includes('fee') && money(l).length) { amount = money(l).slice(-1)[0]; break; } }
+  if (amount == null) { const all = lines.flatMap(money).filter(x => x >= 50); if (all.length) amount = all.sort((a, b) => all.filter(x => x === b).length - all.filter(x => x === a).length)[0]; }
+  const rm = t.match(/ref(?:erence)?\.?\s*(?:no\.?|number)?\s*[:#]?\s*(\d[\d ]{4,20}\d)/i);
+  const ref = rm ? rm[1].replace(/\D/g, '') : null;
+  let sent = null;
+  for (const re of [new RegExp(`((${MON})[a-z]*\\s+\\d{1,2},\\s*\\d{4}\\s+\\d{1,2}:\\d{2}\\s*[AP]M)`, 'i'),
+                    new RegExp(`(\\d{1,2}\\s+(${MON})[a-z]*\\s+\\d{4},?\\s+\\d{1,2}:\\d{2})`, 'i'),
+                    /(\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M)/i]) { const m = flat.match(re); if (m) { sent = m[1]; break; } }
+  const digits = t.replace(/\D/g, '');
+  const toSpawn = digits.includes(SPAWN_GCASH) || /\*{2,}[^\n]*0556/.test(t) || /0556/.test(t);
+  const review = /review transfer|total amount to cash out|confirm (?:transfer|payment)/i.test(t);
+  const bank = (t.match(/\b(maribank|seabank|gotyme|bdo|bpi|landbank|unionbank|metrobank|rcbc|security bank|palawan ?pay|shopeepay|coins\.ph)\b/i) || [])[1];
+  const app = bank ? bank.replace(/\b\w/g, c => c.toUpperCase()) + ' (InstaPay)' : /instapay/i.test(t) ? 'InstaPay' : /maya/i.test(t) ? 'Maya' : /express send|sent via gcash/i.test(t) ? 'GCash' : /gcash/i.test(t) ? 'GCash' : null;
+  return { amount, ref, sent, toSpawn, review, app };
+}
+function sentDate(s){
+  if (!s) return null;
+  const d = new Date(s.replace(/,/g, '')); if (!isNaN(d)) return d.toISOString().slice(0, 10);
+  const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[1]}-${m[2]}` : null;
+}
+function proofBox(){
+  const P = S.form && S.form.proof;
+  if (!P) return `<button type="button" class="proofbtn" id="pf-pick">📷 Attach GCash screenshot <small>reads amount, ref and date for you</small></button><input type="file" id="pf-file" accept="image/*" class="hide">`;
+  const rd = P.read || {}, warns = [];
+  if (rd.review) warns.push('This is a <b>review screen</b>, not a receipt. Ask for the receipt after sending.');
+  if (P.read && !rd.toSpawn) warns.push('Could not see Spawn\'s GCash number (…0556) on it. Check who it was sent to.');
+  const bill = num(v('f-bill'));
+  if (rd.amount && bill && Math.abs(rd.amount - bill) > 0.5) warns.push(`Screenshot says <b>${peso(rd.amount)}</b>, bill is ${peso(bill)}.`);
+  const sd = sentDate(rd.sent); if (sd && Math.abs((new Date(sd) - new Date(workDate())) / 864e5) > 3) warns.push(`Sent on <b>${dLabel(sd)}</b>, but you are recording for ${dLabel(workDate())}.`);
+  const row = (k, val) => `<div><span>${k}</span><b>${val || '<i style="font-weight:500;color:var(--muted)">not found, type it</i>'}</b></div>`;
+  return `<div class="proofcard">
+    <div class="pc-top">${P.thumb ? `<img src="${P.thumb}" alt="Screenshot">` : ''}<div>
+      <b>${P.state === 'reading' ? '<span class="spin"></span> Reading screenshot…' : P.state === 'error' ? '⚠ ' + esc(P.err || 'Could not read') : '✓ Screenshot attached'}</b>
+      <small>${P.path ? 'Saved with the payment' : P.state === 'reading' ? 'Uploading…' : P.upErr ? '⚠ Not uploaded: ' + esc(P.upErr) : ''}</small></div>
+      <button type="button" id="pf-x" aria-label="Remove screenshot">✕</button></div>
+    ${P.read ? `<div class="calc" style="margin:8px 0 0">${row('Amount', rd.amount ? peso(rd.amount) : '')}${row('Ref no.', rd.ref)}${row('Sent', rd.sent)}${row('App', rd.app)}</div>` : ''}
+    ${warns.map(w => `<div class="pwarn">${w}</div>`).join('')}</div>`;
+}
+function drawProof(){ const b = $('proofbox'); if (b) { b.innerHTML = proofBox(); wireProof(); } }
+function wireProof(){
+  const F = S.form;
+  if ($('pf-pick')) $('pf-pick').onclick = () => $('pf-file').click();
+  if ($('pf-file')) $('pf-file').onchange = e => { const f = e.target.files && e.target.files[0]; if (f) attachProof(f); };
+  if ($('pf-x')) $('pf-x').onclick = () => { F.proof = null; drawProof(); };
+}
+async function attachProof(file){
+  const F = S.form; if (!F) return;
+  keep();
+  F.proof = { state:'reading' }; drawProof();
+  let im;
+  try { im = await imgFromFile(file); } catch (e) { F.proof = { state:'error', err:e.message }; drawProof(); return; }
+  const small = canvasOf(im, 1100);
+  F.proof.thumb = canvasOf(im, 120).toDataURL('image/jpeg', 0.6);
+  drawProof();
+  const data = small.toDataURL('image/jpeg', 0.72);
+  const up = fetch(PROOF_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ action:'upload', pin:S.pin, image:data }) })
+    .then(r => r.json()).then(j => { if (S.form !== F || !F.proof) return; if (j.ok) F.proof.path = j.path; else F.proof.upErr = j.error || 'upload failed'; })
+    .catch(() => { if (F.proof) F.proof.upErr = 'no connection'; });
+  let rd = null;
+  try {
+    const T = await loadTess();
+    const big = canvasOf(im, 1600);
+    rd = readReceipt((await T.recognize(big, 'eng')).data.text);
+    if (!rd.ref || !rd.amount || !rd.sent) {
+      const rd2 = readReceipt((await T.recognize(canvasOf(im, 1600, 'bw'), 'eng')).data.text);
+      rd = { amount:rd.amount || rd2.amount, ref:rd.ref || rd2.ref, sent:rd.sent || rd2.sent,
+             toSpawn:rd.toSpawn || rd2.toSpawn, review:rd.review || rd2.review, app:[rd.app, rd2.app].find(x => x && /instapay/i.test(x)) || rd.app || rd2.app };
+    }
+  } catch (e) { if (S.form === F && F.proof) { F.proof.err = e.message; } }
+  await up;
+  if (S.form !== F || !F.proof) return;
+  F.proof.state = rd ? 'done' : 'error'; F.proof.read = rd;
+  if (rd) {
+    keep();
+    if (rd.ref && !F.or && $('f-or')) { F.or = rd.ref; $('f-or').value = rd.ref; }
+    if (rd.ref && F.free && $('f-gref') && !$('f-gref').value) { F.gref = rd.ref; $('f-gref').value = rd.ref; }
+    F.pv = 'gcash';
+    body0().querySelectorAll('[data-pv]').forEach(x => x.classList.toggle('on', x.dataset.pv === 'gcash'));
+    if (rd.amount && $('f-gave') && !$('f-gave').value) { F.gave = String(rd.amount); $('f-gave').value = String(rd.amount); }
+    if (rd.amount && F.free && $('f-bill') && !$('f-bill').value) { F.bill = String(rd.amount); $('f-bill').value = String(rd.amount); }
+    liveCalc();
+  }
+  drawProof();
+}
+function body0(){ return $('sh-body'); }
+function proofDetail(){
+  const P = S.form && S.form.proof; if (!P || !P.path) return {};
+  return { proof_path:P.path, proof_sent_at:(P.read && P.read.sent) || null, proof_app:(P.read && P.read.app) || null };
+}
+
+/* ---------- GCash check by day ---------- */
+const G = { data:null, open:null, busy:false };
+async function loadGcheck(){
+  try { G.data = await rpc('fin_gcash_days', { p_pin:S.pin }); } catch (e) { toast(e.message, 4000); }
+  drawGcheck();
+}
+function gBadge(st){ return st === 'confirmed' ? '<span class="gb ok">✓ Confirmed</span>' : st === 'not_found' ? '<span class="gb no">Not found</span>' : '<span class="gb">Recorded</span>'; }
+function drawGcheck(){
+  const el = $('gc-days'), D = G.data;
+  if (!D) { el.innerHTML = '<div class="empty">Could not load.</div>'; return; }
+  if (!D.days.length) { el.innerHTML = '<div class="empty">No GCash payments in the last 14 days.</div>'; return; }
+  el.innerHTML = D.days.map(d => {
+    const open = G.open === d.date, left = d.count - d.confirmed;
+    return `<div class="gday ${d.confirmed === d.count ? 'done' : ''}">
+      <button type="button" class="gd-hd" data-gday="${d.date}"><span><b>${dLabel(d.date)}</b><small>${d.count} payment${d.count > 1 ? 's' : ''} · ${d.confirmed} confirmed${d.not_found ? ' · ' + d.not_found + ' not found' : ''}</small></span><span class="amt">${peso(d.total)}</span></button>
+      ${left ? `<button type="button" class="go alt gd-all" data-gall="${d.date}">GCash shows ${peso(d.total)} received on ${dLabel(d.date)} → confirm all ${left}</button>` : ''}
+      ${open ? `<div class="plist">${d.items.map(i => `<div class="r gi"><span><b>${esc(i.name)}</b><small>${esc(i.source)}${i.ref ? ' · ref ' + esc(i.ref) : ''}${i.sent_at ? ' · sent ' + esc(i.sent_at) : ''}${i.app ? ' · ' + esc(i.app) : ''}${i.checked_by ? ' · by ' + esc(i.checked_by) : ''}</small>${gBadge(i.status)}</span>
+        <span class="gi-r"><b>${peso(i.amount)}</b><span class="gi-b">${i.proof ? `<button type="button" data-gview="${i.key}">🖼</button>` : ''}${i.status !== 'confirmed' ? `<button type="button" data-gok="${i.key}">✓</button>` : ''}${i.status !== 'not_found' ? `<button type="button" data-gno="${i.key}">✕</button>` : ''}${i.status !== 'recorded' ? `<button type="button" data-gundo="${i.key}">↺</button>` : ''}</span></span></div>`).join('')}</div>` : ''}
+    </div>`; }).join('');
+  el.querySelectorAll('[data-gday]').forEach(b => b.onclick = () => { G.open = G.open === b.dataset.gday ? null : b.dataset.gday; drawGcheck(); });
+  el.querySelectorAll('[data-gall]').forEach(b => b.onclick = () => { const d = D.days.find(x => x.date === b.dataset.gall); gMark(d.items.filter(i => i.status !== 'confirmed').map(i => i.key), 'confirmed'); });
+  el.querySelectorAll('[data-gok]').forEach(b => b.onclick = () => gMark([b.dataset.gok], 'confirmed'));
+  el.querySelectorAll('[data-gno]').forEach(b => b.onclick = () => gMark([b.dataset.gno], 'not_found'));
+  el.querySelectorAll('[data-gundo]').forEach(b => b.onclick = () => gMark([b.dataset.gundo], 'recorded'));
+  el.querySelectorAll('[data-gview]').forEach(b => b.onclick = () => gView(b.dataset.gview));
+}
+async function gMark(keys, status){
+  if (G.busy || !keys.length) return; G.busy = true;
+  try { await rpc('fin_gcash_mark', { p_pin:S.pin, p_keys:keys, p_status:status }); toast(status === 'confirmed' ? `Confirmed ${keys.length}.` : status === 'not_found' ? 'Marked not found.' : 'Back to recorded.'); await loadGcheck(); }
+  catch (e) { toast(e.message, 3500); }
+  G.busy = false;
+}
+async function gView(key){
+  const w = window.open('', '_blank');
+  try {
+    const r = await fetch(PROOF_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ action:'view', pin:S.pin, key }) }).then(x => x.json());
+    if (!r.ok) throw new Error(r.error || 'Could not open');
+    if (w) w.location = r.url; else location.href = r.url;
+  } catch (e) { if (w) w.close(); toast(e.message, 3500); }
+}
+document.addEventListener('keydown', e => {
+  if ($('v-gcheck').classList.contains('hide') || e.key !== 'Escape' || S.form) return;
+  $('btn-home').click();
+});
 
 /* ---------- customer pays: subscriber, months, OR ---------- */
 function subResults(){
