@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v1.13 · 2026-10-10 · screenshot preview in the app, clearer GCash check, GCash wallet counts sheet payments -->
+<!-- SPAWN Finance v1.14 · 2026-10-10 · owner can close all past days from the notebook in one tap -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1153,6 +1153,12 @@ function renderSheet(){
         ${money('f-gadj', 'Adjustment amount', F.gadj ?? '')}${text('f-gmemo', 'Note', F.gmemo || '', 'placeholder="Why the GCash app is different"')}
         <button class="go alt" type="button" id="own-gadj">Save GCash adjustment</button>`;
     }
+    const pastOpen = openDays().filter(d => d < todayPH());
+    h += `<div class="sec">Past days still open</div>`;
+    if (pastOpen.length) {
+      h += `<div class="note"><b>${pastOpen.map(dLabel).join(', ')}</b>. Once the notebook pages for these days are fully encoded, close them all here using the book balances, with no cash count. Today is closed the normal way, with a count.</div>
+        <button class="go alt" type="button" id="own-closepast">Close ${pastOpen.length} past day${pastOpen.length > 1 ? 's' : ''} now</button>`;
+    } else h += `<div class="note" style="background:var(--teal-l);color:#1d6a61">No past days open ✓</div>`;
     h += `<div class="sec">Posting to the books</div>`;
     h += `<div class="note">${cut
       ? `On since <b>${dLabel(cut)}</b>. Closed days from that date post to the ledger from this book; the daily expense book and cash receipts sheet no longer count for those days.`
@@ -1343,6 +1349,12 @@ function wireSheet(){
   }
   body.querySelectorAll('[data-gp]').forEach(b => b.onclick = () => openPaymentVoid(+b.dataset.gp));
   if ($('own-gopen')) $('own-gopen').onclick = ownerGcashOpening;
+  if ($('own-closepast')) $('own-closepast').onclick = async () => {
+    const btn = $('own-closepast'), days = openDays().filter(d => d < todayPH());
+    if (!confirm(`Close ${days.length} past day(s) from the notebook balances? Lines on those days can no longer be changed.`)) return;
+    try { busy(btn, true); const r = await rpc('fin_days_close_past', { p_pin:S.pin }); toast(`Closed ${r.closed} day${r.closed === 1 ? '' : 's'}.`); closeSheet(); await refresh(); }
+    catch (e) { say(e.message); busy(btn, false); }
+  };
   if ($('own-gadj')) $('own-gadj').onclick = ownerGcashAdjust;
   if ($('rs-adjust')) $('rs-adjust').onclick = adjustFromCount;
   if ($('rs-done')) $('rs-done').onclick = closeSheet;
