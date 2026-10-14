@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v2.7 · 2026-10-14 · hand-ins listed up to the page's date · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v2.8 · 2026-10-14 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -533,6 +533,16 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .paper .ln:focus-visible{outline:2px solid #025ac6;outline-offset:0;background:rgba(2,90,198,.08)}
 @media (min-width:760px){.nb-tabs{padding:0 max(0px,calc((100% - 720px) / 2))}.nb-bar{left:50%;right:auto;width:min(720px,100%);transform:translateX(-50%);border-radius:18px 18px 0 0;border:1px solid #e3e7ef;border-bottom:0}
   #nb-choose{align-items:center;justify-content:center}#nb-choose .sh{width:min(520px,calc(100vw - 48px));border-radius:22px}}
+.paper .wl{display:flex;align-items:center;gap:10px;height:40px;white-space:nowrap}
+.paper .wl b{min-width:84px;text-align:right;color:#b07800;font-variant-numeric:tabular-nums;font-weight:700}
+.paper .wl span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;color:#7a5a00}
+.paper .wl span small{color:#a38a4a;font-size:12.5px}
+.paper .wl button{flex:none;height:30px;padding:0 12px;border-radius:999px;border:0;font:800 12.5px Inter,system-ui,sans-serif;color:#fff;cursor:pointer;background:linear-gradient(180deg,#16b386,#00a878);box-shadow:0 3px 8px rgba(0,168,120,.3)}
+.paper .wl button.blue{background:linear-gradient(180deg,#1f74e0,#025ac6);box-shadow:0 3px 8px rgba(2,90,198,.3)}
+.paper .wl-h{height:40px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.05em;color:#b07800}
+.paper .wl-h em{font-style:normal;font-weight:700;color:#a38a4a;letter-spacing:0}
+.paper .wl-wrap{margin:0 -8px;padding:0 8px;border-radius:10px;background:repeating-linear-gradient(135deg,rgba(255,214,102,.13) 0 10px,rgba(255,214,102,.06) 10px 20px);outline:1.5px dashed #f5c542;outline-offset:-1px}
+.paper .wl-old{height:40px;border:0;background:none;padding:0;font:700 12.5px Inter,system-ui,sans-serif;color:#966500;cursor:pointer}
 .nb-back{display:inline-flex;align-items:center;height:36px;padding:0 12px;margin:2px 0 10px;border:0;border-radius:10px;background:#fff;color:#0f2a5c;font:800 13px Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(17,24,39,.08);cursor:pointer}
 .nb-go{border-radius:14px}
 @media(min-width:700px){.paper{font-size:16px}.paper .ln b{min-width:110px}}
@@ -991,7 +1001,12 @@ function pickCollector(name){
   const F = S.form; keep(); F.collector = name;
   if (F.recon && F.recon.collector !== name) F.recon = null;
   const st = collStatus(name);
-  if (!F.recon && (F.htAuto || !F.ht)) { F.ht = st && Number(st.unremitted) > 0 ? String(Number(st.unremitted)) : ''; F.htAuto = true; }
+  if (!F.recon && (F.htAuto || !F.ht)) {
+    // backtracking: on a past page, only the harvest days up to that page are due
+    const wd = workDate(), past = wd < todayPH();
+    const due = !st ? 0 : past ? (st.open_days || []).filter(d => d.date <= wd).reduce((s, d) => s + Number(d.pending || 0), 0) : Number(st.unremitted);
+    F.ht = due > 0 ? String(due) : ''; F.htAuto = true;
+  }
   renderSheet();
   const a = $('f-amt'); if (a) a.focus({preventScroll:true});
 }
@@ -2749,6 +2764,23 @@ function nbPending(){
   return items;
 }
 
+function nbDayItems(d){
+  const out = [];
+  ((S.sheet && S.sheet.days) || []).forEach(dd => { if (dd.date === d) {
+    const names = (dd.items || []).map(i => i.name).filter(Boolean);
+    out.push({ type:'sheet', date:d, amt:Number(dd.total), n:dd.n, ids:(dd.items || []).map(i => i.id), title:'Payment sheet', sub:`${dd.n} cash payment${dd.n === 1 ? '' : 's'}: ${names.slice(0, 3).join(', ')}${names.length > 3 ? ' +' + (names.length - 3) : ''}` });
+  }});
+  ((S.coll && S.coll.collectors) || []).forEach(c => (c.open_days || []).forEach(od => { if (od.date === d && Number(od.pending) > 0)
+    out.push({ type:'harvest', who:c.collector, date:d, amt:Number(od.pending), title:`${c.collector} harvest`, sub:`${od.vendos} vendo${od.vendos === 1 ? '' : 's'} · Spawn Harvest` }); }));
+  ((S.scash && S.scash.collectors) || []).forEach(c => { const its = (c.items || []).filter(i => i.date === d); if (its.length)
+    out.push({ type:'subcash', who:c.collector, c, date:d, amt:its.reduce((s, i) => s + Number(i.amount), 0), title:`${c.collector} · subscribers`, sub:`${its.length} cash receipt${its.length === 1 ? '' : 's'} · Spawn Collect` }); });
+  return out;
+}
+function nbDo(x, btn){
+  if (x.type === 'sheet') return nbAddSheet(x, btn);
+  if (x.type === 'harvest') { openSheet('collect', { mode:'collection' }); pickCollector(x.who); return; }
+  openSheet('subcash', { col:x.who, scSel:x.c.items.map(i => i.id) });
+}
 function nbTabs(){
   const pend = nbPending().length;
   $('nb-tabs').innerHTML = NB_TABS.map(([k, ic, l, col]) => {
@@ -2777,7 +2809,8 @@ function nbTitle(e){
   switch (e.kind) {
     case 'opening': return ['Opening balance', ''];
     case 'collection': { let s = ''; if (e.harvest_total != null) { s = `harvest ${peso(e.harvest_total)}`; if (+e.less_expense) s += ` − expenses ${peso(e.less_expense)}`; if (+e.less_bugi) s += ` − bugi ${peso(e.less_bugi)}`; if (e.short_over != null && +e.short_over !== 0) s += ` · ${+e.short_over < 0 ? 'short' : 'over'} ${peso(Math.abs(e.short_over))}`; } return [`${esc(e.collector)} hand-in`, s]; }
-    case 'office_collection': return e.payment_id ? [`Paid here · ${p || 'subscriber'}`, or ? 'OR ' + esc(or[1]) : ''] : ['Office collection', [p, m].filter(Boolean).join(' · ')];
+    case 'office_collection': if (e.party === 'Payment sheet') return ['Payment sheet', m.replace(/^Payment sheet · /, '')];
+      return e.payment_id ? [`Paid here · ${p || 'subscriber'}`, or ? 'OR ' + esc(or[1]) : ''] : ['Office collection', [p, m].filter(Boolean).join(' · ')];
     case 'expense': return [m || esc(e.category || 'Expense'), [e.category && m ? esc(e.category) : '', p].filter(Boolean).join(' · ')];
     case 'advance': return [`CA · ${p}`, ''];
     case 'co': return [`c/o ${p}`, m];
@@ -2813,7 +2846,8 @@ function renderNote(){
   const carried = opening ? Number(opening.amount) : balanceAt(addDays(d, -1));
   const inT = ins.reduce((s, e) => s + Number(e.signed_amount), 0), outT = outs.reduce((s, e) => s - Number(e.signed_amount), 0);
   const box1 = carried + inT, endBal = balanceAt(d);
-  const pend = nbPending();
+  const pend = nbPending(), dayItems = nbDayItems(d);
+  const olderN = pend.filter(x => x.type === 'sheet' ? x.date < d : false).length;
   const line = (e, isVoid) => {
     const [title, sub] = nbTitle(e), s = Number(e.signed_amount);
     const amt = (s > 0 ? '+ ' : s < 0 ? '− ' : '') + Number(Math.abs(s)).toLocaleString('en-PH', {maximumFractionDigits:2});
@@ -2843,6 +2877,8 @@ function renderNote(){
       <div class="hd">Balance: <small>MONEY IN</small></div>
       ${opening ? line(opening, false) : `<div class="ln"><b class="zero">${Number(carried).toLocaleString('en-PH')}</b><span>— Carried from before</span></div>`}
       ${ins.map(e => line(e, false)).join('')}
+      ${dayItems.length && !(lock && lock.locked_at) ? `<div class="wl-wrap"><div class="wl-h">⏳ STILL TO ADD FOR THIS DAY <em>· tap to add</em></div>${dayItems.map((x, i) => `<div class="wl"><b>+ ${Number(x.amt).toLocaleString('en-PH')}</b><span>— ${esc(x.title)} <small>${esc(x.sub)}</small></span><button type="button" class="${x.type === 'sheet' ? 'blue' : ''}" data-wi="${i}">${x.type === 'sheet' ? 'Add' : 'Count'}</button></div>`).join('')}</div>` : ''}
+      ${olderN && !(lock && lock.locked_at) ? `<button type="button" class="wl-old" id="nb-older">⏳ ${olderN} from earlier days still to add →</button>` : ''}
       <div class="tot"><span>₱${box1.toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
       <div class="hd">Expenses: <small>MONEY OUT</small></div>
       ${outs.map(e => line(e, false)).join('')}
@@ -2859,6 +2895,8 @@ function renderNote(){
   $('nb-prev').onclick = () => { setWorkDate(addDays(d, -1)); renderNote(); };
   $('nb-next').onclick = () => { setWorkDate(addDays(d, 1)); renderNote(); };
   const hint = $('nb-hint'); if (hint) hint.onclick = () => { NB.tab = 'col'; renderNote(); };
+  const older = $('nb-older'); if (older) older.onclick = () => { NB.tab = 'col'; renderNote(); };
+  W.querySelectorAll('[data-wi]').forEach(b => b.onclick = ev => { ev.stopPropagation(); nbDo(dayItems[+b.dataset.wi], b); });
   const mk = $('nb-mark'); if (mk) mk.onclick = () => { if (mk.dataset.d !== d) { setWorkDate(mk.dataset.d); renderNote(); } const l = document.querySelector('.ln.mark'); if (l) l.scrollIntoView({block:'center', behavior:'smooth'}); };
   if (!NB.scrolled) { NB.scrolled = true; setTimeout(() => { const l = document.querySelector('.ln.mark'); if (l) l.scrollIntoView({block:'center'}); }, 60); }
 }
@@ -2895,13 +2933,13 @@ function nbRenderCol(){
 
 async function nbAddSheet(x, btn){
   const names = ((S.sheet.days || []).find(d => d.date === x.date) || { items:[] }).items.map(i => `${i.name} ${peso(i.amount)}${i.or ? ' · OR ' + i.or : ''}`).join('\n');
-  if (!confirm(`Add ${peso(x.amt)} to the book on ${dLabel(x.date)}?\n\nThese ${x.n} cash payment${x.n === 1 ? ' is' : 's are'} already in the payment sheet:\n${names}\n\nThey are added once and can't be added twice.`)) return;
+  if (!confirm(`Add ${peso(x.amt)} to ${dLabel(x.date)}?\n\nCash payments already in the payment sheet:\n${names}\n\nThey go in once — they can't be added twice.`)) return;
   btn.disabled = true; btn.textContent = 'Adding…';
   try {
     const r = await rpc('fin_sheet_cash_receive', { p_pin:S.pin, p_client_id:uuid(), p_ids:x.ids, p_date:x.date });
     if (r && r.ok === false) throw new Error(r.error || 'not added');
     toast(`✓ ${peso(x.amt)} written on ${dLabel(x.date)}`);
-    await refresh(); NB.tab = 'col'; renderNote();
+    const fromPage = !!btn.closest('#nb-paper'); await refresh(); NB.tab = fromPage ? 'book' : 'col'; renderNote();
   } catch (e) {
     toast(/already_in_book/.test(e.message) ? 'Already in the book.' : /day_locked/.test(e.message) ? `${dLabel(x.date)} is closed. Ask Sir Wendell to open it.` : e.message, 4000);
     btn.disabled = false; btn.textContent = 'Add to the book · ' + dLabel(x.date);
@@ -2995,7 +3033,7 @@ document.addEventListener('keydown', e => {
       const b = $(e.key === 'ArrowLeft' ? 'nb-prev' : 'nb-next'); if (b && !b.disabled) { e.preventDefault(); b.click(); setTimeout(() => { const f = document.querySelector('#nb-paper .ln'); if (f && DESK.matches) f.focus({preventScroll:true}); }, 0); }
       return;
     }
-    const ls = [...document.querySelectorAll('#nb-wrap .nb-mark, #nb-wrap #nb-hint, #nb-paper button.ln, .nb-bar button')].filter(x => x.offsetParent);
+    const ls = [...document.querySelectorAll('#nb-wrap .nb-mark, #nb-wrap #nb-hint, #nb-paper button.ln, #nb-paper [data-wi], #nb-paper #nb-older, .nb-bar button')].filter(x => x.offsetParent);
     if (!ls.length) return;
     e.preventDefault();
     let i = ls.indexOf(a);
