@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v2.2 · 2026-10-14 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v2.3 · 2026-10-14 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -502,6 +502,32 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .nb-guide h4{margin:0 0 8px;font-size:14px;color:#0f2a5c}
 .nb-guide .st{display:flex;gap:10px;align-items:center;padding:6px 0;font-size:13.5px;color:#334155}
 .nb-guide .st i{width:24px;height:24px;border-radius:999px;background:#0f2a5c;color:#fff;font-style:normal;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none}
+
+/* ── v2.3 polish ── */
+#v-note{background:radial-gradient(80% 50% at 0% 30%,rgba(2,90,198,.08),rgba(2,90,198,0) 70%),radial-gradient(70% 40% at 100% 100%,rgba(0,168,120,.08),rgba(0,168,120,0) 70%),#eef1f8;min-height:100vh}
+.nb-tabs{background:rgba(255,255,255,.92);backdrop-filter:blur(8px)}
+.nb-tabs button.on::before{content:"";position:absolute;inset:6px 10% 8px;border-radius:12px;background:color-mix(in srgb,var(--c) 9%,transparent)}
+.nb-tabs button i,.nb-tabs button span{position:relative}
+.nb-top .dt{font-size:15px}
+.nb-top .wait{animation:nbPulse 2.2s ease-in-out infinite}
+@keyframes nbPulse{0%,100%{box-shadow:0 4px 10px rgba(255,183,37,.35)}50%{box-shadow:0 4px 18px rgba(255,183,37,.7)}}
+.nb-mark{display:flex;border-left:4px solid #be185d;border-radius:10px;padding:7px 10px;background:#fff;box-shadow:0 2px 8px rgba(190,24,93,.12)}
+.paper{border-radius:16px;box-shadow:0 1px 0 #e9d8e3,0 10px 28px rgba(17,24,39,.12);background-color:#fffdf7;padding-top:14px;border:1px solid #f3e3ec}
+.paper::after{content:"";position:absolute;left:0;right:0;top:0;height:14px;background:repeating-linear-gradient(90deg,transparent 0,transparent 18px,#cfd8e6 18px,#cfd8e6 26px,transparent 26px,transparent 36px);opacity:.55;border-radius:16px 16px 0 0}
+.paper .ln{border-radius:6px;padding:0 6px;margin:0 -6px;transition:background .15s}
+.paper .ln b{letter-spacing:.01em}
+.paper .ln span small{color:#7c8696}
+.paper .tot span,.paper .cnt .ok span{box-shadow:1px 2px 0 rgba(30,41,59,.18)}
+.paper .tot.now span{box-shadow:1px 2px 0 rgba(2,90,198,.25)}
+.paper .hd{color:#0f2a5c}
+.paper .cnt{padding:4px 10px 6px;margin-top:4px;border-radius:12px;background:rgba(2,90,198,.04);border:1px dashed #b9c8e3}
+.nb-guide{border:1px solid #e6ebf5}
+.nb-guide .st i{background:linear-gradient(135deg,#1f74e0,#025ac6)}
+.nb-bar{background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-top:1px solid #e3e7ef}
+.nb-bar button{border-radius:18px;height:52px;letter-spacing:.01em}
+.nb-bar button:active{transform:translateY(1px)}
+.nb-card{border:1px solid #e8ecf3}
+.nb-go{border-radius:14px}
 @media(min-width:700px){.paper{font-size:19px}.paper .ln b{min-width:110px}}
 </style>
 </head>
