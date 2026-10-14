@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v2.0 · 2026-10-13 · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v2.1 · 2026-10-14 · prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -477,6 +477,23 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 #nb-choose .kinds button{height:46px;padding:0 12px;border-radius:12px;border:1.5px solid #dde5f2;background:#fff;color:#334155;font:800 13.5px Inter,system-ui,sans-serif;cursor:pointer}
 #nb-choose .cancel{width:100%;height:44px;border-radius:14px;border:1.5px solid #dde5f2;background:#fff;font:700 15px Inter,system-ui,sans-serif;cursor:pointer}
 #nb-choose .note{font-size:12px;color:#6b7280;margin-top:10px}
+
+.nb-hero{position:relative;overflow:hidden;padding:14px 16px 12px;border-radius:20px;color:#fff;margin:0 0 10px;background:radial-gradient(90% 70% at 10% -10%,rgba(255,255,255,.28),rgba(255,255,255,0) 60%),linear-gradient(135deg,#0146a0 0%,#025ac6 55%,#2b2295 100%);box-shadow:0 10px 22px rgba(1,70,160,.25)}
+.nb-hero .hi{font-size:14px;font-weight:700;opacity:.92}.nb-hero .dy{display:flex;align-items:center;gap:8px;margin-top:4px}
+.nb-hero .dy button{width:32px;height:32px;border-radius:9px;border:0;background:rgba(255,255,255,.18);color:#fff;font-weight:800;cursor:pointer}.nb-hero .dy button:disabled{opacity:.3;cursor:default}
+.nb-hero .dy b{flex:1;font-size:16px}.nb-hero .lbl{font-size:11px;font-weight:800;letter-spacing:.08em;opacity:.85;margin-top:10px}
+.nb-hero .amt{font-size:36px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.nb-hero .io{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}.nb-hero .io span{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.16)}
+.nb-wait{display:flex;align-items:center;gap:12px;width:100%;margin:0 0 10px;padding:12px 14px;border:0;border-radius:16px;text-align:left;cursor:pointer;font-family:inherit;color:#3b2a00;background:linear-gradient(135deg,#ffe08a,#ffb725);box-shadow:0 8px 18px rgba(255,183,37,.35)}
+.nb-wait .wi{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.55);display:flex;align-items:center;justify-content:center;font-size:20px;flex:none}
+.nb-wait .wt{flex:1;min-width:0}.nb-wait .wt b{display:block;font-size:15px}.nb-wait .wt small{font-size:12px;font-weight:600}
+.nb-wait .wg{font-size:13px;font-weight:800;white-space:nowrap}
+.paper .hd small{font-family:Inter,system-ui,sans-serif;font-size:11px;font-weight:700;color:#94a3b8;text-decoration:none;margin-left:8px;letter-spacing:.04em}
+.paper .cl{font-family:Inter,system-ui,sans-serif;font-size:11px;font-weight:800;color:#64748b;height:40px;display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.nb-guide{margin:4px 0 10px;padding:12px 14px;border-radius:16px;background:#fff;box-shadow:0 3px 12px rgba(17,24,39,.06)}
+.nb-guide h4{margin:0 0 8px;font-size:14px;color:#0f2a5c}
+.nb-guide .st{display:flex;gap:10px;align-items:center;padding:6px 0;font-size:13.5px;color:#334155}
+.nb-guide .st i{width:24px;height:24px;border-radius:999px;background:#0f2a5c;color:#fff;font-style:normal;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none}
 @media(min-width:700px){.paper{font-size:19px}.paper .ln b{min-width:110px}}
 </style>
 </head>
@@ -2692,6 +2709,26 @@ $('nb-tabs').addEventListener('click', e => {
 function nbLastKey(){ try { return localStorage.getItem('sf-nb-last') || ''; } catch (e) { return ''; } }
 function nbRemember(e){ try { localStorage.setItem('sf-nb-last', String(e.id)); } catch (x) {} }
 
+function nbTitle(e){
+  const p = e.party ? esc(e.party) : '', m = e.memo ? esc(e.memo) : '';
+  const or = (e.memo || '').match(/OR\s*([0-9A-Za-z-]+)/i);
+  switch (e.kind) {
+    case 'opening': return ['Opening balance', ''];
+    case 'collection': { let s = ''; if (e.harvest_total != null) { s = `harvest ${peso(e.harvest_total)}`; if (+e.less_expense) s += ` − expenses ${peso(e.less_expense)}`; if (+e.less_bugi) s += ` − bugi ${peso(e.less_bugi)}`; if (e.short_over != null && +e.short_over !== 0) s += ` · ${+e.short_over < 0 ? 'short' : 'over'} ${peso(Math.abs(e.short_over))}`; } return [`${esc(e.collector)} hand-in`, s]; }
+    case 'office_collection': return e.payment_id ? [`Paid here · ${p || 'subscriber'}`, or ? 'OR ' + esc(or[1]) : ''] : ['Office collection', [p, m].filter(Boolean).join(' · ')];
+    case 'expense': return [m || esc(e.category || 'Expense'), [e.category && m ? esc(e.category) : '', p].filter(Boolean).join(' · ')];
+    case 'advance': return [`CA · ${p}`, ''];
+    case 'co': return [`c/o ${p}`, m];
+    case 'repay': return [`${p} paid back`, ''];
+    case 'deposit': return [m || 'Bank deposit', ''];
+    case 'bugi_found': return ['Bugi found', e.collector ? esc(e.collector) + ' hand-in' : ''];
+    case 'sukli_out': return ['Sukli given', m];
+    case 'gcash_cashout': return ['GCash → cash', m];
+    case 'adjust_in': return ['Over', m]; case 'adjust_out': return ['Short', m];
+    case 'other_in': return [m || 'Other cash in', p]; case 'other_out': return [m || 'Other cash out', p];
+  }
+  return lineText(e);
+}
 function renderNote(){
   const B = S.book; nbTabs();
   const W = $('nb-wrap');
@@ -2716,42 +2753,48 @@ function renderNote(){
   const box1 = carried + inT, endBal = balanceAt(d);
   const pend = nbPending();
   const line = (e, isVoid) => {
-    const [title, sub] = lineText(e), s = Number(e.signed_amount);
+    const [title, sub] = nbTitle(e), s = Number(e.signed_amount);
     const amt = (s > 0 ? '+ ' : s < 0 ? '− ' : '') + Number(Math.abs(s)).toLocaleString('en-PH', {maximumFractionDigits:2});
     return `<button type="button" class="ln ${isVoid ? 'void' : ''} ${markE && e.id === markE.id && !isVoid ? 'mark' : ''}" data-e="${e.id}"><b class="${s > 0 ? 'in' : s < 0 ? 'out' : 'zero'}">${amt}</b><span>— ${title}${sub ? ' <small>' + sub + '</small>' : ''}${isVoid ? ' <small>· voided</small>' : ''}</span></button>`;
   };
   const cnt = c => {
     const diff = Number(c.difference), rows = [[c.packs_5, '₱5 coins'], [c.packs_1, '₱1 coins'], [c.bills, 'cash'], [c.loose, "wala'"]].filter(x => Number(x[0]) > 0);
     const who = c.kind === 'handover' ? `Received by ${esc(c.handed_to)}` : c.kind === 'closing' ? `Closed by ${esc(c.counted_by)}` : `Counted by ${esc(c.counted_by)}`;
-    return `<div class="cnt">${rows.map(([a, l]) => `<div class="r"><b>${Number(a).toLocaleString('en-PH')}</b><span>— ${l}</span></div>`).join('')}
+    return `<div class="cnt"><div class="cl">🤝 ${c.kind === 'handover' ? 'HANDOVER' : c.kind === 'closing' ? 'DAY CLOSED' : 'COUNT'} · ${tLabel(c.counted_at)}</div>${rows.map(([a, l]) => `<div class="r"><b>${Number(a).toLocaleString('en-PH')}</b><span>— ${l}</span></div>`).join('')}
       <div class="ok"><em class="${diff === 0 ? 'g' : 'r'}">${diff === 0 ? 'ok ✓' : (diff < 0 ? 'short ' : 'over ') + peso(Math.abs(diff))}</em><span>₱${Number(c.counted_total).toLocaleString('en-PH')}</span></div>
       <div class="sig"><button type="button" class="ln" data-c="${c.id}" style="justify-content:flex-end">${who} ✍ <small>${tLabel(c.counted_at)}</small></button></div></div>`;
   };
   let mark = '';
-  if (markE) mark = `<button type="button" class="nb-mark" id="nb-mark" data-d="${markE.entry_date}" data-id="${markE.id}">📍 You stopped here: ${lineText(markE)[0]} · ${pesoS(Number(markE.signed_amount))} · ${markE.entry_date === t ? '' : dLabel(markE.entry_date) + ' '}${tLabel(markE.entered_at)}${markE.created_by ? ' (' + esc(markE.created_by) + ')' : ''}</button>`;
+  if (markE) mark = `<button type="button" class="nb-mark" id="nb-mark" data-d="${markE.entry_date}" data-id="${markE.id}">📍 You stopped here: ${nbTitle(markE)[0]} · ${pesoS(Number(markE.signed_amount))} · ${markE.entry_date === t ? '' : dLabel(markE.entry_date) + ' '}${tLabel(markE.entered_at)}${markE.created_by ? ' (' + esc(markE.created_by) + ')' : ''}</button>`;
+  const hr = new Date().getHours(), greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
+  const waitT = pend.reduce((s, x) => s + x.amt, 0);
   W.innerHTML = `
-    <div class="nb-date">
-      <button type="button" class="nv" id="nb-prev" aria-label="Previous day" ${d <= mn ? 'disabled' : ''}>◀</button>
-      <div class="dt">${d === t ? 'Today' : dLabel(d)}<small>${d === t ? dLabel(d) : 'Recording for this day'}${lock && lock.locked_at ? ' · closed by ' + esc(lock.locked_by) : ''}</small></div>
-      <div class="bal"><small>${d === t ? 'Cash in drawer should be' : 'Balance end of day'}</small><b>${peso(d === t ? B.balance_now : endBal)}</b></div>
-      <button type="button" class="nv" id="nb-next" aria-label="Next day" ${d >= t ? 'disabled' : ''}>▶</button>
+    <div class="nb-hero">
+      <div class="hi">${greet}, ${esc((S.user && S.user.name) || '')} 👋</div>
+      <div class="dy"><button type="button" id="nb-prev" aria-label="Previous day" ${d <= mn ? 'disabled' : ''}>◀</button><b>${d === t ? 'Today · ' + dLabel(d) : dLabel(d)}${lock && lock.locked_at ? ' · closed' : ''}</b><button type="button" id="nb-next" aria-label="Next day" ${d >= t ? 'disabled' : ''}>▶</button></div>
+      <div class="lbl">${d === t ? 'CASH IN THE DRAWER SHOULD BE' : 'BALANCE AT THE END OF THIS DAY'}</div>
+      <div class="amt">${peso(d === t ? B.balance_now : endBal)}</div>
+      <div class="io"><span>In ${pesoS(inT)}</span><span>Out −${peso(outT)}</span>${d !== t ? '' : `<span>Started with ${peso(carried)}</span>`}</div>
     </div>
+    ${pend.length && d === t && !(lock && lock.locked_at) ? `<button type="button" class="nb-wait" id="nb-hint"><span class="wi">💰</span><span class="wt"><b>${pend.length} hand-in${pend.length === 1 ? '' : 's'} waiting to be counted</b><small>${pend.map(x => esc(x.who)).join(', ')} · ${peso(waitT)}</small></span><span class="wg">Count ›</span></button>` : ''}
     ${mark}
     <div class="paper" id="nb-paper">
       <div class="pd"><small>DATE</small><b>${d.slice(5, 7).replace(/^0/, '')}/${d.slice(8, 10).replace(/^0/, '')}/${d.slice(2, 4)}</b></div>
-      <div class="hd">Balance:</div>
+      <div class="hd">Balance: <small>MONEY IN</small></div>
       ${opening ? line(opening, false) : `<div class="ln"><b class="zero">${Number(carried).toLocaleString('en-PH')}</b><span>— Carried from before</span></div>`}
       ${ins.map(e => line(e, false)).join('')}
-      ${pend.length && d === t && !(lock && lock.locked_at) ? `<button type="button" class="hint" id="nb-hint">💰 ${pend.length} hand-in${pend.length === 1 ? '' : 's'} waiting to be counted →</button>` : ''}
       <div class="tot"><span>₱${box1.toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
-      <div class="hd">Expenses:</div>
+      <div class="hd">Expenses: <small>MONEY OUT</small></div>
       ${outs.map(e => line(e, false)).join('')}
       ${voided.map(e => line(e, true)).join('')}
       ${!outs.length && !voided.length ? '<div class="ln"><b class="zero">0</b><span>— none yet</span></div>' : ''}
       <div class="tot big"><small>left in the drawer →</small><span>₱${Number(endBal).toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
       ${counts.map(cnt).join('')}
-      ${!entries.length ? '<div class="empty">Nothing written on this page yet.</div>' : ''}
-    </div>`;
+    </div>
+    ${!entries.length && d === t ? `<div class="nb-guide"><h4>Nothing written today yet. The day goes like this:</h4>
+      <div class="st"><i>1</i><span><b>💰 Collect</b> — count the hand-ins from Harvest and Collect. They are written in by themselves.</span></div>
+      <div class="st"><i>2</i><span><b>✏️ Write a line</b> — gas, snacks, c/o, cash advance, a deposit, or a subscriber who paid here.</span></div>
+      <div class="st"><i>3</i><span><b>🤝 Count &amp; hand over</b> — at the handover, count the drawer and sign. Short or over is written as a line.</span></div></div>` : ''}`;
   $('nb-prev').onclick = () => { setWorkDate(addDays(d, -1)); renderNote(); };
   $('nb-next').onclick = () => { setWorkDate(addDays(d, 1)); renderNote(); };
   const hint = $('nb-hint'); if (hint) hint.onclick = () => { NB.tab = 'col'; renderNote(); };
