@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v2.1 · 2026-10-14 · prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v2.2 · 2026-10-14 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -478,6 +478,14 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 #nb-choose .cancel{width:100%;height:44px;border-radius:14px;border:1.5px solid #dde5f2;background:#fff;font:700 15px Inter,system-ui,sans-serif;cursor:pointer}
 #nb-choose .note{font-size:12px;color:#6b7280;margin-top:10px}
 
+.nb-top{display:flex;align-items:center;gap:6px;margin:0 0 6px}
+.nb-top button.nv{width:32px;height:32px;border-radius:9px;border:1px solid #dde5f2;background:#fff;font-weight:800;cursor:pointer;font-family:inherit;flex:none}
+.nb-top button.nv:disabled{opacity:.3;cursor:default}
+.nb-top .dt{flex:1;min-width:0;font-size:14px;font-weight:800;color:#0f2a5c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nb-top .dt small{font-weight:600;color:#64748b}
+.nb-top .wait{flex:none;display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 10px;border:0;border-radius:999px;background:linear-gradient(135deg,#ffe08a,#ffb725);color:#3b2a00;font:800 12.5px Inter,system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 10px rgba(255,183,37,.35)}
+.paper .tot.now{justify-content:space-between}.paper .tot.now small{font-family:Inter,system-ui,sans-serif;font-size:11px;font-weight:800;letter-spacing:.06em;color:#0f2a5c;white-space:nowrap}
+.paper .tot.now span{background:#eef4ff;border-color:#025ac6;color:#0f2a5c}
 .nb-hero{position:relative;overflow:hidden;padding:14px 16px 12px;border-radius:20px;color:#fff;margin:0 0 10px;background:radial-gradient(90% 70% at 10% -10%,rgba(255,255,255,.28),rgba(255,255,255,0) 60%),linear-gradient(135deg,#0146a0 0%,#025ac6 55%,#2b2295 100%);box-shadow:0 10px 22px rgba(1,70,160,.25)}
 .nb-hero .hi{font-size:14px;font-weight:700;opacity:.92}.nb-hero .dy{display:flex;align-items:center;gap:8px;margin-top:4px}
 .nb-hero .dy button{width:32px;height:32px;border-radius:9px;border:0;background:rgba(255,255,255,.18);color:#fff;font-weight:800;cursor:pointer}.nb-hero .dy button:disabled{opacity:.3;cursor:default}
@@ -2766,20 +2774,18 @@ function renderNote(){
   };
   let mark = '';
   if (markE) mark = `<button type="button" class="nb-mark" id="nb-mark" data-d="${markE.entry_date}" data-id="${markE.id}">📍 You stopped here: ${nbTitle(markE)[0]} · ${pesoS(Number(markE.signed_amount))} · ${markE.entry_date === t ? '' : dLabel(markE.entry_date) + ' '}${tLabel(markE.entered_at)}${markE.created_by ? ' (' + esc(markE.created_by) + ')' : ''}</button>`;
-  const hr = new Date().getHours(), greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
-  const waitT = pend.reduce((s, x) => s + x.amt, 0);
+  const waitT = pend.reduce((s, x) => s + x.amt, 0), showWait = pend.length && d === t && !(lock && lock.locked_at);
   W.innerHTML = `
-    <div class="nb-hero">
-      <div class="hi">${greet}, ${esc((S.user && S.user.name) || '')} 👋</div>
-      <div class="dy"><button type="button" id="nb-prev" aria-label="Previous day" ${d <= mn ? 'disabled' : ''}>◀</button><b>${d === t ? 'Today · ' + dLabel(d) : dLabel(d)}${lock && lock.locked_at ? ' · closed' : ''}</b><button type="button" id="nb-next" aria-label="Next day" ${d >= t ? 'disabled' : ''}>▶</button></div>
-      <div class="lbl">${d === t ? 'CASH IN THE DRAWER SHOULD BE' : 'BALANCE AT THE END OF THIS DAY'}</div>
-      <div class="amt">${peso(d === t ? B.balance_now : endBal)}</div>
-      <div class="io"><span>In ${pesoS(inT)}</span><span>Out −${peso(outT)}</span>${d !== t ? '' : `<span>Started with ${peso(carried)}</span>`}</div>
+    <div class="nb-top">
+      <button type="button" class="nv" id="nb-prev" aria-label="Previous day" ${d <= mn ? 'disabled' : ''}>◀</button>
+      <div class="dt">${d === t ? 'Today' : dLabel(d)} <small>· ${d === t ? dLabel(d) : 'past page'}${lock && lock.locked_at ? ' · closed' : ''} · ${esc((S.user && S.user.name) || '')}</small></div>
+      <button type="button" class="nv" id="nb-next" aria-label="Next day" ${d >= t ? 'disabled' : ''}>▶</button>
+      ${showWait ? `<button type="button" class="wait" id="nb-hint" title="${pend.map(x => esc(x.who)).join(', ')} · ${peso(waitT)}">💰 ${pend.length} waiting</button>` : ''}
     </div>
-    ${pend.length && d === t && !(lock && lock.locked_at) ? `<button type="button" class="nb-wait" id="nb-hint"><span class="wi">💰</span><span class="wt"><b>${pend.length} hand-in${pend.length === 1 ? '' : 's'} waiting to be counted</b><small>${pend.map(x => esc(x.who)).join(', ')} · ${peso(waitT)}</small></span><span class="wg">Count ›</span></button>` : ''}
     ${mark}
     <div class="paper" id="nb-paper">
       <div class="pd"><small>DATE</small><b>${d.slice(5, 7).replace(/^0/, '')}/${d.slice(8, 10).replace(/^0/, '')}/${d.slice(2, 4)}</b></div>
+      <div class="tot now"><small>${d === t ? 'CASH IN DRAWER SHOULD BE' : 'BALANCE END OF THIS DAY'}</small><span>₱${Number(d === t ? B.balance_now : endBal).toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
       <div class="hd">Balance: <small>MONEY IN</small></div>
       ${opening ? line(opening, false) : `<div class="ln"><b class="zero">${Number(carried).toLocaleString('en-PH')}</b><span>— Carried from before</span></div>`}
       ${ins.map(e => line(e, false)).join('')}
