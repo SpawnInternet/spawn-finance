@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v2.3 · 2026-10-14 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v2.4 · 2026-10-14 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -527,6 +527,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .nb-bar button{border-radius:18px;height:52px;letter-spacing:.01em}
 .nb-bar button:active{transform:translateY(1px)}
 .nb-card{border:1px solid #e8ecf3}
+.nb-back{display:inline-flex;align-items:center;height:36px;padding:0 12px;margin:2px 0 10px;border:0;border-radius:10px;background:#fff;color:#0f2a5c;font:800 13px Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(17,24,39,.08);cursor:pointer}
 .nb-go{border-radius:14px}
 @media(min-width:700px){.paper{font-size:19px}.paper .ln b{min-width:110px}}
 </style>
@@ -535,7 +536,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 
 <header class="bar" id="bar">
   <div class="bar-in"><h1>SPAWN Finance<small id="bar-sub">Cash book</small></h1>
-  <button class="chip hide" id="btn-home" type="button">Home</button>
+  <button class="chip hide" id="btn-home" type="button">‹ Back</button>
   <button class="chip hide" id="btn-user" type="button"></button>
   <div class="laysw hide" id="laysw"><button type="button" data-lay="note" title="Notebook" aria-label="Notebook">📒</button><button type="button" data-lay="tiles" title="Tiles" aria-label="Tiles">▦</button></div></div>
 </header>
@@ -2834,6 +2835,7 @@ function renderNote(){
   if (!NB.scrolled) { NB.scrolled = true; setTimeout(() => { const l = document.querySelector('.ln.mark'); if (l) l.scrollIntoView({block:'center'}); }, 60); }
 }
 $('nb-wrap').addEventListener('click', e => {
+  if (e.target.closest('[data-back]')) { NB.tab = 'book'; renderNote(); return; }
   const l = e.target.closest('[data-e]'), c = e.target.closest('[data-c]');
   if (l) openDetail('e', +l.dataset.e); else if (c) openDetail('c', +c.dataset.c);
 });
@@ -2842,6 +2844,7 @@ function nbRenderCol(){
   const items = nbPending(), t = todayPH();
   const done = S.book.entries.filter(e => e.entry_date === t && (e.kind === 'collection' || (e.kind === 'other_in' && /Subscriber cash/i.test(e.category || ''))));
   $('nb-wrap').innerHTML = `
+    <button type="button" class="nb-back" data-back="1">‹ Back to the logbook</button>
     <div style="font-size:13px;color:#6b7280;margin:4px 2px 10px">Hand-ins sent by the apps. Count the money, and it is written in the logbook by itself.</div>
     ${items.length ? items.map((x, i) => `<div class="nb-card"><div class="nb-item"><div class="t"><b>${x.type === 'harvest' ? '🪙 ' : '📶 '}${esc(x.who)} · ${x.type === 'harvest' ? 'harvest' : 'subscribers'}</b><small>${esc(x.sub)}</small></div>
       <div class="a"><small>should hand in</small><b>${peso(x.amt)}</b></div></div>
@@ -2860,6 +2863,7 @@ function nbRenderCol(){
 function nbRenderMore(){
   const owed = (S.book.owed || []);
   $('nb-wrap').innerHTML = `
+    <button type="button" class="nb-back" data-back="1">‹ Back to the logbook</button>
     <div class="nb-menu">
       <button type="button" data-m="advance" style="background:linear-gradient(135deg,#8b5cf6,#5b21b6)"><b>💸 Cash advance / c/o</b><span>Loans, c/o and repayments</span></button>
       <button type="button" data-m="bugi" style="background:linear-gradient(135deg,#f59e0b,#b45309)"><b>🪙 Bugi found</b><span>Old coins · box ${peso(S.book.bugi_total || 0)}</span></button>
@@ -2914,6 +2918,17 @@ $('nb-choose').addEventListener('click', e => { if (e.target.id === 'nb-choose')
 $('nb-write').addEventListener('click', () => { if (!S.book) return toast('Still loading. Try again in a moment.'); nbChoose(); });
 $('nb-hand').addEventListener('click', () => { if (!S.book) return toast('Still loading. Try again in a moment.'); openSheet('count', { mode:'handover' }); });
 nbLaySw();
+/* phone/browser Back: one step back, never out of the app by accident */
+function nbArm(){ try { if (!(history.state && history.state.sfGuard)) history.pushState({ sfGuard: 1 }, ''); } catch (e) {} }
+window.addEventListener('popstate', () => {
+  if (!S.user) return;
+  if ($('nb-choose').classList.contains('on')) { $('nb-choose').classList.remove('on'); nbArm(); return; }
+  if ($('sheet').classList.contains('on')) { closeSheet(); nbArm(); return; }
+  if ($('v-note').classList.contains('hide') && $('v-pin').classList.contains('hide')) { nbEnter(); nbArm(); return; }
+  if (!$('v-note').classList.contains('hide') && NB.tab !== 'book') { NB.tab = 'book'; renderNote(); nbArm(); return; }
+  toast('Press Back again to leave'); setTimeout(nbArm, 1500);
+});
+const _nbShow = show; show = function(v){ _nbShow(v); if (v !== 'pin') nbArm(); };
 
 </script>
 </body>
