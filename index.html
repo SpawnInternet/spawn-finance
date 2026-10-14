@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v2.6 · 2026-10-14 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v2.7 · 2026-10-14 · hand-ins listed up to the page's date · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -710,7 +710,7 @@ const SB  = 'https://cviraqfhphhsonjmrtvu.supabase.co';
 const KEY = 'sb_publishable_6J1xIrlkpHf6jir4DtUh4g_xX7Fm9ln';
 const AREAS = ['Dipolog','Dapitan','Sindangan','Sinaman','Roxas','Polanco','Minaog','Gulayon/Igot'];
 const BANK_DEFAULTS = ['BDO','Landbank','RCBC','Eastwest','Metrobank','BPI'];
-const IDLE_MS = 10 * 60 * 1000;
+const IDLE_MS = 5 * 60 * 60 * 1000;   // v2.7: signed in for 5 hours from sign-in
 
 const S = { user:null, pin:'', name:null, look:null, book:null, range:7, form:null, idle:null };
 
@@ -802,7 +802,7 @@ function show(v){
   $('btn-home').classList.toggle('hide', !['book','exp','match','gcheck'].includes(v) && !(v === 'home' && NB.layout === 'note') && !(v === 'note' && NB.layout === 'tiles'));
   $('btn-user').classList.toggle('hide', v === 'pin');
   $('laysw').classList.toggle('hide', v === 'pin');
-  $('bar-sub').textContent = v === 'book' ? 'Book' : v === 'exp' ? 'Expenses' : v === 'match' ? 'Match names' : v === 'gcheck' ? 'GCash check' : v === 'note' ? (S.user ? S.user.name + ' · logbook' : 'Logbook') : 'Cash book';
+  $('bar-sub').textContent = v === 'book' ? 'Book' : v === 'exp' ? 'Expenses' : v === 'match' ? 'Match names' : v === 'gcheck' ? 'GCash check' : v === 'note' ? (S.user ? S.user.name + ' · logbook' + (S.loginAt ? ' · until ' + signedUntil() : '') : 'Logbook') : 'Cash book';
   window.scrollTo(0, 0);
 }
 
@@ -856,20 +856,21 @@ async function pinKey(k){
   }
 }
 const SESS = 'sf-sess';
-function saveSess(){ try { if (S.user && S.pin) sessionStorage.setItem(SESS, JSON.stringify({ n:S.name, p:S.pin, t:Date.now() })); } catch (e) {} }
-function clearSess(){ try { sessionStorage.removeItem(SESS); } catch (e) {} }
+function saveSess(){ try { if (S.user && S.pin) { if (!S.loginAt) S.loginAt = Date.now(); localStorage.setItem(SESS, JSON.stringify({ n:S.name, p:S.pin, t:S.loginAt })); } } catch (e) {} }
+function clearSess(){ S.loginAt = null; try { localStorage.removeItem(SESS); sessionStorage.removeItem(SESS); } catch (e) {} }
 function resumeSess(){
-  let x = null; try { x = JSON.parse(sessionStorage.getItem(SESS) || 'null'); } catch (e) {}
+  let x = null; try { x = JSON.parse(localStorage.getItem(SESS) || sessionStorage.getItem(SESS) || 'null'); } catch (e) {}
   if (!x || !x.n || !/^\d{4}$/.test(x.p || '')) return false;
   if (Date.now() - (x.t || 0) > IDLE_MS) { clearSess(); return false; }
   const b = [...document.querySelectorAll('.acc')].find(a => a.dataset.n === x.n); if (!b) { clearSess(); return false; }
   document.querySelectorAll('.acc').forEach(a => a.classList.toggle('on', a === b));
-  S.name = x.n; S.pin = x.p.slice(0, 3); pinKey(x.p[3]);
+  S.loginAt = x.t; S.name = x.n; S.pin = x.p.slice(0, 3); pinKey(x.p[3]);
   return true;
 }
 function lockApp(msg){
   clearSess();
   if (X.rows) { stashDraft(); X.rows = null; }
+  clearTimeout(S.idle); S.idle = null;
   S.user = null; S.pin = ''; S.book = null; S.look = null; S.gc = null; S.parts = null; S.workDate = null; closeSheet(); drawDots();
   document.querySelectorAll('.acc').forEach(x => x.classList.remove('on')); S.name = null;
   show('pin'); $('pin-err').textContent = msg || '';
@@ -877,24 +878,28 @@ function lockApp(msg){
 $('btn-user').addEventListener('click', () => lockApp(''));
 $('btn-home').addEventListener('click', () => nbEnter());
 function bumpIdle(){
-  clearTimeout(S.idle);
-  if (S.user) { S.idle = setTimeout(() => lockApp('Locked after 10 minutes of no use.'), IDLE_MS); if (!bumpIdle.t || Date.now() - bumpIdle.t > 15000) { bumpIdle.t = Date.now(); saveSess(); } }
+  if (!S.user) return;
+  if (!S.loginAt) { S.loginAt = Date.now(); saveSess(); }
+  if (!S.idle) S.idle = setTimeout(() => { S.idle = null; lockApp('Signed out after 5 hours. Please sign in again.'); }, Math.max(1000, S.loginAt + IDLE_MS - Date.now()));
 }
+function signedUntil(){ return S.loginAt ? new Date(S.loginAt + IDLE_MS).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit' }) : ''; }
 ['click','keydown','touchstart'].forEach(ev => document.addEventListener(ev, bumpIdle, {passive:true}));
+document.addEventListener('visibilitychange', () => { if (S.user && S.loginAt && Date.now() - S.loginAt > IDLE_MS) lockApp('Signed out after 5 hours. Please sign in again.'); });
 
 /* ---------- data ---------- */
 async function refresh(){
   const t = todayPH();
   const from = addDays(t, -(Math.max(S.range, 31) - 1));
   try {
-    const [book, look, coll, gc, scash] = await Promise.all([
+    const [book, look, coll, gc, scash, sheet] = await Promise.all([
       rpc('fin_cash_book', { p_pin:S.pin, p_from:from, p_to:t }),
       rpc('fin_lookups', { p_pin:S.pin }),
       rpc('fin_collector_status', { p_pin:S.pin }).catch(() => null),
       rpc('fin_gcash_book', { p_pin:S.pin, p_from:addDays(t, -30), p_to:t }).catch(() => null),
-      rpc('fin_sub_cash_pending', { p_pin:S.pin }).catch(() => null)
+      rpc('fin_sub_cash_pending', { p_pin:S.pin }).catch(() => null),
+      rpc('fin_sheet_cash_pending', { p_pin:S.pin }).catch(() => null)
     ]);
-    S.book = book; S.look = look; S.coll = coll; S.gc = gc; S.scash = scash;
+    S.book = book; S.look = look; S.coll = coll; S.gc = gc; S.scash = scash; S.sheet = sheet && sheet.ok ? sheet : null;
   } catch (e) { toast(e.message, 4000); }
   renderHome();
   if (!$('v-book').classList.contains('hide')) renderBook();
@@ -2718,13 +2723,21 @@ $('laysw').addEventListener('click', e => {
 
 /* hand-ins waiting from the apps */
 function nbPending(){
-  const items = [];
+  const items = [], upTo = workDate();
+  ((S.sheet && S.sheet.days) || []).forEach(dd => {
+    if (dd.date > upTo) return;
+    const names = (dd.items || []).map(i => i.name).filter(Boolean);
+    items.push({ type:'sheet', who:'Payment sheet', date:dd.date, amt:Number(dd.total), ids:(dd.items || []).map(i => i.id), n:dd.n,
+      sub:`${dLabel(dd.date)} · ${dd.n} cash payment${dd.n === 1 ? '' : 's'}: ${names.slice(0, 4).join(', ')}${names.length > 4 ? ' +' + (names.length - 4) + ' more' : ''}` });
+  });
   ((S.coll && S.coll.collectors) || []).forEach(c => {
-    const u = Number(c.unremitted); if (u < 1) return;
-    const days = c.open_days || [], v = days.reduce((s, d) => s + Number(d.vendos || 0), 0);
+    const days = (c.open_days || []).filter(d => d.date <= upTo), v = days.reduce((s, d) => s + Number(d.vendos || 0), 0);
+    const u = upTo >= todayPH() ? Number(c.unremitted) : days.reduce((s, d) => s + Number(d.pending || 0), 0);
+    if (u < 1 || !days.length && upTo < todayPH()) return;
     items.push({ type:'harvest', who:c.collector, amt:u, sub:`Spawn Harvest · ${days.length} day${days.length === 1 ? '' : 's'} · ${v} vendo${v === 1 ? '' : 's'}${days.length ? ' · since ' + dLabel(days[0].date) : ''}` });
   });
   ((S.scash && S.scash.collectors) || []).forEach(c => {
+    if (c.oldest && c.oldest > upTo) return;
     const papers = (c.items || []).map(i => i.paper).filter(Boolean);
     const net = Number(c.total) - Number(c.expense_total || 0);
     let sub = `Spawn Collect · ${c.n} cash receipt${c.n === 1 ? '' : 's'}`;
@@ -2860,8 +2873,12 @@ function nbRenderCol(){
   const done = S.book.entries.filter(e => e.entry_date === t && (e.kind === 'collection' || (e.kind === 'other_in' && /Subscriber cash/i.test(e.category || ''))));
   $('nb-wrap').innerHTML = `
     <button type="button" class="nb-back" data-back="1">‹ Back to the logbook</button>
-    <div style="font-size:13px;color:#6b7280;margin:4px 2px 10px">Hand-ins sent by the apps. Count the money, and it is written in the logbook by itself.</div>
-    ${items.length ? items.map((x, i) => `<div class="nb-card"><div class="nb-item"><div class="t"><b>${x.type === 'harvest' ? '🪙 ' : '📶 '}${esc(x.who)} · ${x.type === 'harvest' ? 'harvest' : 'subscribers'}</b><small>${esc(x.sub)}</small></div>
+    <div style="font-size:13px;color:#6b7280;margin:4px 2px 10px">${workDate() === todayPH() ? 'Hand-ins sent by the apps.' : `<b style="color:#966500">For the page of ${dLabel(workDate())}</b> · showing what came in up to that day.`} Count or add them, and they are written in the logbook by themselves.</div>
+    ${items.length ? items.map((x, i) => x.type === 'sheet'
+      ? `<div class="nb-card" style="border-color:#c7d2fe"><div class="nb-item"><div class="t"><b>📄 Payment sheet · ${dLabel(x.date)}</b><small>${esc(x.sub)}</small></div>
+          <div class="a"><small>cash already received</small><b style="color:#025ac6">${peso(x.amt)}</b></div></div>
+          <button type="button" class="nb-go" style="width:100%;margin-top:8px;background:linear-gradient(180deg,#1f74e0,#025ac6)" data-pend="${i}">Add to the book · ${dLabel(x.date)}</button></div>`
+      : `<div class="nb-card"><div class="nb-item"><div class="t"><b>${x.type === 'harvest' ? '🪙 ' : '📶 '}${esc(x.who)} · ${x.type === 'harvest' ? 'harvest' : 'subscribers'}</b><small>${esc(x.sub)}</small></div>
       <div class="a"><small>should hand in</small><b>${peso(x.amt)}</b></div></div>
       <button type="button" class="nb-go" style="width:100%;margin-top:8px" data-pend="${i}">Count the money</button></div>`).join('')
       : '<div class="nb-card" style="text-align:center;color:#94a3b8">Nothing waiting 🎉</div>'}
@@ -2869,12 +2886,27 @@ function nbRenderCol(){
     <div class="nb-card"><h4>Other collections</h4><div class="nb-item"><div class="t"><b>Subscriber paid here at the office</b><small>Cash or GCash, with the OR number</small></div><button type="button" class="nb-go" data-office="1">Record</button></div></div>`;
   $('nb-wrap').querySelectorAll('[data-pend]').forEach(b => b.onclick = () => {
     const x = items[+b.dataset.pend];
+    if (x.type === 'sheet') return nbAddSheet(x, b);
     if (x.type === 'harvest') { openSheet('collect', { mode:'collection' }); pickCollector(x.who); }
     else openSheet('subcash', { col:x.who, scSel:x.c.items.map(i => i.id) });
   });
   const o = $('nb-wrap').querySelector('[data-office]'); if (o) o.onclick = () => openSheet('collect', { mode:'office_collection' });
 }
 
+async function nbAddSheet(x, btn){
+  const names = ((S.sheet.days || []).find(d => d.date === x.date) || { items:[] }).items.map(i => `${i.name} ${peso(i.amount)}${i.or ? ' · OR ' + i.or : ''}`).join('\n');
+  if (!confirm(`Add ${peso(x.amt)} to the book on ${dLabel(x.date)}?\n\nThese ${x.n} cash payment${x.n === 1 ? ' is' : 's are'} already in the payment sheet:\n${names}\n\nThey are added once and can't be added twice.`)) return;
+  btn.disabled = true; btn.textContent = 'Adding…';
+  try {
+    const r = await rpc('fin_sheet_cash_receive', { p_pin:S.pin, p_client_id:uuid(), p_ids:x.ids, p_date:x.date });
+    if (r && r.ok === false) throw new Error(r.error || 'not added');
+    toast(`✓ ${peso(x.amt)} written on ${dLabel(x.date)}`);
+    await refresh(); NB.tab = 'col'; renderNote();
+  } catch (e) {
+    toast(/already_in_book/.test(e.message) ? 'Already in the book.' : /day_locked/.test(e.message) ? `${dLabel(x.date)} is closed. Ask Sir Wendell to open it.` : e.message, 4000);
+    btn.disabled = false; btn.textContent = 'Add to the book · ' + dLabel(x.date);
+  }
+}
 function nbRenderMore(){
   const owed = (S.book.owed || []);
   $('nb-wrap').innerHTML = `
