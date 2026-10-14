@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v2.4 · 2026-10-14 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v2.5 · 2026-10-14 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -527,6 +527,13 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .nb-bar button{border-radius:18px;height:52px;letter-spacing:.01em}
 .nb-bar button:active{transform:translateY(1px)}
 .nb-card{border:1px solid #e8ecf3}
+.nb-keys{display:none;margin:8px 2px 0;font-size:11.5px;color:#64748b;text-align:center}
+.nb-keys kbd{display:inline-block;min-width:18px;padding:1px 5px;margin:0 1px;border-radius:5px;border:1px solid #cbd5e1;border-bottom-width:2px;background:#fff;font:700 11px Inter,system-ui,sans-serif;color:#334155}
+@media (hover:hover) and (pointer:fine){.nb-keys{display:block}}
+#v-note button:focus-visible,#nb-choose button:focus-visible{outline:3px solid #025ac6;outline-offset:2px}
+.paper .ln:focus-visible{outline:2px solid #025ac6;outline-offset:0;background:rgba(2,90,198,.08)}
+@media (min-width:760px){.nb-tabs{padding:0 max(0px,calc((100% - 720px) / 2))}.nb-bar{left:50%;right:auto;width:min(720px,100%);transform:translateX(-50%);border-radius:18px 18px 0 0;border:1px solid #e3e7ef;border-bottom:0}
+  #nb-choose{align-items:center;justify-content:center}#nb-choose .sh{width:min(520px,calc(100vw - 48px));border-radius:22px}}
 .nb-back{display:inline-flex;align-items:center;height:36px;padding:0 12px;margin:2px 0 10px;border:0;border-radius:10px;background:#fff;color:#0f2a5c;font:800 13px Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(17,24,39,.08);cursor:pointer}
 .nb-go{border-radius:14px}
 @media(min-width:700px){.paper{font-size:19px}.paper .ln b{min-width:110px}}
@@ -1930,6 +1937,14 @@ document.addEventListener('keydown', e => {
       if (grp.classList.contains('seg')) clickKeepFocus(n); else n.focus();
       return;
     }
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.isComposing && !a.matches('select, textarea') && (grp || a.matches('input:not([type=checkbox]), button.go'))) {
+      const st = sheetStops();
+      let i = st.indexOf(a); if (i < 0 && grp) i = st.findIndex(x => grp.contains(x));
+      const n = st[i + (e.key === 'ArrowDown' ? 1 : -1)];
+      e.preventDefault();
+      if (n) { n.focus(); if (n.select && n.matches('input[type=text], input[type=number], input:not([type])')) try { n.select(); } catch (x) {} n.scrollIntoView({block:'nearest'}); }
+      return;
+    }
     if (e.key !== 'Enter' || e.isComposing) return;
     if (grp) {
       if (a.dataset.col) return;                       // collector chip: its own click moves on to the amount
@@ -2827,7 +2842,8 @@ function renderNote(){
     ${!entries.length && d === t ? `<div class="nb-guide"><h4>Nothing written today yet. The day goes like this:</h4>
       <div class="st"><i>1</i><span><b>💰 Collect</b> — count the hand-ins from Harvest and Collect. They are written in by themselves.</span></div>
       <div class="st"><i>2</i><span><b>✏️ Write a line</b> — gas, snacks, c/o, cash advance, a deposit, or a subscriber who paid here.</span></div>
-      <div class="st"><i>3</i><span><b>🤝 Count &amp; hand over</b> — at the handover, count the drawer and sign. Short or over is written as a line.</span></div></div>` : ''}`;
+      <div class="st"><i>3</i><span><b>🤝 Count &amp; hand over</b> — at the handover, count the drawer and sign. Short or over is written as a line.</span></div></div>` : ''}
+    <div class="nb-keys">⌨ <kbd>←</kbd><kbd>→</kbd> day · <kbd>↑</kbd><kbd>↓</kbd> lines · <kbd>Enter</kbd> open · <kbd>W</kbd> write a line · <kbd>H</kbd> hand over · <kbd>Esc</kbd> back</div>`;
   $('nb-prev').onclick = () => { setWorkDate(addDays(d, -1)); renderNote(); };
   $('nb-next').onclick = () => { setWorkDate(addDays(d, 1)); renderNote(); };
   const hint = $('nb-hint'); if (hint) hint.onclick = () => { NB.tab = 'col'; renderNote(); };
@@ -2918,6 +2934,52 @@ $('nb-choose').addEventListener('click', e => { if (e.target.id === 'nb-choose')
 $('nb-write').addEventListener('click', () => { if (!S.book) return toast('Still loading. Try again in a moment.'); nbChoose(); });
 $('nb-hand').addEventListener('click', () => { if (!S.book) return toast('Still loading. Try again in a moment.'); openSheet('count', { mode:'handover' }); });
 nbLaySw();
+/* keyboard on a laptop: ← → day · ↑ ↓ lines · Enter open · W write · H hand over · Esc back */
+document.addEventListener('keydown', e => {
+  if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || !S.user) return;
+  if ($('v-note').classList.contains('hide') || $('sheet').classList.contains('on')) return;
+  const a = document.activeElement;
+  if ($('nb-choose').classList.contains('on')) {
+    if (e.key === 'Escape') { e.preventDefault(); $('nb-choose').classList.remove('on'); $('nb-write').focus(); return; }
+    if (!ARROWS.includes(e.key)) return;
+    const bs = [...$('nb-choose').querySelectorAll('button')].filter(b => b.offsetParent);
+    e.preventDefault();
+    if (!bs.includes(a)) { (bs.find(b => b.dataset.kind) || bs[0]).focus(); return; }
+    if (a.dataset.dir && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { const o = $('nb-choose').querySelector(`[data-dir="${a.dataset.dir === 'out' ? 'in' : 'out'}"]`); o.click(); setTimeout(() => { const n = $('nb-choose').querySelector(`[data-dir="${o.dataset.dir}"]`); if (n) n.focus(); }, 0); return; }
+    const n = spatialNext(bs, a, e.key); if (n) n.focus();
+    return;
+  }
+  if (a && a.matches('input, textarea, select')) return;
+  if (e.key === 'Escape' && NB.tab !== 'book') { e.preventDefault(); NB.tab = 'book'; renderNote(); return; }
+  if (NB.tab === 'book' && (e.key === 'w' || e.key === 'W')) { e.preventDefault(); $('nb-write').click(); return; }
+  if (NB.tab === 'book' && (e.key === 'h' || e.key === 'H')) { e.preventDefault(); $('nb-hand').click(); return; }
+  if (!ARROWS.includes(e.key)) return;
+  /* on the tab bar: ← → between tabs */
+  if (a && a.closest('#nb-tabs') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    const bs = [...$('nb-tabs').querySelectorAll('button')], i = bs.indexOf(a);
+    e.preventDefault(); const n = bs[(i + (e.key === 'ArrowRight' ? 1 : -1) + bs.length) % bs.length]; n.focus(); return;
+  }
+  if (NB.tab === 'book') {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      const b = $(e.key === 'ArrowLeft' ? 'nb-prev' : 'nb-next'); if (b && !b.disabled) { e.preventDefault(); b.click(); setTimeout(() => { const f = document.querySelector('#nb-paper .ln'); if (f && DESK.matches) f.focus({preventScroll:true}); }, 0); }
+      return;
+    }
+    const ls = [...document.querySelectorAll('#nb-wrap .nb-mark, #nb-wrap #nb-hint, #nb-paper button.ln, .nb-bar button')].filter(x => x.offsetParent);
+    if (!ls.length) return;
+    e.preventDefault();
+    let i = ls.indexOf(a);
+    i = i < 0 ? (e.key === 'ArrowDown' ? 0 : ls.length - 1) : Math.max(0, Math.min(ls.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+    ls[i].focus(); ls[i].scrollIntoView({block:'nearest'});
+    return;
+  }
+  /* Collect / More: arrows move between the buttons */
+  const items = [...document.querySelectorAll('#nb-wrap button')].filter(x => x.offsetParent);
+  if (!items.length) return;
+  e.preventDefault();
+  if (!items.includes(a)) { items[0].focus(); return; }
+  const n = spatialNext(items, a, e.key); if (n) n.focus();
+});
+
 /* phone/browser Back: one step back, never out of the app by accident */
 function nbArm(){ try { if (!(history.state && history.state.sfGuard)) history.pushState({ sfGuard: 1 }, ''); } catch (e) {} }
 window.addEventListener('popstate', () => {
