@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v2.5 · 2026-10-14 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v2.6 · 2026-10-14 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -405,7 +405,6 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .t-appr{background:#fff;color:#1f6b3a;border:1.5px solid #9fd9b5}
 
 /* ===== NOTEBOOK v2.0 ===== */
-@import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap');
 .laysw{display:flex;padding:3px;border-radius:12px;background:rgba(255,255,255,.16);margin-left:6px}
 .laysw button{width:36px;height:30px;border-radius:9px;border:0;background:transparent;color:#fff;font-size:15px;cursor:pointer}
 .laysw button.on{background:#fff;color:#0f2a5c}
@@ -425,7 +424,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .nb-date .dt{flex:1;font-size:17px;font-weight:800;color:#0f2a5c}.nb-date .dt small{display:block;font-size:12px;color:#64748b;font-weight:600}
 .nb-date .bal{text-align:right}.nb-date .bal small{display:block;font-size:11px;color:#64748b;font-weight:700}.nb-date .bal b{font-size:19px;color:#0f2a5c;font-variant-numeric:tabular-nums}
 .nb-mark{display:inline-flex;align-items:center;gap:6px;max-width:100%;margin:0 0 6px;padding:6px 10px;border-radius:999px;background:#fde7f3;color:#be185d;font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.paper{position:relative;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(17,24,39,.1);background:#fffef9;background-image:repeating-linear-gradient(180deg,transparent 0,transparent 39px,#f2b8d8 39px,#f2b8d8 40px);padding:0 14px 20px 56px;font-family:Kalam,"Comic Sans MS",cursive;font-size:18px;line-height:40px;color:#1e293b}
+.paper{position:relative;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(17,24,39,.1);background:#fffef9;background-image:repeating-linear-gradient(180deg,transparent 0,transparent 39px,#f2b8d8 39px,#f2b8d8 40px);padding:0 14px 20px 56px;font-family:Inter,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15.5px;line-height:40px;color:#1e293b}
 .paper::before{content:"";position:absolute;left:44px;top:0;bottom:0;width:2px;background:#ec8fc0}
 .paper .pd{display:flex;justify-content:flex-end;align-items:baseline;gap:8px;height:40px}
 .paper .pd small{font-family:Inter,system-ui,sans-serif;font-size:11px;font-weight:700;color:#d36aa6;letter-spacing:.08em}
@@ -435,19 +434,19 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .paper .ln:hover{background:rgba(2,90,198,.05)}
 .paper .ln b{min-width:84px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
 .paper .ln b.in{color:#0f766e}.paper .ln b.out{color:#c2142f}.paper .ln b.zero{color:#64748b}
-.paper .ln span{overflow:hidden;text-overflow:ellipsis}.paper .ln span small{color:#64748b;font-size:14px}
+.paper .ln span{overflow:hidden;text-overflow:ellipsis}.paper .ln span small{color:#64748b;font-size:12.5px;font-weight:500}
 .paper .ln.void{text-decoration:line-through;opacity:.55}
 .paper .ln.mark{background:rgba(190,24,93,.07)}.paper .ln.mark::after{content:"◀ last";font-family:Inter,system-ui,sans-serif;font-size:10px;font-weight:800;color:#be185d;margin-left:auto;padding-left:6px}
 .paper .tot{height:40px;display:flex;align-items:center;gap:10px}
-.paper .tot span{display:inline-block;padding:0 12px;line-height:34px;border:2px solid #1e293b;border-radius:4px;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;transform:rotate(-.6deg);background:rgba(255,255,255,.6)}
-.paper .tot.big span{border-width:2.5px;font-size:24px;transform:rotate(.5deg)}
-.paper .tot small{font-size:15px;color:#64748b;white-space:nowrap}
+.paper .tot span{display:inline-block;padding:0 12px;line-height:34px;border:2px solid #1e293b;border-radius:6px;font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;transform:none;background:rgba(255,255,255,.6)}
+.paper .tot.big span{border-width:2.5px;font-size:20px;transform:none}
+.paper .tot small{font-size:13px;color:#64748b;white-space:nowrap}
 .paper .hint{height:40px;border:0;background:none;padding:0;font:700 13px Inter,system-ui,sans-serif;color:#966500;cursor:pointer}
 .paper .cnt{margin:0 0 0 auto;width:230px;max-width:100%}
 .paper .cnt .r{display:flex;gap:8px;height:40px;justify-content:flex-end}.paper .cnt .r b{font-variant-numeric:tabular-nums}
 .paper .cnt .ok{display:flex;justify-content:flex-end;align-items:center;gap:8px;height:40px}
 .paper .cnt .ok em{font-style:normal;font-weight:700}.paper .cnt .ok em.g{color:#027e60}.paper .cnt .ok em.r{color:#c2142f}
-.paper .cnt .ok span{display:inline-block;padding:0 10px;line-height:32px;border:2.5px solid #1e293b;border-radius:4px;font-size:20px;font-weight:700;transform:rotate(-.5deg)}
+.paper .cnt .ok span{display:inline-block;padding:0 10px;line-height:32px;border:2.5px solid #1e293b;border-radius:6px;font-size:18px;font-weight:800}
 .paper .sig{text-align:right;height:40px}.paper .sig small{color:#64748b;font-size:13px}
 .paper .empty{font-family:Inter,system-ui,sans-serif;font-size:13px;color:#64748b;line-height:1.5;padding:12px 0}
 .nb-bar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;gap:8px;padding:12px 14px calc(14px + env(safe-area-inset-bottom,0px));background:rgba(255,255,255,.96);border-top:1px solid #e6e7ea}
@@ -536,7 +535,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
   #nb-choose{align-items:center;justify-content:center}#nb-choose .sh{width:min(520px,calc(100vw - 48px));border-radius:22px}}
 .nb-back{display:inline-flex;align-items:center;height:36px;padding:0 12px;margin:2px 0 10px;border:0;border-radius:10px;background:#fff;color:#0f2a5c;font:800 13px Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(17,24,39,.08);cursor:pointer}
 .nb-go{border-radius:14px}
-@media(min-width:700px){.paper{font-size:19px}.paper .ln b{min-width:110px}}
+@media(min-width:700px){.paper{font-size:16px}.paper .ln b{min-width:110px}}
 </style>
 </head>
 <body>
