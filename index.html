@@ -594,6 +594,15 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .bo-wrap .ps-h{color:#966500}.bo-wrap .ps-h em{color:#a38a4a}.bo-wrap .ps-h .ps-sum{color:#966500;box-shadow:0 0 0 1px #f5d98a}
 .bo-wrap .ps .av{color:#966500;box-shadow:0 0 0 1.5px #f5d98a}.bo-wrap .ps .am{color:#966500}
 .bo-wrap .ps button{background:linear-gradient(180deg,#f0a92a,#d98a00);box-shadow:0 3px 8px rgba(217,138,0,.3)}
+.orpend{display:flex;align-items:center;gap:8px;margin:-4px 0 12px;font-size:13.5px;color:var(--ink-2);cursor:pointer}
+.orpend input{width:20px;height:20px;accent-color:#d98a00}
+.orfollow{padding:11px 12px;border-radius:12px;background:#fff1cc;color:#7a5a00;font-size:14px}
+.orb{display:flex;align-items:center;gap:10px;width:100%;margin:0 0 10px;padding:11px 14px;border:0;border-radius:14px;cursor:pointer;text-align:left;
+  background:linear-gradient(180deg,#fff7df,#fff1cc);color:#7a5a00;font:700 14px Inter,system-ui,sans-serif;box-shadow:0 0 0 1.5px #f5d98a inset}
+.orb b{font-weight:800}.orb span{margin-left:auto;font-size:18px}
+.orrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #f1f3f7}
+.orrow .t{flex:1;min-width:0}.orrow .t b{display:block}.orrow .t small{color:#64748b;font-size:12.5px}
+.orrow input{width:110px;height:40px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;font:700 15px ui-monospace,Menlo,monospace}
 .ps-card{border-color:#c7d7f5 !important;background:linear-gradient(180deg,#f5f8fe,#fff 60px)}
 .ps-card .ps-h{height:auto;margin:0 0 6px;font-size:13px}
 .ps-card .ps{height:auto;padding:9px 0;border-top:1px solid #e8eef8}
@@ -958,15 +967,17 @@ async function refresh(){
   const t = todayPH();
   const from = addDays(t, -(Math.max(S.range, 31) - 1));
   try {
-    const [book, look, coll, gc, scash, sheet] = await Promise.all([
+    const [book, look, coll, gc, scash, sheet, orp] = await Promise.all([
       rpc('fin_cash_book', { p_pin:S.pin, p_from:from, p_to:t }),
       rpc('fin_lookups', { p_pin:S.pin }),
       rpc('fin_collector_status', { p_pin:S.pin }).catch(() => null),
       rpc('fin_gcash_book', { p_pin:S.pin, p_from:addDays(t, -30), p_to:t }).catch(() => null),
       rpc('fin_sub_cash_pending', { p_pin:S.pin }).catch(() => null),
-      rpc('fin_sheet_cash_pending', { p_pin:S.pin }).catch(() => null)
+      rpc('fin_sheet_cash_pending', { p_pin:S.pin }).catch(() => null),
+      rpc('fin_or_pending', { p_pin:S.pin }).catch(() => null)
     ]);
     S.book = book; S.look = look; S.coll = coll; S.gc = gc; S.scash = scash; S.sheet = sheet && sheet.ok ? sheet : null;
+    S.orp = orp && orp.ok ? orp.rows : [];
     restoreWorkDate();
     try { NB.histStale = Date.now(); } catch (x) {}
   } catch (e) { toast(e.message, 4000); }
@@ -1290,7 +1301,10 @@ function renderSheet(){
             h += unpaid.length ? `<div class="note">Not yet paid: <b>${unpaid.map(m => m.label + (m.year !== cy ? " '" + String(m.year).slice(2) : '')).join(', ')}</b>${Number(SM.unpaid_total) ? ' · ' + peso(SM.unpaid_total) : ''}</div>`
                                : `<div class="note" style="background:var(--teal-l);color:#1d6a61">All months up to now are paid ✓</div>`;
           }
-          h += text('f-or', 'OR number / GCash ref', F.or || '', 'autocomplete="off" placeholder="0012457"');
+          h += F.orPend
+            ? `<div class="f"><label>OR number / GCash ref</label><div class="orfollow">⏳ <b>OR to follow</b> — saved now, type the OR later in <b>ORs to follow</b></div></div>`
+            : text('f-or', 'OR number / GCash ref', F.or || '', 'autocomplete="off" placeholder="0012457"');
+          h += `<label class="orpend"><input type="checkbox" id="f-orpend" ${F.orPend ? 'checked' : ''}> No OR at hand — <b>OR to follow</b></label>`;
           h += `<div id="proofbox">${proofBox()}</div>`;
         }
       } else {
@@ -1598,7 +1612,8 @@ function wireSheet(){
     F[n] = b.dataset[n]; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); liveCalc();
   }));
   if ($('f-gave')) $('f-gave').placeholder = 'Same as bill';
-  if (F.kind === 'collect' && F.mode === 'office_collection') { wireSubPay(); wireProof(); wirePlan(); }
+  if (F.kind === 'collect' && F.mode === 'office_collection') { wireSubPay(); wireProof(); wirePlan();
+    const op = $('f-orpend'); if (op) op.onchange = () => { keep(); F.orPend = op.checked; renderSheet(); if (!F.orPend && $('f-or')) $('f-or').focus({ preventScroll:true }); }; }
   if (F.kind === 'appr') wireAppr();
   if (F.kind === 'subcash') {
     body.querySelectorAll('[data-sc]').forEach(b => b.onchange = () => {
@@ -1720,13 +1735,13 @@ async function submit(btn, next){
       if (!F.sub) { if ($('f-sq')) $('f-sq').focus(); throw new Error('Pick the subscriber first.'); }
       const sel = (F.sel || []).slice().sort();
       if (!sel.length) throw new Error(ERR.bad_months);
-      if (!v('f-or')) { $('f-or').focus(); throw new Error(ERR.or_required); }
+      if (!F.orPend && !v('f-or')) { $('f-or').focus(); throw new Error(ERR.or_required); }
       if (!(bill > 0)) { $('f-bill').focus(); throw new Error(ERR.bill_must_be_positive); }
       if (gave < bill) { $('f-gave').focus(); throw new Error(ERR.given_less_than_bill); }
       r = await rpc('fin_sub_payment_add', { p_pin:S.pin, p_client_id:F.cid, p_sub_id:F.sub.id, p_month_from:sel[0], p_months:sel.length,
-        p_bill:bill, p_tendered:gave, p_paid_via:F.pv, p_change_via:ch > 0 ? F.cv : null, p_or_no:v('f-or'),
-        p_entry_date:workDate(), p_detail:{ memo:v('f-memo') || null, ...proofDetail() } });
-      toast(`Paid · ${F.sub.name} · ${r.covers || ''} · OR ${r.or_no || v('f-or')}`, 3600);
+        p_bill:bill, p_tendered:gave, p_paid_via:F.pv, p_change_via:ch > 0 ? F.cv : null, p_or_no:F.orPend ? null : v('f-or'),
+        p_entry_date:workDate(), p_detail:{ memo:v('f-memo') || null, ...(F.orPend ? { or_pending:true } : {}), ...proofDetail() } });
+      toast(`Paid · ${F.sub.name} · ${r.covers || ''} · ${r.or_pending ? '⏳ OR to follow' : 'OR ' + (r.or_no || v('f-or'))}`, 3600);
     }
     else if (F.kind === 'collect' && F.mode === 'office_collection') {
       const bill = num(v('f-bill')), gave = v('f-gave') === '' ? bill : num(v('f-gave')), ch = gave - bill;
@@ -2919,6 +2934,7 @@ function renderNote(){
   if (NB.tab === 'col') return nbRenderCol();
   if (NB.tab === 'more') return nbRenderMore();
   if (NB.tab === 'shorts') return nbRenderShorts();
+  if (NB.tab === 'orpend') return nbRenderOrPend();
   const d = workDate(), t = todayPH(), mn = minWorkDate();
   const entries = B.entries.filter(e => e.entry_date === d).sort((a, b) => a.entered_at < b.entered_at ? -1 : 1);
   const voided = (B.voided || []).filter(e => e.entry_date === d);
@@ -2995,6 +3011,7 @@ function renderNote(){
       ${showWait ? `<button type="button" class="wait" id="nb-hint" title="${pend.map(x => esc(x.who)).join(', ')} · ${peso(waitT)}">💰 ${pend.length} waiting</button>` : ''}
     </div>
     ${mark}
+    ${(S.orp || []).length ? `<button type="button" class="orb" id="nb-orb">⏳ <b>${S.orp.length} OR${S.orp.length === 1 ? '' : 's'} to follow</b> · tap to type them in<span>›</span></button>` : ''}
     <div class="paper" id="nb-paper">
       <div class="pd"><small>DATE</small><b>${d.slice(5, 7).replace(/^0/, '')}/${d.slice(8, 10).replace(/^0/, '')}/${d.slice(2, 4)}</b></div>
       <div class="tot now"><small>${d === t ? 'CASH IN DRAWER SHOULD BE' : 'BALANCE END OF THIS DAY'}</small><span>₱${Number(d === t ? B.balance_now : endBal).toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
@@ -3026,6 +3043,7 @@ function renderNote(){
   $('nb-next').onclick = () => { setWorkDate(addDays(d, 1)); renderNote(); };
   const hint = $('nb-hint'); if (hint) hint.onclick = () => { NB.tab = 'col'; renderNote(); };
   const older = $('nb-older'); if (older) older.onclick = () => { NB.tab = 'col'; renderNote(); };
+  const orb = $('nb-orb'); if (orb) orb.onclick = () => { NB.tab = 'orpend'; renderNote(); window.scrollTo({ top:0 }); };
   W.querySelectorAll('[data-wi]').forEach(b => b.onclick = ev => { ev.stopPropagation(); nbDo(dayItems[+b.dataset.wi], b); });
   const mk = $('nb-mark'); if (mk) mk.onclick = () => { if (mk.dataset.d !== d) { setWorkDate(mk.dataset.d); renderNote(); } const l = document.querySelector('.ln.mark'); if (l) l.scrollIntoView({block:'center', behavior:'smooth'}); };
   if (!NB.scrolled) { NB.scrolled = true; setTimeout(() => { const l = document.querySelector('.ln.mark'); if (l) l.scrollIntoView({block:'center'}); }, 60); }
@@ -3239,6 +3257,31 @@ async function nbAddSheet(x, btn){
   }
 }
 const NB_ST = { covered:['Office covered','#475569','#f1f5f9'], charged:['Charged · not yet paid','#b91c1c','#fee2e2'], paid:['Charged · paid back ✓','#027e60','#e7f6f1'], found:['Found later ✓','#027e60','#e7f6f1'], over:['Over','#966500','#fff1cc'] };
+function nbRenderOrPend(){
+  const W = $('nb-wrap'), L = S.orp || [];
+  $('nb-bar').classList.add('hide');
+  W.innerHTML = `<button type="button" class="nb-back" data-back="1">‹ Back to the logbook</button>
+    <div class="nb-card"><h4 style="margin:0 0 2px">⏳ ORs to follow</h4><div class="ps-note">Payments already in the book, still waiting for their OR number. Type it and tap Save — the payment sheet gets the row then.</div>
+    ${L.length ? L.map((x, i) => `<div class="orrow"><div class="t"><b>${esc(x.name || '?')}</b><small>${esc(dLabel(x.date))} · ${peso(x.amount)} · ${x.via === 'gcash' ? 'GCash' : 'Cash'}${x.from ? ' · for ' + esc(ymLabel(x.from)) + (x.months > 1 ? ' +' + (x.months - 1) : '') : ''}</small></div>
+      <input inputmode="text" autocomplete="off" placeholder="${x.via === 'gcash' ? 'GCash ref' : 'OR no.'}" data-ori="${i}"><button type="button" class="nb-go" data-ors="${i}">Save</button></div>`).join('')
+      : '<div style="text-align:center;color:#94a3b8;padding:12px 0">Nothing waiting — every OR is in 🎉</div>'}</div>`;
+  W.querySelectorAll('[data-ors]').forEach(b => b.onclick = async () => {
+    const i = +b.dataset.ors, x = L[i], inp = W.querySelector(`[data-ori="${i}"]`), val = (inp.value || '').replace(/\s/g, '');
+    if (!val) { inp.focus(); toast('Type the OR number first'); return; }
+    b.disabled = true; b.textContent = 'Saving…';
+    try {
+      const r = await rpc('fin_sub_payment_set_or', { p_pin:S.pin, p_id:x.id, p_or_no:val });
+      if (r && r.ok === false) throw new Error(r.error || 'not saved');
+      toast(`✓ ${x.name} · OR ${val}${r.linked_to_sheet_row ? ' · matched the row already in the sheet' : ''}`, 3500);
+      await refresh(); NB.tab = 'orpend'; renderNote();
+    } catch (e) {
+      const m = String(e.message || '');
+      toast(/or_already_used/.test(m) ? 'That OR is already used on another payment.' : /or_already_in_book/.test(m) ? 'That OR is already counted in the book — check for a double entry.' : /or_amount_mismatch/.test(m) ? 'The sheet has that OR with a different amount — check it.' : m, 4500);
+      b.disabled = false; b.textContent = 'Save';
+    }
+  });
+  W.querySelectorAll('[data-ori]').forEach(inp => inp.onkeydown = ev => { if (ev.key === 'Enter') { const b = W.querySelector(`[data-ors="${inp.dataset.ori}"]`); if (b) b.click(); } });
+}
 async function nbRenderShorts(){
   const W = $('nb-wrap'); $('nb-bar').classList.add('hide');
   const from = (NB.shFrom = NB.shFrom || todayPH().slice(0, 7) + '-01');
