@@ -907,7 +907,7 @@ function lockApp(msg){
   clearSess();
   if (X.rows) { stashDraft(); X.rows = null; }
   clearTimeout(S.idle); S.idle = null;
-  S.user = null; S.pin = ''; S.book = null; S.look = null; S.gc = null; S.parts = null; S.workDate = null; closeSheet(); drawDots();
+  S.user = null; S.pin = ''; S.book = null; S.look = null; S.gc = null; S.parts = null; S.workDate = null; S.wdDone = false; closeSheet(); drawDots();
   document.querySelectorAll('.acc').forEach(x => x.classList.remove('on')); S.name = null;
   show('pin'); $('pin-err').textContent = msg || '';
 }
@@ -936,6 +936,7 @@ async function refresh(){
       rpc('fin_sheet_cash_pending', { p_pin:S.pin }).catch(() => null)
     ]);
     S.book = book; S.look = look; S.coll = coll; S.gc = gc; S.scash = scash; S.sheet = sheet && sheet.ok ? sheet : null;
+    restoreWorkDate();
     try { NB.histStale = Date.now(); } catch (x) {}
   } catch (e) { toast(e.message, 4000); }
   renderHome();
@@ -1173,8 +1174,24 @@ function setWorkDate(val){
   if (d > t) d = t;
   const mn = minWorkDate(); if (d < mn) d = mn;
   S.workDate = d === t ? null : d;
+  // v2.8: remember the logbook page, so a reload / phone app-switch / re-sign-in
+  // comes back to the same page and every form keeps recording for that date.
+  try { localStorage.setItem('sf-wd', JSON.stringify({ d:S.workDate, on:t })); } catch (e) {}
   syncDateBars();
   return d;
+}
+function restoreWorkDate(){
+  if (S.wdDone || !S.book) return;
+  S.wdDone = true;
+  try {
+    const x = JSON.parse(localStorage.getItem('sf-wd') || 'null'), t = todayPH();
+    // back-recording: the book stays on the page you left, even the next day,
+    // so every form keeps the logbook's date. Tap Today to return to live recording.
+    if (x && x.d && x.d < t && x.d >= minWorkDate()) {
+      S.workDate = x.d;
+      setTimeout(() => toast('📖 Continuing on ' + dLabel(x.d) + ' — every entry records for this date. Tap Today for today.', 4500), 400);
+    }
+  } catch (e) {}
 }
 function syncDateBars(){
   const d = workDate(), t = todayPH(), past = d !== t;
