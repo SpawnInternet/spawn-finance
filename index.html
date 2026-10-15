@@ -594,6 +594,8 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .bo-wrap .ps-h{color:#966500}.bo-wrap .ps-h em{color:#a38a4a}.bo-wrap .ps-h .ps-sum{color:#966500;box-shadow:0 0 0 1px #f5d98a}
 .bo-wrap .ps .av{color:#966500;box-shadow:0 0 0 1.5px #f5d98a}.bo-wrap .ps .am{color:#966500}
 .bo-wrap .ps button{background:linear-gradient(180deg,#f0a92a,#d98a00);box-shadow:0 3px 8px rgba(217,138,0,.3)}
+.paper .tot.inout{justify-content:flex-end}.paper .tot.inout small{font-size:12.5px;letter-spacing:0}
+.paper .tot.inout .pin{color:#027e60}.paper .tot.inout .pout{color:#d91934}
 .orpend{display:flex;align-items:center;gap:8px;margin:-4px 0 12px;font-size:13.5px;color:var(--ink-2);cursor:pointer}
 .orpend input{width:20px;height:20px;accent-color:#d98a00}
 .orfollow{padding:11px 12px;border-radius:12px;background:#fff1cc;color:#7a5a00;font-size:14px}
@@ -1905,15 +1907,23 @@ function openDetail(type, id){
   if (e && e.payment_id) html += `<button class="go alt" type="button" id="dt-proof">🖼 View GCash screenshot</button>`;
   if (e && e.payment_id && !e.voided_at && !locked) html += `<div class="note">This line is part of a payment. Voiding it voids the whole payment, including any GCash side.</div>`;
   const canVoid = !rec.voided_at && !locked && !(c && c.kind === 'closing') && !(e && e.kind === 'opening' && !S.user.is_owner);
-  if (canVoid) html += `<div class="f"><label for="f-reason">Reason for voiding</label><input id="f-reason" autocomplete="off" placeholder="e.g. Double entry, wrong amount"></div>
+  if (canVoid) html += `<div class="f"><label for="f-reason">Reason for voiding</label><input id="f-reason" autocomplete="off" placeholder="e.g. Double entry, wrong amount"></div>${VPIN}
     <button class="go danger" type="button" id="dt-void">Void this line</button><div class="msg" id="sh-msg" role="alert"></div>`;
   else if (locked) html += `<div class="note">This day is closed, so this line can't be changed. Fix it with an adjustment on today.</div>`;
   openSheet('detail', { title, html, ref:{ type, id, rec } });
   if ($('dt-proof')) $('dt-proof').onclick = () => gView('fp:' + e.payment_id, 'Screenshot · ' + (e.party || ''));
 }
+const VPIN = `<div class="f"><label for="f-vpin">Your PIN to confirm the void</label><input id="f-vpin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="• • • •"></div>`;
+function vpinOk(){
+  const el = $('f-vpin'), p = el ? el.value.trim() : '';
+  if (p === String(S.pin || '')) return;
+  if (el) { el.value = ''; el.focus(); }
+  throw new Error(p ? 'Wrong PIN — nothing was voided.' : 'Type your PIN to confirm the void.');
+}
 async function doVoid(){
   const F = S.form, btn = $('dt-void'), { type, id, rec } = F.ref;
   try {
+    vpinOk();
     busy(btn, true);
     let what = type === 'c' ? 'count' : 'entry', target = id;
     if (type === 'e' && rec.kind === 'deposit') { what = 'deposit'; target = rec.deposit_id; }
@@ -1971,12 +1981,12 @@ function openPaymentVoid(pid){
   if (r.voided_at) html += `<div class="note">Voided by ${esc(r.voided_by)}: ${esc(r.void_reason)}</div>`;
   else if (locked) html += `<div class="note">This day is closed, so this payment can't be changed.</div>`;
   else html += `<div class="note">Voiding removes the whole payment: the GCash line and any cash line with it.</div>
-    <div class="f"><label for="f-reason">Reason for voiding</label><input id="f-reason" autocomplete="off" placeholder="e.g. Double entry, wrong amount"></div>
+    <div class="f"><label for="f-reason">Reason for voiding</label><input id="f-reason" autocomplete="off" placeholder="e.g. Double entry, wrong amount"></div>${VPIN}
     <button class="go danger" type="button" id="gp-void">Void this payment</button><div class="msg" id="sh-msg" role="alert"></div>`;
   openSheet('detail', { title:'GCash payment', html });
   if ($('gp-void')) $('gp-void').onclick = async () => {
     const btn = $('gp-void');
-    try { busy(btn, true); await rpc('fin_payment_void', { p_pin:S.pin, p_id:pid, p_reason:v('f-reason') });
+    try { vpinOk(); busy(btn, true); await rpc('fin_payment_void', { p_pin:S.pin, p_id:pid, p_reason:v('f-reason') });
       toast('Payment voided.'); closeSheet(); await refresh(); } catch (e) { say(e.message); busy(btn, false); }
   };
 }
@@ -2554,14 +2564,14 @@ function wirePartsToday(){
     if (r.purpose) rows.push(['What for', esc(r.purpose)]);
     if (r.voided_at) rows.push(['Voided', `${esc(r.voided_by)}: ${esc(r.void_reason)}`]);
     let html = `<dl class="kv">${rows.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join('')}</dl>`;
-    if (!r.voided_at) html += `<div class="f"><label for="f-reason">Reason for voiding</label><input id="f-reason" autocomplete="off" placeholder="e.g. Wrong count, returned unused"></div>
+    if (!r.voided_at) html += `<div class="f"><label for="f-reason">Reason for voiding</label><input id="f-reason" autocomplete="off" placeholder="e.g. Wrong count, returned unused"></div>${VPIN}
       <button class="go danger" type="button" id="pr-void">Void this release</button><div class="msg" id="sh-msg" role="alert"></div>`;
     html += `<button class="go alt" type="button" id="pr-back">Back to parts</button>`;
     openSheet('detail', { title:'Part released', html });
     $('pr-back').onclick = () => { openSheet('parts'); loadParts(); };
     if ($('pr-void')) $('pr-void').onclick = async () => {
       const btn = $('pr-void');
-      try { busy(btn, true); await rpc('fin_parts_void', { p_pin:S.pin, p_id:r.id, p_reason:v('f-reason') });
+      try { vpinOk(); busy(btn, true); await rpc('fin_parts_void', { p_pin:S.pin, p_id:r.id, p_reason:v('f-reason') });
         toast('Release voided.'); openSheet('parts'); loadParts(); } catch (e) { say(e.message); busy(btn, false); }
     };
   });
@@ -2991,8 +3001,7 @@ function renderNote(){
       const sp = es.filter(e => e.kind === 'collection' && e.short_over != null && Number(e.short_over) !== 0);
       const der = sp.map(e => ({ ...e, [Number(e.short_over) < 0 ? '_short' : '_over']:true, signed_amount:Number(e.short_over) }));
       h += `<button type="button" class="ln cday" data-goday="${dd}"><b class="zero"></b><span>📅 ${esc(dLabel(dd))} <small>· ${es.length} line${es.length === 1 ? '' : 's'} · open this page →</small></span></button>`;
-      h += es.filter(e => Number(e.signed_amount) >= 0).map(e => line(e, false)).join('') + der.filter(e => e._over).map(e => line(e, false)).join('');
-      h += es.filter(e => Number(e.signed_amount) < 0).map(e => line(e, false)).join('') + der.filter(e => e._short).map(e => line(e, false)).join('');
+      h += es.map(e => line(e, false) + der.filter(y => y.id === e.id).map(y => line(y, false)).join('')).join('');
       h += `<div class="ln cend"><b>${fmt(balanceAt(dd))}</b><span>— left at the end of ${esc(dLabel(dd))}</span></div>`;
       prev = dd;
     });
@@ -3002,6 +3011,16 @@ function renderNote(){
   };
   let mark = '';
   if (markE) mark = `<button type="button" class="nb-mark" id="nb-mark" data-d="${markE.entry_date}" data-id="${markE.id}">📍 You stopped here: ${nbTitle(markE)[0]} · ${pesoS(Number(markE.signed_amount))} · ${markE.entry_date === t ? '' : dLabel(markE.entry_date) + ' '}${tLabel(markE.entered_at)}${markE.created_by ? ' (' + esc(markE.created_by) + ')' : ''}</button>`;
+  // v2.13: one list in the order it was written — + money in and − money out mixed,
+  // a collector's short/over right under its hand-in, counts where they happened
+  const seqItems = [...entries.filter(e => e.kind !== 'opening').map(e => ({ t:e.entered_at || '', e })),
+                    ...voided.map(e => ({ t:e.entered_at || '', e, v:true })),
+                    ...counts.map(c => ({ t:c.counted_at || '', c }))]
+    .sort((a, b) => a.t < b.t ? -1 : a.t > b.t ? 1 : 0);
+  const derivedAll = [...derivedIn, ...derivedOut];
+  const seqHtml = seqItems.map(x => x.c ? cnt(x.c)
+    : line(x.e, !!x.v) + (x.v ? '' : derivedAll.filter(y => y.id === x.e.id).map(y => line(y, false)).join(''))).join('');
+  const seqN = seqItems.filter(x => x.e).length;
   const waitT = pend.reduce((s, x) => s + x.amt, 0), showWait = pend.length && d === t && !(lock && lock.locked_at);
   W.innerHTML = `
     <div class="nb-top">
@@ -3015,9 +3034,10 @@ function renderNote(){
     <div class="paper" id="nb-paper">
       <div class="pd"><small>DATE</small><b>${d.slice(5, 7).replace(/^0/, '')}/${d.slice(8, 10).replace(/^0/, '')}/${d.slice(2, 4)}</b></div>
       <div class="tot now"><small>${d === t ? 'CASH IN DRAWER SHOULD BE' : 'BALANCE END OF THIS DAY'}</small><span>₱${Number(d === t ? B.balance_now : endBal).toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
-      <div class="hd">Balance: <small>MONEY IN</small></div>
+      <div class="hd">Lines: <small>+ MONEY IN · − MONEY OUT · as written</small></div>
       ${opening ? line(opening, false) : `<button type="button" class="ln cfrom" data-carry="1" aria-expanded="${NB.carryOpen ? 'true' : 'false'}"><b class="zero">${Number(carried).toLocaleString('en-PH')}</b><span>— Carried from before <small>${NB.carryOpen ? '▾ hide' : '▸ tap to see where it came from'}</small></span></button>${NB.carryOpen ? carryHtml() : ''}`}
-      ${ins.map(e => line(e, false)).join('')}${derivedIn.map(e => line(e, false)).join('')}
+      ${seqHtml}
+      ${!seqN ? '<div class="ln"><b class="zero">0</b><span>— no lines yet</span></div>' : ''}
       ${(() => { if (!dayItems.length || (lock && lock.locked_at)) return '';
         const sh = dayItems.map((x, i) => [x, i]).filter(([x]) => x.type === 'sheet'), ot = dayItems.map((x, i) => [x, i]).filter(([x]) => x.type !== 'sheet');
         const sTot = sh.reduce((s, [x]) => s + Number(x.amt), 0);
@@ -3025,13 +3045,8 @@ function renderNote(){
           + (ot.length ? `<div class="wl-wrap"><div class="wl-h">⏳ STILL TO ADD FOR THIS DAY <em>· tap to count</em></div>${ot.map(([x, i]) => `<div class="wl"><b>+ ${Number(x.amt).toLocaleString('en-PH')}</b><span>— ${esc(x.title)} <small>${esc(x.sub)}</small></span><button type="button" data-wi="${i}">Count</button></div>`).join('')}</div>` : ''); })()}
       ${!(lock && lock.locked_at) ? '<div id="nb-bo"></div>' : ''}
       ${olderN && !(lock && lock.locked_at) ? `<button type="button" class="wl-old" id="nb-older">⏳ ${olderN} from earlier days still to add →</button>` : ''}
-      <div class="tot"><span>₱${box1.toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
-      <div class="hd">Expenses: <small>MONEY OUT</small></div>
-      ${outs.map(e => line(e, false)).join('')}${derivedOut.map(e => line(e, false)).join('')}
-      ${voided.map(e => line(e, true)).join('')}
-      ${!outs.length && !voided.length && !derivedOut.length ? '<div class="ln"><b class="zero">0</b><span>— none yet</span></div>' : ''}
+      <div class="tot inout"><small>in <b class="pin">+ ${Number(inT).toLocaleString('en-PH', {maximumFractionDigits:2})}</b> · out <b class="pout">− ${Number(outT).toLocaleString('en-PH', {maximumFractionDigits:2})}</b></small></div>
       <div class="tot big"><small>left in the drawer →</small><span>₱${Number(endBal).toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
-      ${counts.map(cnt).join('')}
     </div>
     <div id="nb-hist"></div>
     ${!entries.length && d === t ? `<div class="nb-guide"><h4>Nothing written today yet. The day goes like this:</h4>
