@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v3.0 · 2026-10-15 · bookmark = newest line in the book · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v3.0 · 2026-10-15 · tap "Carried from before" to see the earlier days' lines · bookmark = newest line in the book · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -436,6 +436,13 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .paper .ln b.in{color:#0f766e}.paper .ln b.out{color:#c2142f}.paper .ln b.zero{color:#64748b}
 .paper .ln span{overflow:hidden;text-overflow:ellipsis}.paper .ln span small{color:#64748b;font-size:12.5px;font-weight:500}
 .paper .ln.void{text-decoration:line-through;opacity:.55}
+/* carried-from-before breakdown: the earlier pages, written out on the same ruled lines */
+.paper .carry-blk{background:rgba(2,90,198,.04);border-left:3px solid #9ec0ee;margin:0 0 0 -12px;padding:0 0 0 9px;border-radius:0 0 6px 6px}
+.paper .ln.cday span{font-weight:800;color:#025ac6}.paper .ln.cday span small{color:#5b84c4;font-weight:600}
+.paper .ln.cend b{color:#1e293b;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:5px}
+.paper .ln.cend span{color:#475569;font-size:13.5px}
+.paper .ln.cgap{cursor:default;color:#64748b;font-size:13.5px}.paper .ln.cgap:hover{background:none}
+.paper .ln.cfrom span small{color:#025ac6;font-weight:700}
 .paper .ln.mark{background:rgba(190,24,93,.07)}.paper .ln.mark::after{content:"◀ last";font-family:Inter,system-ui,sans-serif;font-size:10px;font-weight:800;color:#be185d;margin-left:auto;padding-left:6px}
 .paper .tot{height:40px;display:flex;align-items:center;gap:10px}
 .paper .tot span{display:inline-block;padding:0 12px;line-height:34px;border:2px solid #1e293b;border-radius:6px;font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;transform:none;background:rgba(255,255,255,.6)}
@@ -2896,6 +2903,34 @@ function renderNote(){
       <div class="ok"><em class="${diff === 0 ? 'g' : 'r'}">${diff === 0 ? 'ok ✓' : (diff < 0 ? 'short ' : 'over ') + peso(Math.abs(diff))}</em><span>₱${Number(c.counted_total).toLocaleString('en-PH')}</span></div>
       <div class="sig"><button type="button" class="ln" data-c="${c.id}" style="justify-content:flex-end">${who} ✍ <small>${tLabel(c.counted_at)}</small></button></div></div>`;
   };
+  // the earlier pages that add up to "Carried from before": each day's lines and its ending balance
+  const carryHtml = () => {
+    const prior = B.entries.filter(e => e.entry_date < d);
+    const days = [...new Set(prior.map(e => e.entry_date))].sort();
+    const fmt = x => Number(x).toLocaleString('en-PH', {maximumFractionDigits:2});
+    const gap = (a2, b2) => {
+      if (a2 > b2) return '';
+      const lbl = a2 === b2 ? dLabel(a2) : `${dLabel(a2)} – ${dLabel(b2)}`;
+      return `<div class="ln cgap"><b class="zero">—</b><span>${esc(lbl)} · not in the book yet</span></div>`;
+    };
+    let h = '', prev = null;
+    if (B.from && (!days.length || days[0] > B.from || !prior.some(e => e.kind === 'opening')) && Number(B.opening_balance))
+      h += `<div class="ln cend"><b>${fmt(B.opening_balance)}</b><span>— balance before ${esc(dLabel(B.from))}</span></div>`;
+    days.forEach(dd => {
+      if (prev) h += gap(addDays(prev, 1), addDays(dd, -1));
+      const es = prior.filter(e => e.entry_date === dd).sort((a2, b2) => a2.entered_at < b2.entered_at ? -1 : 1);
+      const sp = es.filter(e => e.kind === 'collection' && e.short_over != null && Number(e.short_over) !== 0);
+      const der = sp.map(e => ({ ...e, [Number(e.short_over) < 0 ? '_short' : '_over']:true, signed_amount:Number(e.short_over) }));
+      h += `<button type="button" class="ln cday" data-goday="${dd}"><b class="zero"></b><span>📅 ${esc(dLabel(dd))} <small>· ${es.length} line${es.length === 1 ? '' : 's'} · open this page →</small></span></button>`;
+      h += es.filter(e => Number(e.signed_amount) >= 0).map(e => line(e, false)).join('') + der.filter(e => e._over).map(e => line(e, false)).join('');
+      h += es.filter(e => Number(e.signed_amount) < 0).map(e => line(e, false)).join('') + der.filter(e => e._short).map(e => line(e, false)).join('');
+      h += `<div class="ln cend"><b>${fmt(balanceAt(dd))}</b><span>— left at the end of ${esc(dLabel(dd))}</span></div>`;
+      prev = dd;
+    });
+    if (prev) h += gap(addDays(prev, 1), addDays(d, -1));
+    if (!h) h = `<div class="ln cgap"><b class="zero">—</b><span>No earlier lines in the last ${Math.max(S.range || 0, 31)} days</span></div>`;
+    return `<div class="carry-blk">${h}</div>`;
+  };
   let mark = '';
   if (markE) mark = `<button type="button" class="nb-mark" id="nb-mark" data-d="${markE.entry_date}" data-id="${markE.id}">📍 You stopped here: ${nbTitle(markE)[0]} · ${pesoS(Number(markE.signed_amount))} · ${markE.entry_date === t ? '' : dLabel(markE.entry_date) + ' '}${tLabel(markE.entered_at)}${markE.created_by ? ' (' + esc(markE.created_by) + ')' : ''}</button>`;
   const waitT = pend.reduce((s, x) => s + x.amt, 0), showWait = pend.length && d === t && !(lock && lock.locked_at);
@@ -2911,7 +2946,7 @@ function renderNote(){
       <div class="pd"><small>DATE</small><b>${d.slice(5, 7).replace(/^0/, '')}/${d.slice(8, 10).replace(/^0/, '')}/${d.slice(2, 4)}</b></div>
       <div class="tot now"><small>${d === t ? 'CASH IN DRAWER SHOULD BE' : 'BALANCE END OF THIS DAY'}</small><span>₱${Number(d === t ? B.balance_now : endBal).toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
       <div class="hd">Balance: <small>MONEY IN</small></div>
-      ${opening ? line(opening, false) : `<div class="ln"><b class="zero">${Number(carried).toLocaleString('en-PH')}</b><span>— Carried from before</span></div>`}
+      ${opening ? line(opening, false) : `<button type="button" class="ln cfrom" data-carry="1" aria-expanded="${NB.carryOpen ? 'true' : 'false'}"><b class="zero">${Number(carried).toLocaleString('en-PH')}</b><span>— Carried from before <small>${NB.carryOpen ? '▾ hide' : '▸ tap to see where it came from'}</small></span></button>${NB.carryOpen ? carryHtml() : ''}`}
       ${ins.map(e => line(e, false)).join('')}${derivedIn.map(e => line(e, false)).join('')}
       ${dayItems.length && !(lock && lock.locked_at) ? `<div class="wl-wrap"><div class="wl-h">⏳ STILL TO ADD FOR THIS DAY <em>· tap to add</em></div>${dayItems.map((x, i) => `<div class="wl"><b>+ ${Number(x.amt).toLocaleString('en-PH')}</b><span>— ${esc(x.title)} <small>${esc(x.sub)}</small></span><button type="button" class="${x.type === 'sheet' ? 'blue' : ''}" data-wi="${i}">${x.type === 'sheet' ? 'Add' : 'Count'}</button></div>`).join('')}</div>` : ''}
       ${olderN && !(lock && lock.locked_at) ? `<button type="button" class="wl-old" id="nb-older">⏳ ${olderN} from earlier days still to add →</button>` : ''}
@@ -3044,6 +3079,8 @@ function nbHistHtml(H){
 }
 $('nb-wrap').addEventListener('click', e => {
   if (e.target.closest('[data-back]')) { NB.tab = 'book'; renderNote(); return; }
+  if (e.target.closest('[data-carry]')) { NB.carryOpen = !NB.carryOpen; renderNote(); return; }
+  const gd = e.target.closest('[data-goday]'); if (gd) { NB.carryOpen = false; setWorkDate(gd.dataset.goday); renderNote(); window.scrollTo({top:0}); return; }
   const sh = e.target.closest('[data-short]'); if (sh) { NB.tab = 'shorts'; renderNote(); return; }
   const l = e.target.closest('[data-e]'), c = e.target.closest('[data-c]');
   if (l) openDetail('e', +l.dataset.e); else if (c) openDetail('c', +c.dataset.c);
