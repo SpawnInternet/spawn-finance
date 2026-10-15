@@ -113,6 +113,22 @@ main{padding:4px 0 28px}
 .bar{height:8px;border-radius:99px;background:var(--line);margin-top:10px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--done);border-radius:99px}
 
+.imp{display:flex;align-items:center;gap:12px;width:100%;padding:14px;margin-bottom:12px;border-radius:16px;background:var(--card);
+  box-shadow:0 0 0 1.5px var(--blue) inset;text-align:left}
+.imp b{display:block;color:var(--blue);font-size:15.5px}.imp small{color:var(--ink-2);font-size:13px}
+.imp .ic{width:40px;height:40px;border-radius:12px;background:var(--blue-l);display:grid;place-items:center;font-size:20px;flex:none}
+.sec{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px;margin:18px 2px 8px}
+.sec b{font-size:16px;white-space:nowrap}.sec small{color:var(--muted);font-size:13px}
+.opt{display:flex;align-items:center;gap:12px;padding:10px 4px;border-top:1px solid var(--line);cursor:pointer}
+.opt:first-of-type{border-top:0}
+.opt input{width:22px;height:22px;flex:none;accent-color:var(--blue)}
+.opt span{flex:1;min-width:0}.opt span b{display:block;font-size:14.5px;font-weight:600;overflow-wrap:anywhere}
+.opt span small{color:var(--muted);font-size:13px}
+.opt em{font-style:normal;font-weight:700;font-size:14.5px;letter-spacing:.01em;white-space:nowrap}
+.tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;font-size:11.5px;font-weight:700;background:var(--late-l);color:var(--late)}
+.savebar{position:sticky;bottom:0;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--paper) 70%,transparent)}
+.savebar .btn{width:100%;height:50px;background:var(--blue);color:#fff;box-shadow:none;font-size:16px}
+.savebar .btn.ghost{background:transparent;color:var(--ink-2);height:40px;font-size:14px;margin-top:4px}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;
   background:var(--ink);color:var(--paper);padding:11px 18px;border-radius:14px;font-weight:600;font-size:14px;transition:.18s;pointer-events:none;z-index:50;max-width:90vw;text-align:center}
 #toast.on{opacity:1;transform:translate(-50%,0)}
@@ -141,6 +157,7 @@ main{padding:4px 0 28px}
   </div></header>
   <main class="wrap" id="list" aria-live="polite"></main>
 </div>
+<input type="file" id="vcf" accept=".vcf,text/vcard,text/x-vcard" class="hide">
 <div id="toast" role="status"></div>
 
 <script>
@@ -222,6 +239,7 @@ function render(){
   $('prev').disabled = d <= addDays(t, -14);
   $('next').disabled = d >= addDays(t, 7);
   const T = [['send', 'To text', L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]];
+  if (S.imp) T.push(['import', 'Contacts', S.imp.rows.filter(r => r.bucket !== 'none').length]);
   $('tabs').innerHTML = T.map(([k, l, n]) => `<button type="button" class="${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-pressed="${S.tab === k}">${l}<em>${n}</em></button>`).join('');
   const box = $('list'), past = d < t, future = d > t;
   let h = '';
@@ -240,6 +258,7 @@ function render(){
       : `<div class="empty"><b>${L.done.length ? 'All done for this day' : 'No one to text'}</b>${L.nonum.length ? `${L.nonum.length} still need a number — see No number.` : future ? 'Nobody falls due on this day.' : 'Everyone on this day is handled.'}</div>`;
   }
   if (S.tab === 'nonum') {
+    h += `<button type="button" class="imp" id="impbtn"><span class="ic">📇</span><span><b>Find numbers in the phone's contacts</b><small>Export Contacts as a .vcf file, then choose it here. Matching happens on this phone only.</small></span></button>`;
     h += `<div class="note">Found their number? Save it and they move to To text. The number is kept for next time.</div>`;
     h += L.nonum.length ? L.nonum.map(r => `<article class="item" data-key="${esc(r.key)}">${head(r)}
         <div class="nform"><input type="tel" inputmode="tel" placeholder="09XX XXX XXXX" aria-label="Mobile number for ${esc(r.name)}"><button type="button" class="btn" data-act="phone">Save number</button></div>
@@ -248,6 +267,7 @@ function render(){
       </article>`).join('')
       : `<div class="empty"><b>Everyone has a number</b>Nothing to fill in for this day.</div>`;
   }
+  if (S.tab === 'import' && S.imp) h += impHtml();
   if (S.tab === 'done') {
     h += L.done.length ? L.done.map(r => `<div class="dl" data-key="${esc(r.key)}"><span class="ck ${r.paid ? 'p' : ''}">${r.paid ? '₱' : '✓'}</span>
         <div class="t"><b>${esc(r.name)}</b><small>${r.paid ? `Marked already paid by ${esc(r.paid.by)} · ${tLabel(r.paid.at)}` : `Texted by ${esc(r.sent.by)} · ${tLabel(r.sent.at)}`}</small></div>
@@ -255,7 +275,7 @@ function render(){
       : `<div class="empty"><b>Nothing done yet</b>Texts you send and people marked paid show here.</div>`;
   }
   const sent = Number(S.stats.sent_14d || 0), paid = Number(S.stats.paid_14d || 0), all = sent + paid;
-  h += `<div class="meter"><b>Last 14 days:</b> ${sent} texted · ${paid} were already paid${all ? ` (${Math.round(paid / all * 100)}%)` : ''}.<br>
+  if (S.tab !== 'import') h += `<div class="meter"><b>Last 14 days:</b> ${sent} texted · ${paid} were already paid${all ? ` (${Math.round(paid / all * 100)}%)` : ''}.<br>
     When “already paid” stays rare, the list is accurate enough to send by itself.${all ? `<div class="bar"><i style="width:${Math.round(sent / all * 100)}%"></i></div>` : ''}</div>`;
   box.innerHTML = h;
 }
@@ -297,6 +317,106 @@ $('list').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   const f = e.target.closest('.nform,.pform'); if (!f) return;
   const b = f.querySelector('button'); if (b) b.click();
+});
+
+/* ── contacts import: read a .vcf on this phone, match names, review, save ── */
+const STOPW = new Set('jr sr ii iii iv ma mr mrs ms sir maam am atty eng engr dr office tig bayad tigbayad gcash cash private vendo spawn wifi net internet subscriber sub subs new old the and of sa ni si mama papa ate kuya dong day'.split(' '));
+const deacc = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const ntoks = s => deacc(String(s || '').toLowerCase()).replace(/\([^)]*\)/g, ' ').replace(/[^a-z ]/g, ' ').split(/\s+/).filter(t => t.length >= 2 && !STOPW.has(t));
+const nalts = name => { const base = String(name).replace(/\([^)]*\)/g, ' ');
+  return [...base.split(/\/|\bor\b/).map(ntoks), ntoks(base)].filter(a => a.length >= 2); };
+const teq = (a, b) => a === b || (a.length >= 5 && b.length >= 5 && (a.startsWith(b.slice(0, -1)) || b.startsWith(a.slice(0, -1))))
+  || (a.length >= 5 && a.length === b.length && [...a].filter((c, i) => c !== b[i]).length === 1);
+const cover = (sm, bg) => sm.every(s => bg.some(b => teq(s, b)));
+function mobile(t){ const d = String(t).replace(/[\s\-.()]/g, ''); const m = d.match(/(?:\+63|63|0)?9\d{9}/); return m ? '0' + m[0].slice(-10) : null; }
+function qp(s){ try { return decodeURIComponent(s.replace(/=([0-9A-F]{2})/gi, '%$1')); } catch (e) { return s; } }
+function parseVcf(txt){
+  txt = txt.replace(/=\r?\n/g, '').replace(/\r?\n[ \t]/g, '');
+  return txt.split(/BEGIN:VCARD/i).slice(1).map(c => {
+    let fn = '', n = '', tels = [];
+    c.split(/\r?\n/).forEach(line => {
+      const i = line.indexOf(':'); if (i < 0) return;
+      const k = line.slice(0, i).toUpperCase(), v0 = line.slice(i + 1), v = /QUOTED-PRINTABLE/.test(k) ? qp(v0) : v0;
+      if (/^FN\b|^FN;/.test(k)) fn = v.trim();
+      else if (/^N\b|^N;/.test(k)) n = v.split(';').filter(Boolean).reverse().join(' ').trim();
+      else if (/^(ITEM\d+\.)?TEL/.test(k)) tels.push(v.trim());
+    });
+    return { name:fn || n, mobiles:[...new Set(tels.map(mobile).filter(Boolean))] };
+  }).filter(c => c.name && c.mobiles.length);
+}
+function matchAll(subs, contacts){
+  const C = contacts.map(c => ({ ...c, t:ntoks(c.name) })).filter(c => c.t.length >= 2);
+  const rows = subs.map(s => {
+    const by = new Map();
+    for (const c of C) for (const a of nalts(s.name)) {
+      const [sm, bg] = a.length <= c.t.length ? [a, c.t] : [c.t, a];
+      if (sm.length >= 2 && cover(sm, bg)) {
+        const level = cover(a, c.t) && cover(c.t, a) ? 'exact' : 'close';
+        c.mobiles.forEach(m => { const o = by.get(m); if (!o || (o.level !== 'exact' && level === 'exact')) by.set(m, { contact:c.name, mobile:m, level }); });
+        break;
+      }
+    }
+    return { ...s, cands:[...by.values()] };
+  });
+  const claim = {}; rows.forEach(r => r.cands.forEach(c => (claim[c.mobile] = claim[c.mobile] || new Set()).add(r.id)));
+  rows.forEach(r => { r.cands.forEach(c => c.shared = claim[c.mobile].size > 1);
+    const cs = r.cands;
+    r.bucket = !cs.length ? 'none' : cs.length === 1 && !cs[0].shared && cs[0].level === 'exact' ? 'sure' : cs.length === 1 && !cs[0].shared ? 'likely' : 'pick';
+    r.pick = r.bucket === 'sure' ? cs[0].mobile : null; });
+  return rows;
+}
+async function importFile(f){
+  if (!f) return;
+  toast('Reading contacts…', 8000);
+  try {
+    const contacts = parseVcf(await f.text());
+    if (!contacts.length) { toast('No contacts with mobile numbers in that file', 4000); return; }
+    const j = await rpc('remind_import_list', { p_pin:S.pin });
+    const rows = matchAll(j.subs || [], contacts);
+    S.imp = { rows, file:f.name, contacts:contacts.length };
+    S.tab = 'import'; render(); window.scrollTo({ top:0 });
+    toast(`${contacts.length} contacts read · ${rows.filter(r => r.bucket !== 'none').length} possible matches`, 3500);
+  } catch (e) { toast(e.message, 4000); }
+}
+$('vcf').addEventListener('change', e => { importFile(e.target.files[0]); e.target.value = ''; });
+function impHtml(){
+  const R = S.imp.rows, by = b => R.filter(r => r.bucket === b);
+  const sec = (b, title, sub) => { const L = by(b); if (!L.length) return '';
+    return `<div class="sec"><b>${title}</b><small>${L.length} · ${sub}</small></div>` + L.map(r => {
+      const i = R.indexOf(r), clean = esc(String(r.name).replace(/\s*\([^)]*\)\s*/g, ' ').trim());
+      return `<article class="item" style="padding-bottom:6px"><div class="ih"><div class="nm"><b>${clean}</b><small>${esc(r.area || '')}</small></div></div>`
+        + r.cands.map(c => `<label class="opt"><input type="${r.cands.length > 1 ? 'radio' : 'checkbox'}" name="imp${i}" data-imp="${i}" value="${esc(c.mobile)}" ${r.pick === c.mobile ? 'checked' : ''}>
+            <span><b>${esc(c.contact)}</b><small>${c.level === 'exact' ? 'name matches' : 'name partly matches'}${c.shared ? '<span class="tag">also matches someone else</span>' : ''}</small></span>
+            <em>${esc(c.mobile.replace(/(\d{4})(\d{3})(\d{4})/, '$1 $2 $3'))}</em></label>`).join('')
+        + (r.cands.length > 1 ? `<label class="opt"><input type="radio" name="imp${i}" data-imp="${i}" value="" ${!r.pick ? 'checked' : ''}><span><b>None of these</b></span></label>` : '')
+        + `</article>`; }).join(''); };
+  const n = R.filter(r => r.pick).length, none = by('none').length;
+  return `<div class="note">From <b>${esc(S.imp.file)}</b> — ${S.imp.contacts} contacts. Tick the right number for each person, then save. ${none ? `${none} had no match in the contacts.` : ''}</div>`
+    + sec('sure', 'Same name', 'ticked already — untick any that look wrong')
+    + sec('likely', 'Close name', 'tick if it is the same person')
+    + sec('pick', 'Pick one', 'more than one number, or a number another subscriber also matches')
+    + `<div class="savebar"><button type="button" class="btn" id="impsave" ${n ? '' : 'disabled'}>Save ${n} number${n === 1 ? '' : 's'}</button>
+       <button type="button" class="btn ghost" id="impcancel">Close without saving</button></div>`;
+}
+$('list').addEventListener('change', e => {
+  const x = e.target.closest('[data-imp]'); if (!x || !S.imp) return;
+  const r = S.imp.rows[+x.dataset.imp];
+  r.pick = x.type === 'checkbox' ? (x.checked ? x.value : null) : (x.value || null);
+  const n = S.imp.rows.filter(y => y.pick).length, b = $('impsave');
+  if (b) { b.textContent = `Save ${n} number${n === 1 ? '' : 's'}`; b.disabled = !n; }
+});
+$('list').addEventListener('click', async e => {
+  if (e.target.closest('#impbtn')) { $('vcf').click(); return; }
+  if (e.target.closest('#impcancel')) { S.imp = null; S.tab = 'nonum'; render(); return; }
+  const sv = e.target.closest('#impsave'); if (!sv || !S.imp) return;
+  const todo = S.imp.rows.filter(r => r.pick); let ok = 0, bad = 0;
+  sv.disabled = true;
+  for (const r of todo) {
+    sv.textContent = `Saving ${ok + bad + 1} of ${todo.length}…`;
+    try { await rpc('remind_set_phone', { p_pin:S.pin, p_sub:r.id, p_phone:r.pick }); ok++; } catch (x) { bad++; }
+  }
+  S.imp = null; S.tab = 'send'; await reload();
+  toast(`${ok} number${ok === 1 ? '' : 's'} saved${bad ? ` · ${bad} could not be saved` : ''}`, 4000);
 });
 
 /* resume a recent session on this tab */
