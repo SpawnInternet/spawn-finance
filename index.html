@@ -480,6 +480,13 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .hx details[open] summary:after{transform:rotate(90deg)}
 .hx summary:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
 .hx .rows{padding:0 14px 10px 54px}
+.hx .stt{display:inline-block;margin-top:3px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.01em;white-space:nowrap}
+.stt.in{background:#e7f6f1;color:#027e60}.stt.wait{background:#fff1cc;color:#966500}.stt.gc{background:#eaf0fb;color:#244c9c}
+.stt.col{background:#f1f5f9;color:#475569}.stt.vd{background:#fee2e2;color:#b91c1c}
+.hx .r.vdr > span > :not(.stt), .hx .r.vdr > b{text-decoration:line-through;opacity:.55}
+.hx .r .hadd{margin-left:6px;height:26px;padding:0 11px;border-radius:999px;border:0;color:#fff;font:800 11.5px Inter,system-ui,sans-serif;cursor:pointer;background:linear-gradient(180deg,#1f74e0,#025ac6);box-shadow:0 2px 6px rgba(2,90,198,.3);vertical-align:middle}
+.hx .r .hadd:disabled{opacity:.55}
+.hx .chk{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 8px}
 .hx .r{display:flex;gap:8px;justify-content:space-between;padding:5px 0;border-top:1px dashed #eef0f4;font-size:13px}
 .hx .r:first-child{border-top:0}.hx .r span{min-width:0}.hx .r small{color:#64748b}.hx .r b{white-space:nowrap}
 .hx .r.sub{font-weight:700;color:var(--ink-2)}
@@ -3047,6 +3054,9 @@ async function nbHist(d){
 }
 function nbHistLoading(d){ return `<div class="hx"><div class="hx-h"><b>📜 Everything recorded on ${esc(dLabel(d))}</b><small>Loading the day's history…</small></div></div>`; }
 function nbHistKeep(box, d){
+  box.querySelectorAll('[data-hadd]').forEach(b => b.onclick = ev => { ev.preventDefault(); ev.stopPropagation();
+    const s = (NB.hsubs || {})[b.dataset.hadd]; if (!s) return;
+    nbAddSheet(sheetItem(d, { id:s.id, name:s.name, amount:s.amount, or:s.or, collector:s.by }), b); });
   // remember which groups are open, per page, so a refresh does not fold them back
   NB.histOpen = NB.histOpen || {};
   const o = NB.histOpen[d] || {};
@@ -3075,11 +3085,21 @@ function nbHistHtml(H){
   if (sb.length) {
     const cash = sb.filter(s => !isG(s)), gc = sb.filter(isG);
     const tc = cash.reduce((s, x) => s + n(x.amount), 0), tg = gc.reduce((s, x) => s + n(x.amount), 0);
-    const one = s => row(`${esc(s.name || '?')} <small>${[s.office ? 'paid here' : esc(s.by || ''), s.or ? 'OR ' + esc(s.or) : '', esc(s.note || '')].filter(Boolean).join(' · ')}</small>`, peso(s.amount));
-    let rows = '';
+    // v2.10: each payment says whether it is in the cash book, and on which page
+    NB.hsubs = {};
+    const ST = { book:['in','✓ In the book'], waiting:['wait','Not in the book'], gcash:['gc','GCash · not cash'], collector:['col','With collector · not handed in'], void:['vd','Voided'] };
+    const stOf = s => s.st || (s.office ? 'book' : 'waiting');
+    const one = s => { const st = stOf(s), [cl, lb] = ST[st] || ST.waiting; NB.hsubs[s.id] = s;
+      const tag = `<span class="stt ${cl}">${lb}${st === 'book' && s.book_d ? (s.book_d === H.date ? '' : ' · page ' + esc(dLabel(s.book_d))) : ''}</span>`
+        + (st === 'waiting' && s.id && H.date >= minWorkDate() ? `<button type="button" class="hadd" data-hadd="${s.id}">＋ Add</button>` : '');
+      return `<div class="r${st === 'void' ? ' vdr' : ''}"><span>${esc(s.name || '?')} <small>${[s.office ? 'paid here' : esc(s.by || ''), s.or ? 'OR ' + esc(s.or) : '', esc(s.note || '')].filter(Boolean).join(' · ')}</small><br>${tag}</span><b>${peso(s.amount)}</b></div>`; };
+    const live = sb.filter(s => stOf(s) !== 'void'), cashL = live.filter(s => !isG(s) && stOf(s) !== 'gcash');
+    const inB = cashL.filter(s => stOf(s) === 'book'), wt = cashL.filter(s => stOf(s) === 'waiting'), wc = cashL.filter(s => stOf(s) === 'collector');
+    const sum = a => a.reduce((s, x) => s + n(x.amount), 0);
+    let rows = `<div class="chk"><span class="stt in">✓ In the book ${inB.length} · ${peso(sum(inB))}</span>${wt.length ? `<span class="stt wait">Not in the book ${wt.length} · ${peso(sum(wt))}</span>` : ''}${wc.length ? `<span class="stt col">With collector ${wc.length} · ${peso(sum(wc))}</span>` : ''}</div>`;
     if (cash.length) rows += `<div class="grp">Cash · ${cash.length} · ${peso(tc)}</div>` + cash.map(one).join('');
     if (gc.length) rows += `<div class="grp">GCash (not in the drawer) · ${gc.length} · ${peso(tg)}</div>` + gc.map(one).join('');
-    out += grp('sb', '📶', 'var(--blue-l)', 'Subscriber payments', `${sb.length} paid · cash ${peso(tc)} · GCash ${peso(tg)}`, peso(tc + tg), 'var(--blue)', rows);
+    out += grp('sb', '📶', 'var(--blue-l)', 'Subscriber payments', `${sb.length} paid · ${inB.length} in the book${wt.length ? ' · <span style="color:#966500;font-weight:800">' + wt.length + ' not in the book</span>' : ''} · GCash ${peso(tg)}`, peso(tc + tg), 'var(--blue)', rows);
   }
 
   const ce = H.col_exp || [];
@@ -3166,7 +3186,8 @@ async function nbAddSheet(x, btn){
     const r = await rpc('fin_sheet_cash_receive', { p_pin:S.pin, p_client_id:uuid(), p_ids:x.ids, p_date:x.date });
     if (r && r.ok === false) throw new Error(r.error || 'not added');
     toast(`✓ ${x.name} ${peso(x.amt)} written on ${dLabel(x.date)}`);
-    const fromPage = !!btn.closest('#nb-paper'); await refresh(); NB.tab = fromPage ? 'book' : 'col'; renderNote();
+    if (NB.hist) delete NB.hist[x.date];
+    const fromPage = !!btn.closest('#nb-paper, #nb-hist'); await refresh(); NB.tab = fromPage ? 'book' : 'col'; renderNote();
   } catch (e) {
     toast(/already_in_book/.test(e.message) ? 'Already in the book.' : /day_locked/.test(e.message) ? `${dLabel(x.date)} is closed. Ask Sir Wendell to open it.` : e.message, 4000);
     btn.disabled = false; btn.textContent = label;
