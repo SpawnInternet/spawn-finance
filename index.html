@@ -3053,7 +3053,19 @@ async function nbHist(d){
   if (workDate() === d && NB.tab === 'book' && $('nb-hist')) { $('nb-hist').innerHTML = nbHistHtml(NB.hist[d].data); nbHistKeep($('nb-hist'), d); }
 }
 function nbHistLoading(d){ return `<div class="hx"><div class="hx-h"><b>📜 Everything recorded on ${esc(dLabel(d))}</b><small>Loading the day's history…</small></div></div>`; }
+function ymLabel(ym){ try { return new Date(ym + '-01T12:00:00Z').toLocaleDateString('en-PH', { month:'long', year:'numeric', timeZone:'UTC' }); } catch (e) { return ym; } }
+async function addFromBashang(x){
+  openSheet('collect', { mode:'office_collection', pv:x.gcash ? 'gcash' : 'cash', results:[{ id:x.sub_id, name:x.name, area:x.area, monthly_amount:x.amount }] });
+  await pickSub(x.sub_id);
+  const F = S.form; if (!F || !F.sub || F.sub.id !== x.sub_id) return;
+  F.sel = [x.ym]; F.bill = String(Number(x.amount)); F.billEdited = true;
+  renderSheet(); if ($('f-bill')) { $('f-bill').value = F.bill; liveCalc(); }
+  toast(`${x.name} · ${ymLabel(x.ym)} · ${peso(x.amount)} — type the OR no.${x.gcash ? ' (GCash ref)' : ''} and save`, 4500);
+  const o = $('f-or'); if (o) o.focus({ preventScroll:true });
+}
 function nbHistKeep(box, d){
+  box.querySelectorAll('[data-hbo]').forEach(b => b.onclick = ev => { ev.preventDefault(); ev.stopPropagation();
+    const x = (NB.hbo || [])[+b.dataset.hbo]; if (x) addFromBashang(x); });
   box.querySelectorAll('[data-hadd]').forEach(b => b.onclick = ev => { ev.preventDefault(); ev.stopPropagation();
     const s = (NB.hsubs || {})[b.dataset.hadd]; if (!s) return;
     nbAddSheet(sheetItem(d, { id:s.id, name:s.name, amount:s.amount, or:s.or, collector:s.by }), b); });
@@ -3100,6 +3112,21 @@ function nbHistHtml(H){
     if (cash.length) rows += `<div class="grp">Cash · ${cash.length} · ${peso(tc)}</div>` + cash.map(one).join('');
     if (gc.length) rows += `<div class="grp">GCash (not in the drawer) · ${gc.length} · ${peso(tg)}</div>` + gc.map(one).join('');
     out += grp('sb', '📶', 'var(--blue-l)', 'Subscriber payments', `${sb.length} paid · ${inB.length} in the book${wt.length ? ' · <span style="color:#966500;font-weight:800">' + wt.length + ' not in the book</span>' : ''} · GCash ${peso(tg)}`, peso(tc + tg), 'var(--blue)', rows);
+  }
+
+  // v2.11: paid in BASHANG but never typed in the payment sheet — add it here
+  const bo = H.bashang_only || [];
+  NB.hbo = bo;
+  if (bo.length) {
+    const boC = bo.filter(x => !x.gcash), boG = bo.filter(x => x.gcash), sm = a => a.reduce((s, x) => s + n(x.amount), 0);
+    const oneB = (x, i) => `<div class="r"><span>${esc(x.name || '?')} <small>${[esc(x.area || ''), 'for ' + esc(ymLabel(x.ym))].filter(Boolean).join(' · ')}</small><br>`
+      + `<span class="stt ${x.gcash ? 'gc' : 'wait'}">${x.gcash ? 'GCash · not in the sheet' : 'Not in the payment sheet'}</span>`
+      + (H.date >= minWorkDate() ? `<button type="button" class="hadd" data-hbo="${i}">＋ Add</button>` : '') + `</span><b>${peso(x.amount)}</b></div>`;
+    const idx = x => bo.indexOf(x);
+    let rows = `<div class="ps-note" style="margin:0 0 8px">Marked paid in BASHANG on this day, but nobody typed them into the payment sheet. <b>＋ Add</b> records it here and puts it in the sheet too.</div>`;
+    if (boC.length) rows += `<div class="grp">Cash · ${boC.length} · ${peso(sm(boC))}</div>` + boC.map(x => oneB(x, idx(x))).join('');
+    if (boG.length) rows += `<div class="grp">GCash · ${boG.length} · ${peso(sm(boG))}</div>` + boG.map(x => oneB(x, idx(x))).join('');
+    out += grp('bo', '📒', 'var(--gold-l)', 'In BASHANG · not in the payment sheet', `<span style="color:#966500;font-weight:800">${bo.length} to check</span>${boC.length ? ' · cash ' + peso(sm(boC)) : ''}${boG.length ? ' · GCash ' + peso(sm(boG)) : ''}`, peso(sm(bo)), '#966500', rows);
   }
 
   const ce = H.col_exp || [];
