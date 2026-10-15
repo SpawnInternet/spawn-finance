@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#025AC6">
+<title>Spawn Remind</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#025AC6; --blue-d:#014a9f; --blue-l:#E6EFFB;
+  --ink:#1E2B45; --ink-2:#4A5672; --muted:#7A859C;
+  --paper:#F3F6FB; --card:#FFFFFF; --line:#E1E7F0;
+  --late:#C77700; --late-l:#FFF2DC; --utang:#C8283C; --utang-l:#FDE7EA;
+  --done:#0F8A6B; --done-l:#E2F5EF;
+  --bubble:#025AC6; --bubble-ink:#FFFFFF;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --blue:#4C93F0; --blue-d:#2F7BE0; --blue-l:#16263F;
+    --ink:#E8EDF6; --ink-2:#B6C0D3; --muted:#8892A8;
+    --paper:#0E1522; --card:#162033; --line:#24304A;
+    --late:#F2A93B; --late-l:#2E2210; --utang:#F07385; --utang-l:#331820;
+    --done:#38C79C; --done-l:#10291F;
+    --bubble:#2F7BE0; --bubble-ink:#FFFFFF;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:Figtree,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--paper);color:var(--ink);
+  font-size:15px;line-height:1.45;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;
+  padding-bottom:env(safe-area-inset-bottom,0px)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:8px}
+.hide{display:none!important}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px}
+
+/* ── PIN ── */
+#lock{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px;gap:22px}
+.brand{display:flex;align-items:baseline;gap:8px}
+.brand b{font-size:30px;font-weight:800;letter-spacing:-.02em;color:var(--blue)}
+.brand span{font-size:30px;font-weight:500;letter-spacing:-.02em}
+#lock p{color:var(--ink-2);text-align:center;max-width:30ch}
+.dots{display:flex;gap:14px}.dots i{width:14px;height:14px;border-radius:50%;background:var(--line);transition:background .12s}
+.dots i.on{background:var(--blue)}
+.pad{display:grid;grid-template-columns:repeat(3,76px);gap:12px}
+.pad button{height:64px;border-radius:18px;background:var(--card);font-size:24px;font-weight:600;box-shadow:0 1px 0 var(--line)}
+.pad button:active{background:var(--blue-l)}
+.err{min-height:20px;color:var(--utang);font-weight:600;font-size:14px}
+
+/* ── top ── */
+header{position:sticky;top:0;z-index:20;background:var(--paper);padding-top:env(safe-area-inset-top,0px)}
+.top{display:flex;align-items:center;gap:10px;padding:14px 0 6px}
+.top .brand b,.top .brand span{font-size:21px}
+.who{margin-left:auto;font-size:13px;color:var(--muted)}
+.who button{color:var(--blue);font-weight:600;margin-left:6px}
+.day{display:flex;align-items:center;gap:6px;padding:4px 0 10px}
+.day .nv{width:40px;height:40px;border-radius:12px;background:var(--card);font-size:16px;box-shadow:0 1px 0 var(--line)}
+.day .nv:disabled{opacity:.35;cursor:default}
+.day .dt{flex:1;text-align:center}
+.day .dt b{display:block;font-size:19px;font-weight:700;letter-spacing:-.01em}
+.day .dt small{color:var(--muted);font-size:13px}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;height:36px;padding:0 14px;border-radius:999px;background:var(--card);font-size:14px;font-weight:600;color:var(--ink-2);box-shadow:0 0 0 1px var(--line) inset}
+.tabs button em{font-style:normal;margin-left:6px;color:var(--muted);font-weight:700}
+.tabs button.on{background:var(--ink);color:var(--paper);box-shadow:none}
+.tabs button.on em{color:var(--paper);opacity:.75}
+
+/* ── list ── */
+main{padding:4px 0 28px}
+.note{font-size:13.5px;color:var(--ink-2);padding:2px 2px 12px}
+.item{background:var(--card);border-radius:18px;padding:14px 14px 12px;margin-bottom:12px;box-shadow:0 1px 0 var(--line)}
+.ih{display:flex;align-items:flex-start;gap:10px}
+.ih .nm{flex:1;min-width:0}
+.ih .nm b{display:block;font-size:16.5px;font-weight:700;line-height:1.25}
+.ih .nm small{color:var(--muted);font-size:13px}
+.ih .am{font-size:17px;font-weight:800;white-space:nowrap}
+.why{display:inline-block;margin-top:6px;padding:2px 10px;border-radius:999px;font-size:12.5px;font-weight:700}
+.why.due_soon{background:var(--blue-l);color:var(--blue)}
+.why.late{background:var(--late-l);color:var(--late)}
+.why.utang{background:var(--utang-l);color:var(--utang)}
+.bubble{position:relative;margin:12px 0 4px 26px;padding:11px 14px;border-radius:18px 18px 4px 18px;
+  background:var(--bubble);color:var(--bubble-ink);font-size:14.5px;line-height:1.45}
+.to{display:flex;justify-content:flex-end;font-size:12px;color:var(--muted);margin-bottom:10px}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.btn{height:42px;padding:0 14px;border-radius:12px;font-weight:700;font-size:14px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset}
+.btn.send{flex:1 1 100%;height:48px;background:var(--blue);color:#fff;box-shadow:none;font-size:15.5px}
+.btn.send:active{background:var(--blue-d)}
+.btn:disabled{opacity:.5}
+.pform,.nform{display:flex;gap:8px;margin-top:10px}
+.pform input,.nform input{flex:1;min-width:0;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--paper);padding:0 12px;font-size:15px}
+.nform input{font-weight:700;letter-spacing:.02em}
+.pform .btn,.nform .btn{background:var(--ink);color:var(--paper);box-shadow:none}
+.prom{margin-top:8px;font-size:13px;color:var(--done);font-weight:600}
+
+/* done lines */
+.dl{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);border-radius:14px;margin-bottom:8px;box-shadow:0 1px 0 var(--line)}
+.dl .ck{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;flex:none;background:var(--done-l);color:var(--done)}
+.dl .ck.p{background:var(--blue-l);color:var(--blue)}
+.dl .t{flex:1;min-width:0}.dl .t b{display:block;font-weight:700}.dl .t small{color:var(--muted);font-size:13px}
+.dl button{color:var(--blue);font-weight:700;font-size:13.5px;padding:6px}
+
+.empty{text-align:center;padding:40px 16px;color:var(--ink-2)}
+.empty b{display:block;font-size:17px;color:var(--ink);margin-bottom:4px}
+.meter{margin:18px 0 8px;padding:14px;border-radius:16px;background:var(--card);box-shadow:0 1px 0 var(--line);font-size:13.5px;color:var(--ink-2)}
+.meter b{color:var(--ink)}
+.bar{height:8px;border-radius:99px;background:var(--line);margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--done);border-radius:99px}
+
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;
+  background:var(--ink);color:var(--paper);padding:11px 18px;border-radius:14px;font-weight:600;font-size:14px;transition:.18s;pointer-events:none;z-index:50;max-width:90vw;text-align:center}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<section id="lock">
+  <div class="brand"><b>Spawn</b><span>Remind</span></div>
+  <p>Payment reminders for today. Type your office PIN.</p>
+  <div class="dots" id="dots"><i></i><i></i><i></i><i></i></div>
+  <div class="pad" id="pad"></div>
+  <div class="err" id="perr" role="alert"></div>
+</section>
+
+<div id="app" class="hide">
+  <header><div class="wrap">
+    <div class="top"><div class="brand"><b>Spawn</b><span>Remind</span></div><div class="who"><span id="uname"></span><button type="button" id="out">Lock</button></div></div>
+    <div class="day">
+      <button type="button" class="nv" id="prev" aria-label="Previous day">◀</button>
+      <div class="dt"><b id="dlabel"></b><small id="dsub"></small></div>
+      <button type="button" class="nv" id="next" aria-label="Next day">▶</button>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Lists"></nav>
+  </div></header>
+  <main class="wrap" id="list" aria-live="polite"></main>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+const SB  = 'https://cviraqfhphhsonjmrtvu.supabase.co';
+const KEY = 'sb_publishable_6J1xIrlkpHf6jir4DtUh4g_xX7Fm9ln';
+const SESS = 'spawn-remind-sess', IDLE = 3 * 60 * 60 * 1000;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const peso = n => '₱' + Number(n || 0).toLocaleString('en-PH', { maximumFractionDigits:2 });
+const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', { weekday:'short', month:'short', day:'numeric', timeZone:'UTC' });
+const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' }) : '';
+const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:'send', user:'', open:null };
+
+function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
+const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 10 minutes.', not_on_list:'This person is no longer on the list — refresh.',
+  no_phone:'No number for this person yet.', bad_phone:'That is not a mobile number. Use 09XXXXXXXXX.', bad_date:'Pick a date from today on.' };
+async function rpc(fn, args){
+  let res; try { res = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' }, body:JSON.stringify(args) }); }
+  catch (e) { throw new Error('No signal — try again.'); }
+  let j = null; try { j = await res.json(); } catch (e) {}
+  if (!res.ok) { const m = (j && (j.message || j.hint)) || ('Error ' + res.status); throw new Error(ERR[m] || m); }
+  if (j && j.ok === false) throw new Error(ERR[j.error] || j.error || 'Not done');
+  return j;
+}
+
+/* ── PIN ── */
+const pad = $('pad');
+['1','2','3','4','5','6','7','8','9','c','0','b'].forEach(k => {
+  const b = document.createElement('button'); b.type = 'button'; b.dataset.k = k;
+  b.textContent = k === 'c' ? 'Clear' : k === 'b' ? '⌫' : k; if (k === 'c') b.style.fontSize = '15px';
+  b.setAttribute('aria-label', k === 'c' ? 'Clear' : k === 'b' ? 'Delete' : k); pad.appendChild(b);
+});
+let typed = '';
+function dots(){ [...$('dots').children].forEach((i, n) => i.classList.toggle('on', n < typed.length)); }
+async function key(k){
+  if (k === 'c') typed = ''; else if (k === 'b') typed = typed.slice(0, -1); else if (typed.length < 4) typed += k;
+  dots(); $('perr').textContent = '';
+  if (typed.length === 4) {
+    const p = typed;
+    try { await load(p, null); S.pin = p; sessionStorage.setItem(SESS, JSON.stringify({ p, t:Date.now() })); show(); }
+    catch (e) { $('perr').textContent = e.message; typed = ''; dots(); }
+  }
+}
+pad.addEventListener('click', e => { const b = e.target.closest('button'); if (b) key(b.dataset.k); });
+document.addEventListener('keydown', e => { if (!$('lock').classList.contains('hide')) { if (/^\d$/.test(e.key)) key(e.key); else if (e.key === 'Backspace') key('b'); } });
+function lock(msg){ S.pin = ''; typed = ''; dots(); sessionStorage.removeItem(SESS); $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
+$('out').onclick = () => lock();
+
+async function load(pin, date){
+  const r = await rpc('remind_board', { p_pin:pin, p_date:date });
+  S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
+}
+function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); }
+async function reload(){ try { await load(S.pin, S.date); render(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
+
+/* ── lists ── */
+const isDone = r => !!(r.sent || r.paid);
+function lists(){
+  const live = S.rows.filter(r => !isDone(r));
+  return { send: live.filter(r => r.phone), nonum: live.filter(r => !r.phone), done: S.rows.filter(isDone) };
+}
+function why(r){
+  if (r.intent === 'due_soon') return `<span class="why due_soon">Due ${esc(dLabel(r.due))}</span>`;
+  if (r.intent === 'late') return `<span class="why late">3 days late · due ${esc(dLabel(r.due))}</span>`;
+  return `<span class="why utang">Utang · ${esc(r.months)}</span>`;
+}
+function head(r){
+  return `<div class="ih"><div class="nm"><b>${esc(r.name)}</b><small>${esc(r.area || '')}</small><br>${why(r)}</div><div class="am">${peso(r.total)}</div></div>`;
+}
+function smsHref(r){ return `sms:${r.phone}${IOS ? '&' : '?'}body=${encodeURIComponent(r.body)}`; }
+
+function render(){
+  const L = lists(), d = S.date, t = S.today;
+  $('uname').textContent = S.user || '';
+  $('dlabel').textContent = d === t ? 'Today' : dLabel(d);
+  $('dsub').textContent = d === t ? dLabel(d) : d > t ? 'Preview — not yet due' : 'Past day';
+  $('prev').disabled = d <= addDays(t, -14);
+  $('next').disabled = d >= addDays(t, 7);
+  const T = [['send', 'To text', L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]];
+  $('tabs').innerHTML = T.map(([k, l, n]) => `<button type="button" class="${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-pressed="${S.tab === k}">${l}<em>${n}</em></button>`).join('');
+  const box = $('list'), past = d < t, future = d > t;
+  let h = '';
+  if (S.tab === 'send') {
+    h += `<div class="note">${future ? 'A look ahead — these go out on that day.' : 'Each text goes from this phone. Nothing is sent by itself.'}</div>`;
+    h += L.send.length ? L.send.map(r => `<article class="item" data-key="${esc(r.key)}">${head(r)}
+        <div class="bubble">${esc(r.body)}</div><div class="to">to ${esc(r.phone)}</div>
+        <div class="acts">
+          ${future ? '' : `<a class="btn send" style="display:grid;place-items:center;text-decoration:none" href="${esc(smsHref(r))}" data-act="sent">Text from this phone</a>`}
+          <button type="button" class="btn" data-act="copy">Copy text</button>
+          ${future ? '' : `<button type="button" class="btn" data-act="paid">Already paid</button>`}
+          ${r.intent === 'utang' && !future ? `<button type="button" class="btn" data-act="promise">Pay date</button>` : ''}
+        </div>
+        ${S.open === r.key + '|p' ? `<div class="pform"><input type="date" min="${t}" aria-label="Promised pay date"><button type="button" class="btn" data-act="psave">Save date</button></div>` : ''}
+      </article>`).join('')
+      : `<div class="empty"><b>${L.done.length ? 'All done for this day' : 'No one to text'}</b>${L.nonum.length ? `${L.nonum.length} still need a number — see No number.` : future ? 'Nobody falls due on this day.' : 'Everyone on this day is handled.'}</div>`;
+  }
+  if (S.tab === 'nonum') {
+    h += `<div class="note">Found their number? Save it and they move to To text. The number is kept for next time.</div>`;
+    h += L.nonum.length ? L.nonum.map(r => `<article class="item" data-key="${esc(r.key)}">${head(r)}
+        <div class="nform"><input type="tel" inputmode="tel" placeholder="09XX XXX XXXX" aria-label="Mobile number for ${esc(r.name)}"><button type="button" class="btn" data-act="phone">Save number</button></div>
+        ${future ? '' : `<div class="acts" style="margin-top:8px"><button type="button" class="btn" data-act="paid">Already paid</button>${r.intent === 'utang' ? `<button type="button" class="btn" data-act="promise">Pay date</button>` : ''}</div>`}
+        ${S.open === r.key + '|p' ? `<div class="pform"><input type="date" min="${t}" aria-label="Promised pay date"><button type="button" class="btn" data-act="psave">Save date</button></div>` : ''}
+      </article>`).join('')
+      : `<div class="empty"><b>Everyone has a number</b>Nothing to fill in for this day.</div>`;
+  }
+  if (S.tab === 'done') {
+    h += L.done.length ? L.done.map(r => `<div class="dl" data-key="${esc(r.key)}"><span class="ck ${r.paid ? 'p' : ''}">${r.paid ? '₱' : '✓'}</span>
+        <div class="t"><b>${esc(r.name)}</b><small>${r.paid ? `Marked already paid by ${esc(r.paid.by)} · ${tLabel(r.paid.at)}` : `Texted by ${esc(r.sent.by)} · ${tLabel(r.sent.at)}`}</small></div>
+        <button type="button" data-act="undo">Undo</button></div>`).join('')
+      : `<div class="empty"><b>Nothing done yet</b>Texts you send and people marked paid show here.</div>`;
+  }
+  const sent = Number(S.stats.sent_14d || 0), paid = Number(S.stats.paid_14d || 0), all = sent + paid;
+  h += `<div class="meter"><b>Last 14 days:</b> ${sent} texted · ${paid} were already paid${all ? ` (${Math.round(paid / all * 100)}%)` : ''}.<br>
+    When “already paid” stays rare, the list is accurate enough to send by itself.${all ? `<div class="bar"><i style="width:${Math.round(sent / all * 100)}%"></i></div>` : ''}</div>`;
+  box.innerHTML = h;
+}
+
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; S.tab = b.dataset.tab; S.open = null; render(); window.scrollTo({ top:0 }); });
+$('prev').onclick = () => { S.date = addDays(S.date, -1); S.open = null; reload(); };
+$('next').onclick = () => { S.date = addDays(S.date, 1); S.open = null; reload(); };
+
+$('list').addEventListener('click', async e => {
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  const card = a.closest('[data-key]'), r = card && S.rows.find(x => x.key === card.dataset.key); if (!r) return;
+  const act = a.dataset.act;
+  if (act === 'copy') {
+    try { await navigator.clipboard.writeText(r.body); toast('Text copied'); } catch (x) { toast('Could not copy — long-press the bubble instead'); }
+    return;
+  }
+  if (act === 'promise') { S.open = S.open === r.key + '|p' ? null : r.key + '|p'; render(); const i = $('list').querySelector(`[data-key="${CSS.escape(r.key)}"] .pform input`); if (i) i.focus(); return; }
+  const go = async (action, extra, okMsg) => {
+    if (a.tagName === 'BUTTON') a.disabled = true;
+    try { await rpc('remind_act', { p_pin:S.pin, p_action:action, p_sub:r.sub, p_date:S.date, p_intent:r.intent, ...extra }); toast(okMsg); S.open = null; await reload(); }
+    catch (x) { toast(x.message, 4000); if (a.tagName === 'BUTTON') a.disabled = false; }
+  };
+  if (act === 'sent') { setTimeout(() => go('sent', {}, `Marked texted · ${r.name}`), 400); return; }   // the sms: link opens the messages app; we record it as texted
+  if (act === 'paid') return go('paid', {}, `${r.name} marked already paid`);
+  if (act === 'undo') return go('undo', {}, 'Undone — back on the list');
+  if (act === 'psave') {
+    const v = card.querySelector('.pform input').value;
+    if (!v) { toast('Pick the date they promised'); return; }
+    return go('promise', { p_value:v }, `Pay date saved — ${dLabel(v)}. No utang reminder until then.`);
+  }
+  if (act === 'phone') {
+    const v = card.querySelector('.nform input').value;
+    a.disabled = true;
+    try { const j = await rpc('remind_set_phone', { p_pin:S.pin, p_sub:r.sub, p_phone:v }); toast(`Saved ${j.phone} · moved to To text`); await reload(); }
+    catch (x) { toast(x.message, 4000); a.disabled = false; }
+  }
+});
+$('list').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const f = e.target.closest('.nform,.pform'); if (!f) return;
+  const b = f.querySelector('button'); if (b) b.click();
+});
+
+/* resume a recent session on this tab */
+(async () => {
+  let x = null; try { x = JSON.parse(sessionStorage.getItem(SESS) || 'null'); } catch (e) {}
+  if (x && /^\d{4}$/.test(x.p || '') && Date.now() - (x.t || 0) < IDLE) {
+    try { await load(x.p, null); S.pin = x.p; show(); } catch (e) { lock(); }
+  }
+})();
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.pin) reload(); });
+</script>
+</body>
+</html>
