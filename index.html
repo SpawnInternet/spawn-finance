@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v3.0 · 2026-10-15 · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -459,6 +459,25 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .nb-item:first-of-type{border-top:0}
 .nb-item .t{flex:1;min-width:0}.nb-item .t b{display:block;font-size:15px}.nb-item .t small{color:#64748b;font-size:12px}
 .nb-item .a{text-align:right}.nb-item .a b{display:block;font-size:17px;color:#966500;font-variant-numeric:tabular-nums}.nb-item .a small{font-size:11px;color:#64748b}
+/* day history: everything the other apps recorded on this date (read only) */
+.hx{margin:12px 0 10px;border-radius:16px;background:#fff;box-shadow:0 3px 12px rgba(17,24,39,.06);overflow:hidden}
+.hx-h{padding:12px 14px 10px;border-bottom:1px solid #f1f3f7}
+.hx-h b{display:block;font-size:15px}.hx-h small{display:block;font-size:12px;color:#64748b;margin-top:2px}
+.hx details{border-top:1px solid #f1f3f7}.hx details:first-of-type{border-top:0}
+.hx summary{list-style:none;display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer}
+.hx summary::-webkit-details-marker{display:none}
+.hx summary .i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:15px;flex:none}
+.hx summary .t{flex:1;min-width:0}.hx summary .t b{display:block;font-size:14px}.hx summary .t small{display:block;font-size:12px;color:#64748b}
+.hx summary .a{font-size:15px;font-weight:800;white-space:nowrap}
+.hx summary:after{content:'›';font-size:18px;color:#94a3b8;transition:transform .15s}
+.hx details[open] summary:after{transform:rotate(90deg)}
+.hx summary:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.hx .rows{padding:0 14px 10px 54px}
+.hx .r{display:flex;gap:8px;justify-content:space-between;padding:5px 0;border-top:1px dashed #eef0f4;font-size:13px}
+.hx .r:first-child{border-top:0}.hx .r span{min-width:0}.hx .r small{color:#64748b}.hx .r b{white-space:nowrap}
+.hx .r.sub{font-weight:700;color:var(--ink-2)}
+.hx .grp{font-size:12px;font-weight:800;color:var(--ink-2);margin:8px 0 2px}
+.hx .none{padding:12px 14px;font-size:13px;color:#64748b}
 .nb-go{height:44px;padding:0 14px;border-radius:12px;border:0;color:#fff;font:800 14px Inter,system-ui,sans-serif;background:linear-gradient(180deg,#16b386,#00a878);cursor:pointer;white-space:nowrap}
 .nb-menu{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .nb-menu button{min-height:84px;padding:12px;border-radius:16px;border:0;text-align:left;cursor:pointer;font-family:inherit;color:#fff}
@@ -910,6 +929,7 @@ async function refresh(){
       rpc('fin_sheet_cash_pending', { p_pin:S.pin }).catch(() => null)
     ]);
     S.book = book; S.look = look; S.coll = coll; S.gc = gc; S.scash = scash; S.sheet = sheet && sheet.ok ? sheet : null;
+    try { NB.histStale = Date.now(); } catch (x) {}
   } catch (e) { toast(e.message, 4000); }
   renderHome();
   if (!$('v-book').classList.contains('hide')) renderBook();
@@ -2903,6 +2923,7 @@ function renderNote(){
       <div class="tot big"><small>left in the drawer →</small><span>₱${Number(endBal).toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
       ${counts.map(cnt).join('')}
     </div>
+    <div id="nb-hist"></div>
     ${!entries.length && d === t ? `<div class="nb-guide"><h4>Nothing written today yet. The day goes like this:</h4>
       <div class="st"><i>1</i><span><b>💰 Collect</b> — count the hand-ins from Harvest and Collect. They are written in by themselves.</span></div>
       <div class="st"><i>2</i><span><b>✏️ Write a line</b> — gas, snacks, c/o, cash advance, a deposit, or a subscriber who paid here.</span></div>
@@ -2915,6 +2936,111 @@ function renderNote(){
   W.querySelectorAll('[data-wi]').forEach(b => b.onclick = ev => { ev.stopPropagation(); nbDo(dayItems[+b.dataset.wi], b); });
   const mk = $('nb-mark'); if (mk) mk.onclick = () => { if (mk.dataset.d !== d) { setWorkDate(mk.dataset.d); renderNote(); } const l = document.querySelector('.ln.mark'); if (l) l.scrollIntoView({block:'center', behavior:'smooth'}); };
   if (!NB.scrolled) { NB.scrolled = true; setTimeout(() => { const l = document.querySelector('.ln.mark'); if (l) l.scrollIntoView({block:'center'}); }, 60); }
+  nbHist(d);
+}
+
+/* ---------- day history (read only) ----------
+   Everything the other apps and sheets recorded on this date: Spawn Harvest, subscriber payments,
+   collector expenses, the office cash sheet, the expense books, deposits and parts.
+   For checking only: none of it changes the balance. */
+NB.hist = {};
+async function nbHist(d){
+  const box = $('nb-hist'); if (!box) return;
+  const c = NB.hist[d];
+  if (c && c.data) { box.innerHTML = nbHistHtml(c.data); nbHistKeep(box, d); if (c.at >= (NB.histStale || 0) || c.p) return; }
+  else if (c && c.p) { box.innerHTML = nbHistLoading(d); return; }
+  else box.innerHTML = nbHistLoading(d);
+  const p = rpc('fin_day_history', { p_pin:S.pin, p_date:d });
+  NB.hist[d] = { ...(c || {}), p };
+  try {
+    const r = await p;
+    if (r && r.ok === false) throw new Error(r.error || 'Could not load');
+    NB.hist[d] = { data:r, at:Date.now() };
+  } catch (e) {
+    if (c && c.data) { NB.hist[d] = c; return; }
+    delete NB.hist[d];
+    if (workDate() === d && $('nb-hist')) $('nb-hist').innerHTML = `<div class="hx"><div class="hx-h"><b>📜 Day history</b><small>Could not load: ${esc(e.message)}. Pull down or reopen the page to try again.</small></div></div>`;
+    return;
+  }
+  if (workDate() === d && NB.tab === 'book' && $('nb-hist')) { $('nb-hist').innerHTML = nbHistHtml(NB.hist[d].data); nbHistKeep($('nb-hist'), d); }
+}
+function nbHistLoading(d){ return `<div class="hx"><div class="hx-h"><b>📜 Everything recorded on ${esc(dLabel(d))}</b><small>Loading the day's history…</small></div></div>`; }
+function nbHistKeep(box, d){
+  // remember which groups are open, per page, so a refresh does not fold them back
+  NB.histOpen = NB.histOpen || {};
+  const o = NB.histOpen[d] || {};
+  box.querySelectorAll('details[data-k]').forEach(el => {
+    if (o[el.dataset.k]) el.open = true;
+    el.addEventListener('toggle', () => { (NB.histOpen[d] = NB.histOpen[d] || {})[el.dataset.k] = el.open; });
+  });
+}
+function nbHistHtml(H){
+  const n = x => Number(x || 0), fmt = x => n(x).toLocaleString('en-PH', {maximumFractionDigits:2});
+  const isG = s => /g-?\s?cash/i.test(String(s.by || '')) || /gcash/i.test(String(s.via || ''));
+  const grp = (k, icon, bg, title, sub, amt, color, rows) =>
+    `<details data-k="${k}"><summary><i class="i" style="background:${bg}">${icon}</i><span class="t"><b>${title}</b><small>${sub}</small></span><span class="a" style="color:${color}">${amt}</span></summary><div class="rows">${rows}</div></details>`;
+  const row = (l, r, cls) => `<div class="r ${cls || ''}"><span>${l}</span><b>${r}</b></div>`;
+  let out = '';
+
+  const hv = H.harvest || [];
+  if (hv.length) {
+    const sp = hv.reduce((s, c) => s + n(c.spawn), 0), co = hv.reduce((s, c) => s + n(c.coins), 0), vn = hv.reduce((s, c) => s + n(c.vendos), 0);
+    const rows = hv.map(c => `<div class="grp">${esc(c.collector)} · ${c.vendos} vendo${c.vendos == 1 ? '' : 's'} · coins ${peso(c.coins)} · Spawn ${peso(c.spawn)}</div>` +
+      (c.items || []).map(it => row(`${esc(it.vendo || '?')} <small>${esc(it.area || '')}${n(it.old) ? ' · bugi ' + fmt(it.old) : ''}</small>`, `${fmt(it.spawn)} <small>of ${fmt(it.coins)}</small>`)).join('')).join('');
+    out += grp('hv', '🪙', 'var(--gold-l)', 'Spawn Harvest', `${hv.map(c => esc(c.collector)).join(', ')} · ${vn} vendo${vn === 1 ? '' : 's'} · coins ${peso(co)}`, peso(sp), '#966500', rows + row('Spawn share (75%) to hand in', peso(sp), 'sub'));
+  }
+
+  const sb = H.subs || [];
+  if (sb.length) {
+    const cash = sb.filter(s => !isG(s)), gc = sb.filter(isG);
+    const tc = cash.reduce((s, x) => s + n(x.amount), 0), tg = gc.reduce((s, x) => s + n(x.amount), 0);
+    const one = s => row(`${esc(s.name || '?')} <small>${[s.office ? 'paid here' : esc(s.by || ''), s.or ? 'OR ' + esc(s.or) : '', esc(s.note || '')].filter(Boolean).join(' · ')}</small>`, peso(s.amount));
+    let rows = '';
+    if (cash.length) rows += `<div class="grp">Cash · ${cash.length} · ${peso(tc)}</div>` + cash.map(one).join('');
+    if (gc.length) rows += `<div class="grp">GCash (not in the drawer) · ${gc.length} · ${peso(tg)}</div>` + gc.map(one).join('');
+    out += grp('sb', '📶', 'var(--blue-l)', 'Subscriber payments', `${sb.length} paid · cash ${peso(tc)} · GCash ${peso(tg)}`, peso(tc + tg), 'var(--blue)', rows);
+  }
+
+  const ce = H.col_exp || [];
+  if (ce.length) {
+    const t = ce.reduce((s, x) => s + n(x.amount), 0);
+    out += grp('ce', '⛽', 'var(--red-l)', 'Collector expenses', ce.map(x => esc(x.collector)).filter((v, i, a) => a.indexOf(v) === i).join(', '), '− ' + peso(t), 'var(--red)',
+      ce.map(x => row(`${esc(x.what || '?')} <small>${esc(x.collector || '')}</small>`, peso(x.amount))).join(''));
+  }
+
+  const sh = H.sheet || [];
+  if (sh.length) {
+    const tn = sh.reduce((s, x) => s + n(x.net), 0);
+    const rows = sh.map((x, i) => (sh.length > 1 ? `<div class="grp">Row ${i + 1}</div>` : '') + [
+        ['Piso WiFi', x.piso], ['Subscribers', x.subs], ['GCash', x.gcash], ['Change received', x.change], ['Expenses', x.expenses && -n(x.expenses)],
+        ['Short', x.short && -n(x.short)], ['Over', x.over], ['Deposited' + (x.dep_date ? ' ' + dLabel(x.dep_date) : ''), x.deposited]
+      ].filter(r => r[1] != null && n(r[1]) !== 0).map(r => row(r[0], (n(r[1]) < 0 ? '− ' : '') + peso(Math.abs(n(r[1]))))).join('') +
+      row('Net cash', peso(x.net), 'sub') + (x.remarks ? `<div class="r"><small>“${esc(x.remarks)}”</small></div>` : '')).join('');
+    out += grp('sh', '📄', 'var(--purple-l)', 'Office cash sheet', `the Google Sheet record · ${sh.length} row${sh.length === 1 ? '' : 's'}`, peso(tn), 'var(--purple)', rows);
+  }
+
+  const ex = H.expenses || [];
+  if (ex.length) {
+    const t = ex.reduce((s, x) => s + n(x.amount), 0);
+    const books = [...new Set(ex.map(x => x.book || 'other'))];
+    const rows = books.map(b => { const L = ex.filter(x => (x.book || 'other') === b);
+      return `<div class="grp">${b === 'admin' ? 'Admin book (Sir Wendell)' : b === 'daily' ? 'Daily expense book' : esc(b)} · ${peso(L.reduce((s, x) => s + n(x.amount), 0))}</div>` +
+        L.map(x => row(`${esc(x.what || '?')} <small>${[x.co ? 'c/o ' + esc(x.co) : '', esc(x.cat || '')].filter(Boolean).join(' · ')}</small>`, peso(x.amount))).join(''); }).join('');
+    out += grp('ex', '💸', 'var(--red-l)', 'Expense books', `${ex.length} line${ex.length === 1 ? '' : 's'} · ${books.map(b => b === 'admin' ? 'admin' : b).join(', ')}`, '− ' + peso(t), 'var(--red)', rows);
+  }
+
+  const dp = H.deposits || [];
+  if (dp.length) {
+    const t = dp.reduce((s, x) => s + n(x.amount), 0);
+    out += grp('dp', '🏦', 'var(--teal-l)', 'Bank deposits', `${dp.length} deposit${dp.length === 1 ? '' : 's'}`, peso(t), 'var(--teal)',
+      dp.map(x => row(x.src === 'book' ? `${esc(x.bank || 'Bank')} <small>${x.ref ? 'ref ' + esc(x.ref) : 'this book'}</small>` : `Cash sheet deposit <small>for ${esc(dLabel(x.for))}</small>`, peso(x.amount))).join(''));
+  }
+
+  const pt = H.parts || [];
+  if (pt.length) out += grp('pt', '🔧', 'var(--bg)', 'Parts taken out', pt.map(x => `${fmt(x.qty)} ${esc(x.unit || '')} ${esc(x.part)}`).slice(0, 3).join(', ') + (pt.length > 3 ? ' …' : ''), `${pt.length}`, 'var(--ink-2)',
+    pt.map(x => row(`${esc(x.part)} <small>${[esc(x.by || ''), esc(x.purpose || '')].filter(Boolean).join(' · ')}</small>`, `${fmt(x.qty)} ${esc(x.unit || '')}`)).join(''));
+
+  return `<div class="hx"><div class="hx-h"><b>📜 Everything recorded on ${esc(dLabel(H.date))}</b><small>From Spawn Harvest, Spawn Collect, the sheets and the books. For checking only: it does not change the balance above. Tap a group to see each line.</small></div>${out || '<div class="none">Nothing was recorded anywhere on this day.</div>'}</div>`;
 }
 $('nb-wrap').addEventListener('click', e => {
   if (e.target.closest('[data-back]')) { NB.tab = 'book'; renderNote(); return; }
