@@ -590,6 +590,10 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
   background:linear-gradient(180deg,#1f74e0,#025ac6);box-shadow:0 3px 8px rgba(2,90,198,.3);transition:transform .1s}
 .ps button:active{transform:scale(.96)}
 .ps button:disabled{opacity:.55;box-shadow:none}
+.bo-wrap{margin-top:0;background:linear-gradient(180deg,rgba(255,241,204,.9),rgba(255,241,204,.5));outline-color:#f5c542}
+.bo-wrap .ps-h{color:#966500}.bo-wrap .ps-h em{color:#a38a4a}.bo-wrap .ps-h .ps-sum{color:#966500;box-shadow:0 0 0 1px #f5d98a}
+.bo-wrap .ps .av{color:#966500;box-shadow:0 0 0 1.5px #f5d98a}.bo-wrap .ps .am{color:#966500}
+.bo-wrap .ps button{background:linear-gradient(180deg,#f0a92a,#d98a00);box-shadow:0 3px 8px rgba(217,138,0,.3)}
 .ps-card{border-color:#c7d7f5 !important;background:linear-gradient(180deg,#f5f8fe,#fff 60px)}
 .ps-card .ps-h{height:auto;margin:0 0 6px;font-size:13px}
 .ps-card .ps{height:auto;padding:9px 0;border-top:1px solid #e8eef8}
@@ -3002,6 +3006,7 @@ function renderNote(){
         const sTot = sh.reduce((s, [x]) => s + Number(x.amt), 0);
         return (sh.length ? `<div class="ps-wrap"><div class="ps-h">📄 PAYMENT SHEET <em>· add only what the office received</em><span class="ps-sum">${sh.length} · ${peso(sTot)}</span></div>${sh.map(([x, i]) => psRow(x, `data-wi="${i}"`)).join('')}</div>` : '')
           + (ot.length ? `<div class="wl-wrap"><div class="wl-h">⏳ STILL TO ADD FOR THIS DAY <em>· tap to count</em></div>${ot.map(([x, i]) => `<div class="wl"><b>+ ${Number(x.amt).toLocaleString('en-PH')}</b><span>— ${esc(x.title)} <small>${esc(x.sub)}</small></span><button type="button" data-wi="${i}">Count</button></div>`).join('')}</div>` : ''); })()}
+      ${!(lock && lock.locked_at) ? '<div id="nb-bo"></div>' : ''}
       ${olderN && !(lock && lock.locked_at) ? `<button type="button" class="wl-old" id="nb-older">⏳ ${olderN} from earlier days still to add →</button>` : ''}
       <div class="tot"><span>₱${box1.toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
       <div class="hd">Expenses: <small>MONEY OUT</small></div>
@@ -3035,7 +3040,7 @@ NB.hist = {};
 async function nbHist(d){
   const box = $('nb-hist'); if (!box) return;
   const c = NB.hist[d];
-  if (c && c.data) { box.innerHTML = nbHistHtml(c.data); nbHistKeep(box, d); if (c.at >= (NB.histStale || 0) || c.p) return; }
+  if (c && c.data) { box.innerHTML = nbHistHtml(c.data); nbHistKeep(box, d); nbBoPaper(d, c.data); if (c.at >= (NB.histStale || 0) || c.p) return; }
   else if (c && c.p) { box.innerHTML = nbHistLoading(d); return; }
   else box.innerHTML = nbHistLoading(d);
   const p = rpc('fin_day_history', { p_pin:S.pin, p_date:d });
@@ -3050,9 +3055,22 @@ async function nbHist(d){
     if (workDate() === d && $('nb-hist')) $('nb-hist').innerHTML = `<div class="hx"><div class="hx-h"><b>📜 Day history</b><small>Could not load: ${esc(e.message)}. Pull down or reopen the page to try again.</small></div></div>`;
     return;
   }
-  if (workDate() === d && NB.tab === 'book' && $('nb-hist')) { $('nb-hist').innerHTML = nbHistHtml(NB.hist[d].data); nbHistKeep($('nb-hist'), d); }
+  if (workDate() === d && NB.tab === 'book' && $('nb-hist')) { $('nb-hist').innerHTML = nbHistHtml(NB.hist[d].data); nbHistKeep($('nb-hist'), d); nbBoPaper(d, NB.hist[d].data); }
 }
 function nbHistLoading(d){ return `<div class="hx"><div class="hx-h"><b>📜 Everything recorded on ${esc(dLabel(d))}</b><small>Loading the day's history…</small></div></div>`; }
+/* BASHANG-only payments, shown on the logbook page itself next to the payment sheet */
+function nbBoPaper(d, H){
+  const el = $('nb-bo'); if (!el) return;
+  const bo = (H && H.bashang_only) || [];
+  if (!bo.length || d < minWorkDate()) { el.innerHTML = ''; return; }
+  NB.hbo = bo;
+  const tot = bo.reduce((s, x) => s + Number(x.amount || 0), 0);
+  el.innerHTML = `<div class="ps-wrap bo-wrap"><div class="ps-h">📒 IN BASHANG · NOT IN THE SHEET <em>· add if the office received it</em><span class="ps-sum">${bo.length} · ${peso(tot)}</span></div>`
+    + bo.map((x, i) => `<div class="ps"><span class="av">${esc(psInit(x.name))}</span>
+        <span class="nm"><b>${esc(String(x.name || '?').replace(/\s*\([^)]*\)\s*/g, ' ').trim())}</b><small>for ${esc(ymLabel(x.ym))} · ${x.gcash ? 'GCash' : 'Cash'}${x.area ? ' · ' + esc(x.area) : ''}</small></span>
+        <span class="am">${peso(x.amount)}</span><button type="button" data-pbo="${i}">＋ Add</button></div>`).join('') + '</div>';
+  el.querySelectorAll('[data-pbo]').forEach(b => b.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); const x = bo[+b.dataset.pbo]; if (x) addFromBashang(x); });
+}
 function ymLabel(ym){ try { return new Date(ym + '-01T12:00:00Z').toLocaleDateString('en-PH', { month:'long', year:'numeric', timeZone:'UTC' }); } catch (e) { return ym; } }
 async function addFromBashang(x){
   openSheet('collect', { mode:'office_collection', pv:x.gcash ? 'gcash' : 'cash', results:[{ id:x.sub_id, name:x.name, area:x.area, monthly_amount:x.amount }] });
