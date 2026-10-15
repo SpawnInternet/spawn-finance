@@ -568,6 +568,26 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .paper .wl-h{height:40px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.05em;color:#b07800}
 .paper .wl-h em{font-style:normal;font-weight:700;color:#a38a4a;letter-spacing:0}
 .paper .wl-wrap{margin:0 -8px;padding:0 8px;border-radius:10px;background:repeating-linear-gradient(135deg,rgba(255,214,102,.13) 0 10px,rgba(255,214,102,.06) 10px 20px);outline:1.5px dashed #f5c542;outline-offset:-1px}
+.ps-wrap{margin:0 -8px 0;padding:0 8px;border-radius:12px;background:linear-gradient(180deg,rgba(234,240,251,.95),rgba(234,240,251,.6));outline:1.5px solid #c7d7f5;outline-offset:-1px}
+.ps-h{height:40px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.05em;color:#244c9c;white-space:nowrap}
+.ps-h em{font-style:normal;font-weight:700;color:#5b7bbf;letter-spacing:0;overflow:hidden;text-overflow:ellipsis}
+.ps-h .ps-sum{margin-left:auto;flex:none;display:inline-block;height:auto;line-height:1.3;align-self:center;padding:3px 10px;border-radius:999px;background:#fff;color:#025ac6;letter-spacing:0;font-size:12px;box-shadow:0 0 0 1px #d6e0f2}
+.ps{display:flex;align-items:center;gap:10px;height:40px}
+.ps .av{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#025ac6;font:800 11px Inter,system-ui,sans-serif;box-shadow:0 0 0 1.5px #c7d7f5}
+.ps .nm{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;line-height:1.15}
+.ps .nm b{font-size:14px;font-weight:700;color:#1e2b45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ps .nm small{font-size:11.5px;color:#5b6b88;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ps .nm small i{font-style:normal;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;color:#244c9c}
+.ps .am{flex:none;min-width:72px;text-align:right;font-weight:800;color:#025ac6;font-variant-numeric:tabular-nums}
+.ps button{flex:none;height:30px;padding:0 14px;border-radius:999px;border:0;color:#fff;font:800 12.5px Inter,system-ui,sans-serif;cursor:pointer;
+  background:linear-gradient(180deg,#1f74e0,#025ac6);box-shadow:0 3px 8px rgba(2,90,198,.3);transition:transform .1s}
+.ps button:active{transform:scale(.96)}
+.ps button:disabled{opacity:.55;box-shadow:none}
+.ps-card{border-color:#c7d7f5 !important;background:linear-gradient(180deg,#f5f8fe,#fff 60px)}
+.ps-card .ps-h{height:auto;margin:0 0 6px;font-size:13px}
+.ps-card .ps{height:auto;padding:9px 0;border-top:1px solid #e8eef8}
+.ps-card .ps button{height:36px;padding:0 16px;font-size:13.5px}
+.ps-note{font-size:11.5px;color:#5b6b88;margin:2px 0 8px}
 .paper .wl-old{height:40px;border:0;background:none;padding:0;font:700 12.5px Inter,system-ui,sans-serif;color:#966500;cursor:pointer}
 .nb-back{display:inline-flex;align-items:center;height:36px;padding:0 12px;margin:2px 0 10px;border:0;border-radius:10px;background:#fff;color:#0f2a5c;font:800 13px Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(17,24,39,.08);cursor:pointer}
 .nb-go{border-radius:14px}
@@ -2782,14 +2802,22 @@ $('laysw').addEventListener('click', e => {
   nbEnter();
 });
 
+const psInit = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+const psRow = (x, attr) => `<div class="ps"><span class="av">${esc(psInit(x.name))}</span>
+  <span class="nm"><b>${esc(x.name)}</b><small>${x.or ? 'OR <i>' + esc(x.or) + '</i>' : 'no OR written'}${x.collector ? ' · via ' + esc(x.collector) : ''}</small></span>
+  <span class="am">${peso(x.amt)}</span><button type="button" ${attr}>＋ Add</button></div>`;
+/* one payment from the payment sheet = one thing to add */
+function sheetItem(date, it){
+  return { type:'sheet', who:'Payment sheet', date, amt:Number(it.amount), ids:[it.id], n:1, name:it.name || '?', or:it.or || '', collector:it.collector || '',
+    title:`Payment sheet · ${it.name || '?'}`, sub:[it.or ? 'OR ' + it.or : 'no OR', it.collector ? 'via ' + it.collector : ''].filter(Boolean).join(' · ') };
+}
 /* hand-ins waiting from the apps */
 function nbPending(){
   const items = [], upTo = workDate();
+  // v2.9: one item per payment — the office adds only the ones it actually received
   ((S.sheet && S.sheet.days) || []).forEach(dd => {
     if (dd.date > upTo) return;
-    const names = (dd.items || []).map(i => i.name).filter(Boolean);
-    items.push({ type:'sheet', who:'Payment sheet', date:dd.date, amt:Number(dd.total), ids:(dd.items || []).map(i => i.id), n:dd.n,
-      sub:`${dLabel(dd.date)} · ${dd.n} cash payment${dd.n === 1 ? '' : 's'}: ${names.slice(0, 4).join(', ')}${names.length > 4 ? ' +' + (names.length - 4) + ' more' : ''}` });
+    (dd.items || []).forEach(it => items.push(sheetItem(dd.date, it)));
   });
   ((S.coll && S.coll.collectors) || []).forEach(c => {
     const days = (c.open_days || []).filter(d => d.date <= upTo), v = days.reduce((s, d) => s + Number(d.vendos || 0), 0);
@@ -2812,10 +2840,7 @@ function nbPending(){
 
 function nbDayItems(d){
   const out = [];
-  ((S.sheet && S.sheet.days) || []).forEach(dd => { if (dd.date === d) {
-    const names = (dd.items || []).map(i => i.name).filter(Boolean);
-    out.push({ type:'sheet', date:d, amt:Number(dd.total), n:dd.n, ids:(dd.items || []).map(i => i.id), title:'Payment sheet', sub:`${dd.n} cash payment${dd.n === 1 ? '' : 's'}: ${names.slice(0, 3).join(', ')}${names.length > 3 ? ' +' + (names.length - 3) : ''}` });
-  }});
+  ((S.sheet && S.sheet.days) || []).forEach(dd => { if (dd.date === d) (dd.items || []).forEach(it => out.push(sheetItem(d, it))); });
   ((S.coll && S.coll.collectors) || []).forEach(c => (c.open_days || []).forEach(od => { if (od.date === d && Number(od.pending) > 0)
     out.push({ type:'harvest', who:c.collector, date:d, amt:Number(od.pending), title:`${c.collector} harvest`, sub:`${od.vendos} vendo${od.vendos === 1 ? '' : 's'} · Spawn Harvest` }); }));
   ((S.scash && S.scash.collectors) || []).forEach(c => { const its = (c.items || []).filter(i => i.date === d); if (its.length)
@@ -2965,7 +2990,11 @@ function renderNote(){
       <div class="hd">Balance: <small>MONEY IN</small></div>
       ${opening ? line(opening, false) : `<button type="button" class="ln cfrom" data-carry="1" aria-expanded="${NB.carryOpen ? 'true' : 'false'}"><b class="zero">${Number(carried).toLocaleString('en-PH')}</b><span>— Carried from before <small>${NB.carryOpen ? '▾ hide' : '▸ tap to see where it came from'}</small></span></button>${NB.carryOpen ? carryHtml() : ''}`}
       ${ins.map(e => line(e, false)).join('')}${derivedIn.map(e => line(e, false)).join('')}
-      ${dayItems.length && !(lock && lock.locked_at) ? `<div class="wl-wrap"><div class="wl-h">⏳ STILL TO ADD FOR THIS DAY <em>· tap to add</em></div>${dayItems.map((x, i) => `<div class="wl"><b>+ ${Number(x.amt).toLocaleString('en-PH')}</b><span>— ${esc(x.title)} <small>${esc(x.sub)}</small></span><button type="button" class="${x.type === 'sheet' ? 'blue' : ''}" data-wi="${i}">${x.type === 'sheet' ? 'Add' : 'Count'}</button></div>`).join('')}</div>` : ''}
+      ${(() => { if (!dayItems.length || (lock && lock.locked_at)) return '';
+        const sh = dayItems.map((x, i) => [x, i]).filter(([x]) => x.type === 'sheet'), ot = dayItems.map((x, i) => [x, i]).filter(([x]) => x.type !== 'sheet');
+        const sTot = sh.reduce((s, [x]) => s + Number(x.amt), 0);
+        return (sh.length ? `<div class="ps-wrap"><div class="ps-h">📄 PAYMENT SHEET <em>· add only what the office received</em><span class="ps-sum">${sh.length} · ${peso(sTot)}</span></div>${sh.map(([x, i]) => psRow(x, `data-wi="${i}"`)).join('')}</div>` : '')
+          + (ot.length ? `<div class="wl-wrap"><div class="wl-h">⏳ STILL TO ADD FOR THIS DAY <em>· tap to count</em></div>${ot.map(([x, i]) => `<div class="wl"><b>+ ${Number(x.amt).toLocaleString('en-PH')}</b><span>— ${esc(x.title)} <small>${esc(x.sub)}</small></span><button type="button" data-wi="${i}">Count</button></div>`).join('')}</div>` : ''); })()}
       ${olderN && !(lock && lock.locked_at) ? `<button type="button" class="wl-old" id="nb-older">⏳ ${olderN} from earlier days still to add →</button>` : ''}
       <div class="tot"><span>₱${box1.toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
       <div class="hd">Expenses: <small>MONEY OUT</small></div>
@@ -3110,9 +3139,10 @@ function nbRenderCol(){
     <button type="button" class="nb-back" data-back="1">‹ Back to the logbook</button>
     <div style="font-size:13px;color:#6b7280;margin:4px 2px 10px">${workDate() === todayPH() ? 'Hand-ins sent by the apps.' : `<b style="color:#966500">For the page of ${dLabel(workDate())}</b> · showing what came in up to that day.`} Count or add them, and they are written in the logbook by themselves.</div>
     ${items.length ? items.map((x, i) => x.type === 'sheet'
-      ? `<div class="nb-card" style="border-color:#c7d2fe"><div class="nb-item"><div class="t"><b>📄 Payment sheet · ${dLabel(x.date)}</b><small>${esc(x.sub)}</small></div>
-          <div class="a"><small>cash already received</small><b style="color:#025ac6">${peso(x.amt)}</b></div></div>
-          <button type="button" class="nb-go" style="width:100%;margin-top:8px;background:linear-gradient(180deg,#1f74e0,#025ac6)" data-pend="${i}">Add to the book · ${dLabel(x.date)}</button></div>`
+      ? (() => { const first = i === 0 || items[i - 1].type !== 'sheet' || items[i - 1].date !== x.date, last = i === items.length - 1 || items[i + 1].type !== 'sheet' || items[i + 1].date !== x.date;
+          const day = items.filter(y => y.type === 'sheet' && y.date === x.date), dTot = day.reduce((s, y) => s + Number(y.amt), 0);
+          return (first ? `<div class="nb-card ps-card"><div class="ps-h">📄 Payment sheet · ${dLabel(x.date)}<span class="ps-sum">${day.length} · ${peso(dTot)}</span></div><div class="ps-note">Cash payments typed in the sheet. Tap <b>＋ Add</b> only for the ones the office received.</div>` : '')
+            + psRow(x, `data-pend="${i}"`) + (last ? '</div>' : ''); })()
       : `<div class="nb-card"><div class="nb-item"><div class="t"><b>${x.type === 'harvest' ? '🪙 ' : '📶 '}${esc(x.who)} · ${x.type === 'harvest' ? 'harvest' : 'subscribers'}</b><small>${esc(x.sub)}</small></div>
       <div class="a"><small>should hand in</small><b>${peso(x.amt)}</b></div></div>
       <button type="button" class="nb-go" style="width:100%;margin-top:8px" data-pend="${i}">Count the money</button></div>`).join('')
@@ -3129,17 +3159,17 @@ function nbRenderCol(){
 }
 
 async function nbAddSheet(x, btn){
-  const names = ((S.sheet.days || []).find(d => d.date === x.date) || { items:[] }).items.map(i => `${i.name} ${peso(i.amount)}${i.or ? ' · OR ' + i.or : ''}`).join('\n');
-  if (!confirm(`Add ${peso(x.amt)} to ${dLabel(x.date)}?\n\nCash payments already in the payment sheet:\n${names}\n\nThey go in once — they can't be added twice.`)) return;
+  if (!confirm(`Add ${peso(x.amt)} to ${dLabel(x.date)}?\n\n${x.name}${x.or ? ' · OR ' + x.or : ''}${x.collector ? '\nvia ' + x.collector : ''}\n\nAdd it only if the office received this cash. It goes in once — it can't be added twice.`)) return;
+  const label = btn.textContent;
   btn.disabled = true; btn.textContent = 'Adding…';
   try {
     const r = await rpc('fin_sheet_cash_receive', { p_pin:S.pin, p_client_id:uuid(), p_ids:x.ids, p_date:x.date });
     if (r && r.ok === false) throw new Error(r.error || 'not added');
-    toast(`✓ ${peso(x.amt)} written on ${dLabel(x.date)}`);
+    toast(`✓ ${x.name} ${peso(x.amt)} written on ${dLabel(x.date)}`);
     const fromPage = !!btn.closest('#nb-paper'); await refresh(); NB.tab = fromPage ? 'book' : 'col'; renderNote();
   } catch (e) {
     toast(/already_in_book/.test(e.message) ? 'Already in the book.' : /day_locked/.test(e.message) ? `${dLabel(x.date)} is closed. Ask Sir Wendell to open it.` : e.message, 4000);
-    btn.disabled = false; btn.textContent = 'Add to the book · ' + dLabel(x.date);
+    btn.disabled = false; btn.textContent = label;
   }
 }
 const NB_ST = { covered:['Office covered','#475569','#f1f5f9'], charged:['Charged · not yet paid','#b91c1c','#fee2e2'], paid:['Charged · paid back ✓','#027e60','#e7f6f1'], found:['Found later ✓','#027e60','#e7f6f1'], over:['Over','#966500','#fff1cc'] };
