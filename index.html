@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v3.0 · 2026-10-15 · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v3.0 · 2026-10-15 · bookmark = newest line in the book · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -2867,8 +2867,8 @@ function renderNote(){
   const all = [...B.entries].sort((a, b) => a.entered_at < b.entered_at ? -1 : 1);
   const lastE = all[all.length - 1];
   if (lastE) { if (NB.maxId != null && lastE.id > NB.maxId) nbRemember(lastE); NB.maxId = lastE.id; }
-  const markId = nbLastKey() ? Number(nbLastKey()) : (lastE ? lastE.id : null);
-  const markE = all.find(e => e.id === markId) || lastE;
+  // bookmark = the newest line in the book, whoever wrote it and on whichever phone/computer
+  const markE = lastE;
   const ins = entries.filter(e => Number(e.signed_amount) >= 0 && e.kind !== 'opening'), outs = entries.filter(e => Number(e.signed_amount) < 0);
   const split = entries.filter(e => e.kind === 'collection' && e.short_over != null && Number(e.short_over) !== 0);
   const derivedOut = split.filter(e => Number(e.short_over) < 0).map(e => ({ ...e, _short:true, signed_amount:Number(e.short_over) }));
