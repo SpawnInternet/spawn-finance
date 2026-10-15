@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v2.8 · 2026-10-14 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1195,6 +1195,7 @@ function renderSheet(){
       h += `<div class="two">${money('f-le', 'Less expense', F.le ?? '')}${money('f-lb', 'Less bugi', F.lb ?? '')}</div>`;
       h += money('f-amt', 'Cash counted from collector', F.amt ?? '');
       h += `<div class="calc" id="calc"></div>`;
+      h += `<div class="f"><label for="f-snote">If short or over: where / why <small style="font-weight:600;color:var(--muted)">(goes to the Shorts list)</small></label><input id="f-snote" autocomplete="off" placeholder="e.g. 1 pack ₱1K kulang ₱35" value="${esc(F.snote || '')}"></div>`;
     } else if (F.mode === 'office_collection') {
       F.pv = F.pv || 'cash'; F.cv = F.cv || 'cash';
       if (!F.free) {
@@ -1471,7 +1472,7 @@ function keep(){ // remember typed values when switching modes
   const F = S.form; if (!F) return;
   const map = { 'f-amt':'amt','f-ht':'ht','f-le':'le','f-lb':'lb','f-memo':'memo','f-party':'party','f-bank':'bank','f-ref':'ref','f-cf':'cf','f-ct':'ct','f-by':'by','f-p5':'p5','f-p1':'p1','f-bills':'bills','f-loose':'loose','f-area':'area','f-q':'q',
     'f-cust':'cust','f-bill':'bill','f-gave':'gave','f-gref':'gref','f-part':'part','f-qty':'qty','f-unit':'unit','f-taker':'taker','f-purpose':'purpose','f-jo':'jo',
-    'f-gadj':'gadj','f-gmemo':'gmemo','f-or':'or','f-sq':'sq','f-dq':'dq','f-ddays':'ddays','f-dreason':'dreason','f-dym':'dym','f-pym':'pym','f-pother':'pother','f-pnote':'pnote' };
+    'f-gadj':'gadj','f-gmemo':'gmemo','f-snote':'snote','f-or':'or','f-sq':'sq','f-dq':'dq','f-ddays':'ddays','f-dreason':'dreason','f-dym':'dym','f-pym':'pym','f-pother':'pother','f-pnote':'pnote' };
   for (const [id, k] of Object.entries(map)) if ($(id)) F[k] = $(id).value;
 }
 
@@ -1698,6 +1699,7 @@ async function submit(btn, next){
         Object.assign(det, { collector:F.collector, area:(S.look.collectors.find(c => c.name === F.collector) || {}).area || null });
         if (v('f-ht')) Object.assign(det, { harvest_total:num(v('f-ht')), less_expense:num(v('f-le')), less_bugi:num(v('f-lb')) });
         if (F.recon) det.recon_id = F.recon.id;
+        if (v('f-snote')) det.memo = v('f-snote');
       } else {
         if (v('f-party')) det.party = v('f-party');
         if (v('f-memo')) det.memo = v('f-memo');
@@ -2819,7 +2821,12 @@ function nbTitle(e){
     case 'bugi_found': return ['Bugi found', e.collector ? esc(e.collector) + ' hand-in' : ''];
     case 'sukli_out': return ['Sukli given', m];
     case 'gcash_cashout': return ['GCash → cash', m];
-    case 'adjust_in': return ['Over', m]; case 'adjust_out': return ['Short', m];
+    case 'adjust_in': {
+      if (e.category === 'Short paid back') return [`${p} paid back short`, m];
+      if (e.category === 'Short found') return [`Short found · ${p}`, m];
+      return [`Over · ${p || '?'}`, (m || '').replace(' — ', ' · ')];
+    }
+    case 'adjust_out': return [`Short · ${p || '?'}`, (m || '').replace(' — ', ' · ')];
     case 'other_in': return [m || 'Other cash in', p]; case 'other_out': return [m || 'Other cash out', p];
   }
   return lineText(e);
@@ -2831,6 +2838,7 @@ function renderNote(){
   $('nb-bar').classList.toggle('hide', NB.tab !== 'book');
   if (NB.tab === 'col') return nbRenderCol();
   if (NB.tab === 'more') return nbRenderMore();
+  if (NB.tab === 'shorts') return nbRenderShorts();
   const d = workDate(), t = todayPH(), mn = minWorkDate();
   const entries = B.entries.filter(e => e.entry_date === d).sort((a, b) => a.entered_at < b.entered_at ? -1 : 1);
   const voided = (B.voided || []).filter(e => e.entry_date === d);
@@ -2842,16 +2850,24 @@ function renderNote(){
   const markId = nbLastKey() ? Number(nbLastKey()) : (lastE ? lastE.id : null);
   const markE = all.find(e => e.id === markId) || lastE;
   const ins = entries.filter(e => Number(e.signed_amount) >= 0 && e.kind !== 'opening'), outs = entries.filter(e => Number(e.signed_amount) < 0);
+  const split = entries.filter(e => e.kind === 'collection' && e.short_over != null && Number(e.short_over) !== 0);
+  const derivedOut = split.filter(e => Number(e.short_over) < 0).map(e => ({ ...e, _short:true, signed_amount:Number(e.short_over) }));
+  const derivedIn = split.filter(e => Number(e.short_over) > 0).map(e => ({ ...e, _over:true, signed_amount:Number(e.short_over) }));
   const opening = entries.find(e => e.kind === 'opening');
   const carried = opening ? Number(opening.amount) : balanceAt(addDays(d, -1));
-  const inT = ins.reduce((s, e) => s + Number(e.signed_amount), 0), outT = outs.reduce((s, e) => s - Number(e.signed_amount), 0);
+  const inT = ins.reduce((s, e) => s + Number(e.signed_amount), 0) - split.reduce((s, e) => s + Number(e.short_over), 0) + derivedIn.reduce((s, e) => s + Number(e.signed_amount), 0),
+        outT = outs.reduce((s, e) => s - Number(e.signed_amount), 0) - derivedOut.reduce((s, e) => s + Number(e.signed_amount), 0);
   const box1 = carried + inT, endBal = balanceAt(d);
   const pend = nbPending(), dayItems = nbDayItems(d);
   const olderN = pend.filter(x => x.type === 'sheet' ? x.date < d : false).length;
   const line = (e, isVoid) => {
-    const [title, sub] = nbTitle(e), s = Number(e.signed_amount);
+    let [title, sub] = nbTitle(e), s = Number(e.signed_amount);
+    if (e.kind === 'collection' && !e._short && !e._over && e.short_over != null && Number(e.short_over) !== 0) { s = Number(e.amount) - Number(e.short_over); sub = sub.replace(/ · (short|over) ₱[\d,.]+/, ''); }
+    if (e._short) { title = `Short · ${esc(e.collector || '?')}`; sub = 'harvest hand-in' + (e.memo ? ' · ' + esc(e.memo) : '') + ' · office covered'; }
+    if (e._over) { title = `Over · ${esc(e.collector || '?')}`; sub = 'harvest hand-in' + (e.memo ? ' · ' + esc(e.memo) : ''); }
     const amt = (s > 0 ? '+ ' : s < 0 ? '− ' : '') + Number(Math.abs(s)).toLocaleString('en-PH', {maximumFractionDigits:2});
-    return `<button type="button" class="ln ${isVoid ? 'void' : ''} ${markE && e.id === markE.id && !isVoid ? 'mark' : ''}" data-e="${e.id}"><b class="${s > 0 ? 'in' : s < 0 ? 'out' : 'zero'}">${amt}</b><span>— ${title}${sub ? ' <small>' + sub + '</small>' : ''}${isVoid ? ' <small>· voided</small>' : ''}</span></button>`;
+    const isShort = e._short || e._over || /^(adjust_out|adjust_in)$/.test(e.kind) && /Short|Over/.test(e.category || '');
+    return `<button type="button" class="ln ${isVoid ? 'void' : ''} ${markE && e.id === markE.id && !isVoid && !e._short && !e._over ? 'mark' : ''}" ${isShort && !isVoid ? 'data-short="1"' : `data-e="${e.id}"`}><b class="${s > 0 ? 'in' : s < 0 ? 'out' : 'zero'}">${amt}</b><span>— ${title}${sub ? ' <small>' + sub + '</small>' : ''}${isVoid ? ' <small>· voided</small>' : ''}</span></button>`;
   };
   const cnt = c => {
     const diff = Number(c.difference), rows = [[c.packs_5, '₱5 coins'], [c.packs_1, '₱1 coins'], [c.bills, 'cash'], [c.loose, "wala'"]].filter(x => Number(x[0]) > 0);
@@ -2876,14 +2892,14 @@ function renderNote(){
       <div class="tot now"><small>${d === t ? 'CASH IN DRAWER SHOULD BE' : 'BALANCE END OF THIS DAY'}</small><span>₱${Number(d === t ? B.balance_now : endBal).toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
       <div class="hd">Balance: <small>MONEY IN</small></div>
       ${opening ? line(opening, false) : `<div class="ln"><b class="zero">${Number(carried).toLocaleString('en-PH')}</b><span>— Carried from before</span></div>`}
-      ${ins.map(e => line(e, false)).join('')}
+      ${ins.map(e => line(e, false)).join('')}${derivedIn.map(e => line(e, false)).join('')}
       ${dayItems.length && !(lock && lock.locked_at) ? `<div class="wl-wrap"><div class="wl-h">⏳ STILL TO ADD FOR THIS DAY <em>· tap to add</em></div>${dayItems.map((x, i) => `<div class="wl"><b>+ ${Number(x.amt).toLocaleString('en-PH')}</b><span>— ${esc(x.title)} <small>${esc(x.sub)}</small></span><button type="button" class="${x.type === 'sheet' ? 'blue' : ''}" data-wi="${i}">${x.type === 'sheet' ? 'Add' : 'Count'}</button></div>`).join('')}</div>` : ''}
       ${olderN && !(lock && lock.locked_at) ? `<button type="button" class="wl-old" id="nb-older">⏳ ${olderN} from earlier days still to add →</button>` : ''}
       <div class="tot"><span>₱${box1.toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
       <div class="hd">Expenses: <small>MONEY OUT</small></div>
-      ${outs.map(e => line(e, false)).join('')}
+      ${outs.map(e => line(e, false)).join('')}${derivedOut.map(e => line(e, false)).join('')}
       ${voided.map(e => line(e, true)).join('')}
-      ${!outs.length && !voided.length ? '<div class="ln"><b class="zero">0</b><span>— none yet</span></div>' : ''}
+      ${!outs.length && !voided.length && !derivedOut.length ? '<div class="ln"><b class="zero">0</b><span>— none yet</span></div>' : ''}
       <div class="tot big"><small>left in the drawer →</small><span>₱${Number(endBal).toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
       ${counts.map(cnt).join('')}
     </div>
@@ -2902,6 +2918,7 @@ function renderNote(){
 }
 $('nb-wrap').addEventListener('click', e => {
   if (e.target.closest('[data-back]')) { NB.tab = 'book'; renderNote(); return; }
+  const sh = e.target.closest('[data-short]'); if (sh) { NB.tab = 'shorts'; renderNote(); return; }
   const l = e.target.closest('[data-e]'), c = e.target.closest('[data-c]');
   if (l) openDetail('e', +l.dataset.e); else if (c) openDetail('c', +c.dataset.c);
 });
@@ -2945,11 +2962,50 @@ async function nbAddSheet(x, btn){
     btn.disabled = false; btn.textContent = 'Add to the book · ' + dLabel(x.date);
   }
 }
+const NB_ST = { covered:['Office covered','#475569','#f1f5f9'], charged:['Charged · not yet paid','#b91c1c','#fee2e2'], paid:['Charged · paid back ✓','#027e60','#e7f6f1'], found:['Found later ✓','#027e60','#e7f6f1'], over:['Over','#966500','#fff1cc'] };
+async function nbRenderShorts(){
+  const W = $('nb-wrap'); $('nb-bar').classList.add('hide');
+  const from = (NB.shFrom = NB.shFrom || todayPH().slice(0, 7) + '-01');
+  W.innerHTML = '<button type="button" class="nb-back" data-back="1">‹ Back to the logbook</button><div class="nb-card">Loading shorts…</div>';
+  let L; try { L = await rpc('fin_shorts_list', { p_pin:S.pin, p_from:from }); } catch (e) { W.innerHTML = `<button type="button" class="nb-back" data-back="1">‹ Back to the logbook</button><div class="nb-card">${esc(e.message)}</div>`; return; }
+  if (NB.tab !== 'shorts') return;
+  const rows = L.rows || [], people = L.people || [];
+  const mLbl = new Date(from + 'T12:00:00').toLocaleDateString('en-PH', { month:'long', year:'numeric' });
+  const tot = rows.filter(r => r.dir === 'short').reduce((s, r) => s + Number(r.amount), 0);
+  W.innerHTML = `<button type="button" class="nb-back" data-back="1">‹ Back to the logbook</button>
+    <div class="nb-card"><div style="display:flex;align-items:center;gap:8px"><button type="button" class="nb-back" style="margin:0" id="sh-prev">◀</button><h4 style="flex:1;margin:0;text-align:center">📉 Shorts · ${esc(mLbl)}</h4><button type="button" class="nb-back" style="margin:0" id="sh-next">▶</button></div>
+      <div style="font-size:12.5px;color:#64748b;margin-top:6px">A short is minus from the cash on hand (the office covers it). Change it to <b>Charge to collector</b> only when needed.</div>
+      <div style="display:flex;justify-content:space-between;margin-top:8px;font-weight:800"><span>Total short</span><span style="color:#c2142f">−${peso(tot)}</span></div></div>
+    ${people.length ? `<div class="nb-card"><h4>Per person</h4>${people.map(p => `<div class="nb-item"><div class="t"><b>${esc(p.person)}</b><small>${p.n_short} short${p.n_short == 1 ? '' : 's'}${Number(p.over_total) ? ' · over ' + peso(p.over_total) : ''}</small></div><div class="a"><b style="color:#c2142f">−${peso(p.short_total)}</b>${Number(p.owed) ? `<small style="color:#b91c1c;font-weight:800">owes ${peso(p.owed)}</small>` : ''}</div></div>`).join('')}</div>` : ''}
+    <div class="nb-card"><h4>Every short and over</h4>${rows.length ? rows.map(r => { const st = NB_ST[r.status] || NB_ST.covered; return `<div class="nb-item" style="align-items:flex-start"><div class="t">
+        <b>${esc(r.person)} <span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:${st[2]};color:${st[1]}">${st[0]}</span></b>
+        <small>${dLabel(r.entry_date)} · ${esc(r.where_text || '')}${r.note ? ' · ' + esc(r.note) : ''}</small>
+        ${r.dir === 'short' && r.status !== 'paid' ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          ${r.status === 'covered' ? `<button type="button" class="nb-back" style="margin:0;color:#b91c1c" data-sact="charged" data-sid="${r.id}">Charge to ${esc(r.person)}</button>${r.kind === 'drawer' ? `<button type="button" class="nb-back" style="margin:0" data-sact="found" data-sid="${r.id}">Found later</button>` : ''}` : ''}
+          ${r.status === 'charged' ? `<button type="button" class="nb-go" style="height:36px" data-sact="pay" data-sid="${r.id}">${esc(r.person)} paid it back</button><button type="button" class="nb-back" style="margin:0" data-sact="covered" data-sid="${r.id}">Office covers it</button>` : ''}
+          ${r.status === 'found' && !r.payback_entry_id ? `<button type="button" class="nb-go" style="height:36px" data-sact="pay" data-sid="${r.id}">Put the found cash back</button>` : ''}
+        </div>` : ''}</div>
+      <div class="a"><b style="color:${r.dir === 'short' ? '#c2142f' : '#0f766e'}">${r.dir === 'short' ? '−' : '+'}${peso(r.amount)}</b></div></div>`; }).join('') : '<div style="color:#94a3b8;font-size:13px">No shorts this month 🎉</div>'}</div>`;
+  const mv = n => { const d = new Date(from + 'T12:00:00'); d.setMonth(d.getMonth() + n); NB.shFrom = d.toISOString().slice(0, 7) + '-01'; nbRenderShorts(); };
+  $('sh-prev').onclick = () => mv(-1); $('sh-next').onclick = () => mv(1);
+  W.querySelectorAll('[data-sact]').forEach(b => b.onclick = async () => {
+    const id = +b.dataset.sid, a = b.dataset.sact, r = rows.find(x => x.id === id);
+    const msg = a === 'charged' ? `Charge ${peso(r.amount)} to ${r.person}?\nIt shows as owed until ${r.person} pays it back.` : a === 'covered' ? `The office covers ${peso(r.amount)} (no charge to ${r.person})?` : a === 'found' ? `The ${peso(r.amount)} was found later?` : `${r.person} paid back ${peso(r.amount)} today?\nIt is written in today's logbook as money in.`;
+    if (!confirm(msg)) return;
+    b.disabled = true;
+    try {
+      if (a === 'pay') await rpc('fin_short_payback', { p_pin:S.pin, p_client_id:uuid(), p_id:id, p_date:todayPH() });
+      else await rpc('fin_short_set', { p_pin:S.pin, p_id:id, p_status:a, p_note:null });
+      toast('✓ Saved'); if (a === 'pay') await refresh(); nbRenderShorts();
+    } catch (e) { toast(e.message, 4000); b.disabled = false; }
+  });
+}
 function nbRenderMore(){
   const owed = (S.book.owed || []);
   $('nb-wrap').innerHTML = `
     <button type="button" class="nb-back" data-back="1">‹ Back to the logbook</button>
     <div class="nb-menu">
+      <button type="button" data-m="shorts" style="background:linear-gradient(135deg,#ef4444,#991b1b)"><b>📉 Shorts</b><span>Who was short, where, how much</span></button>
       <button type="button" data-m="advance" style="background:linear-gradient(135deg,#8b5cf6,#5b21b6)"><b>💸 Cash advance / c/o</b><span>Loans, c/o and repayments</span></button>
       <button type="button" data-m="bugi" style="background:linear-gradient(135deg,#f59e0b,#b45309)"><b>🪙 Bugi found</b><span>Old coins · box ${peso(S.book.bugi_total || 0)}</span></button>
       <button type="button" data-m="gcash" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)"><b>📱 GCash wallet</b><span>${S.gc ? 'Should have ' + pesoN(S.gc.closing_balance) : 'Wallet lines'}</span></button>
@@ -2964,13 +3020,14 @@ function nbRenderMore(){
     if (m === 'exp') { show('exp'); if (typeof drawSaved === 'function') drawSaved(); return; }
     if (m === 'match') { show('match'); loadMatch(); return; }
     if (m === 'bookv') { show('book'); renderBook(); return; }
+    if (m === 'shorts') { NB.tab = 'shorts'; renderNote(); return; }
     openSheet(m);
   });
 }
 
 /* ✏️ Write a line → the right sheet, already set to the kind */
-const NB_OUT = [['exp','Expense'],['co','C/O'],['ca','Cash advance'],['dep','Bank deposit'],['bugi','Bugi found'],['oth','Other cash out']];
-const NB_IN = [['office','Subscriber paid here'],['install','Installation fee'],['repay','CA paid back'],['sukli','Sukli back'],['gc','GCash → cash'],['othin','Other cash in']];
+const NB_OUT = [['exp','Expense'],['co','C/O'],['ca','Cash advance'],['dep','Bank deposit'],['short','Short (office covers)'],['bugi','Bugi found'],['oth','Other cash out']];
+const NB_IN = [['office','Subscriber paid here'],['install','Installation fee'],['repay','CA paid back'],['sukli','Sukli back'],['gc','GCash → cash'],['over','Over'],['othin','Other cash in']];
 let nbDir = 'out';
 function nbChoose(){
   const sh = $('nb-choose-sh');
@@ -2985,8 +3042,9 @@ function nbChoose(){
   sh.querySelectorAll('[data-dir]').forEach(b => b.onclick = () => { nbDir = b.dataset.dir; nbChoose(); });
   $('nb-choose-x').onclick = () => $('nb-choose').classList.remove('on');
   sh.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => {
-    $('nb-choose').classList.remove('on');
     const k = b.dataset.kind;
+    if (k === 'short' || k === 'over') return nbShortForm(k);
+    $('nb-choose').classList.remove('on');
     if (k === 'exp' || k === 'oth') openSheet('expense');
     else if (k === 'co') openSheet('advance', { mode:'co' });
     else if (k === 'ca') openSheet('advance', { mode:'advance' });
@@ -2998,6 +3056,33 @@ function nbChoose(){
     else if (k === 'gc') openSheet('collect', { mode:'gcash_cashout' });
     else openSheet('collect', { mode:'other_in' });
   });
+}
+function nbShortForm(k){
+  const sh = $('nb-choose-sh'), short = k === 'short', who = ((S.look && S.look.collectors) || []).map(c => c.name).concat((S.look && S.look.accounts) || []);
+  const inp = 'width:100%;box-sizing:border-box;height:46px;padding:0 12px;border:1.5px solid #c7d2fe;border-radius:12px;font:600 15px Inter,system-ui,sans-serif';
+  sh.innerHTML = `<div class="hdl"></div><h3>${short ? 'Short — the office covers it' : 'Over'}</h3>
+    <div class="lb">WHO</div><input id="ns-who" list="ns-who-l" placeholder="Collector or staff" style="${inp}"><datalist id="ns-who-l">${[...new Set(who)].map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+    <div class="lb" style="margin-top:10px">HOW MUCH</div><input id="ns-amt" inputmode="decimal" placeholder="₱" style="${inp};font-weight:800;font-size:17px">
+    <div class="lb" style="margin-top:10px">WHERE / WHY</div><input id="ns-why" placeholder="e.g. Oct 2 harvest · 1 pack ₱1K kulang" style="${inp}">
+    <div style="font-size:12px;color:#64748b;margin:8px 0">${short ? 'Written as a minus line on ' + dLabel(workDate()) + ' and added to 📉 Shorts as “Office covered”.' : 'Written as a plus line on ' + dLabel(workDate()) + '.'}</div>
+    <button type="button" id="ns-save" style="width:100%;height:50px;border-radius:14px;border:0;color:#fff;font:800 16px Inter,system-ui,sans-serif;background:${short ? 'linear-gradient(180deg,#ef4444,#c2142f)' : 'linear-gradient(180deg,#16b386,#00a878)'};cursor:pointer">Write it</button>
+    <button type="button" class="cancel" id="nb-choose-x" style="margin-top:8px">Cancel</button>`;
+  $('nb-choose').classList.add('on');
+  setTimeout(() => $('ns-who').focus(), 50);
+  $('nb-choose-x').onclick = () => $('nb-choose').classList.remove('on');
+  const ids = ['ns-who', 'ns-amt', 'ns-why'];
+  ids.forEach((id, i) => $(id).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); i < 2 ? $(ids[i + 1]).focus() : $('ns-save').click(); } if (e.key === 'ArrowUp' && i) { e.preventDefault(); $(ids[i - 1]).focus(); } }));
+  $('ns-save').onclick = async () => {
+    const w = $('ns-who').value.trim(), a = Number(String($('ns-amt').value).replace(/[^0-9.]/g, '')), why = $('ns-why').value.trim();
+    if (!w || !a) return toast('Type who and how much');
+    $('ns-save').disabled = true;
+    try {
+      const r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:uuid(), p_kind:short ? 'adjust_out' : 'adjust_in', p_amount:a, p_entry_date:workDate(),
+        p_detail:{ party:w, category:short ? 'Short' : 'Over', memo:(why ? 'Written by hand — ' + why : 'Written by hand') } });
+      if (r && r.ok === false) throw new Error(r.error);
+      $('nb-choose').classList.remove('on'); toast(`✓ ${short ? 'Short' : 'Over'} ${peso(a)} · ${w}`); await refresh(); renderNote();
+    } catch (e) { toast(e.message, 4000); $('ns-save').disabled = false; }
+  };
 }
 $('nb-choose').addEventListener('click', e => { if (e.target.id === 'nb-choose') $('nb-choose').classList.remove('on'); });
 $('nb-write').addEventListener('click', () => { if (!S.book) return toast('Still loading. Try again in a moment.'); nbChoose(); });
