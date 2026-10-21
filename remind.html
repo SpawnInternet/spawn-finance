@@ -265,11 +265,12 @@ function autoHtml(L, d, t){
   let h = `<div class="mode ${esc(mode)}">${banner}</div>`;
   if (nTests) h += `<div class="note"><button type="button" class="linkbtn" id="tests">${S.showTests ? 'Hide' : 'Show'} test texts (${nTests})</button></div>`;
   if (!R.length) {
-    const n = L.send.length;   // people with a number, not yet texted / paid / promised
-    h += mode === 'off' ? '' : d >= t
-      ? `<div class="note">${n ? `<b>${n}</b> ${n === 1 ? 'person' : 'people'} on this day's list will be texted automatically` : 'Nobody on this day\'s list to text'}${d === t ? ' — the list is queued at 08:05 each morning' : ' at 08:05 that morning'} (between ${esc(A.hours || '08:00-18:00')}).</div>`
-      : '';
-    return h + `<div class="empty"><b>No automatic texts for this day</b>${mode === 'off' ? 'Turn automatic texting on to use this.' : 'They show here once queued.'}</div>`;
+    // nothing queued yet for this day: show WHO is on the list (people with a number, not yet texted / paid / promised)
+    if (mode === 'off' || d < t) return h + `<div class="empty"><b>No automatic texts for this day</b>${mode === 'off' ? 'Turn automatic texting on to use this.' : ''}</div>`;
+    const n = L.send.length, nn = L.nonum.length;
+    h += `<div class="note">${n ? `<b>${n}</b> ${n === 1 ? 'person' : 'people'} will be texted automatically` : 'Nobody on this day\'s list to text'}${d === t ? ' — the list is queued at 08:05 each morning' : ' at 08:05 that morning'}${mode === 'dry_run' ? ' (test mode: to the test number only)' : ''}.${nn ? ` ${nn} more ${nn === 1 ? 'has' : 'have'} no number and will not be texted — see No number.` : ''}</div>`;
+    h += L.send.map(r => `<div class="dl"><div class="t"><b>${esc(r.name)}</b><small>${esc(WHY[r.intent] || r.intent || '')}${r.area ? ` · ${esc(r.area)}` : ''} · ${peso(r.total)}</small></div><span class="st queued">Coming up</span></div>`).join('');
+    return h;
   }
   h += `<div class="chips">${[['queued', c.queued], ['sent', c.sent], ['delivered', c.delivered], ['failed', c.failed], ['handled', c.skipped]]
     .map(([k, n]) => `<div class="chip"><b>${Number(n || 0)}</b><small>${ST[k]}</small></div>`).join('')}</div>`;
