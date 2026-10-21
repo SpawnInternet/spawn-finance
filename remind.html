@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#025AC6">
 <title>Spawn Remind</title>
+<link rel="manifest" href="remind.webmanifest">
+<link rel="icon" type="image/png" href="remind-icon-192.png">
+<link rel="apple-touch-icon" href="remind-apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Spawn Remind">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -199,13 +203,13 @@ async function key(k){
   dots(); $('perr').textContent = '';
   if (typed.length === 4) {
     const p = typed;
-    try { await load(p, null); S.pin = p; sessionStorage.setItem(SESS, JSON.stringify({ p, t:Date.now() })); show(); }
+    try { await load(p, null); S.pin = p; try { sessionStorage.setItem(SESS, JSON.stringify({ p, t:Date.now() })); } catch (x) {} show(); }   // storage may be blocked (private mode) — then just don't remember the PIN
     catch (e) { $('perr').textContent = e.message; typed = ''; dots(); }
   }
 }
 pad.addEventListener('click', e => { const b = e.target.closest('button'); if (b) key(b.dataset.k); });
 document.addEventListener('keydown', e => { if (!$('lock').classList.contains('hide')) { if (/^\d$/.test(e.key)) key(e.key); else if (e.key === 'Backspace') key('b'); } });
-function lock(msg){ S.pin = ''; typed = ''; dots(); sessionStorage.removeItem(SESS); $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
+function lock(msg){ S.pin = ''; typed = ''; dots(); try { sessionStorage.removeItem(SESS); } catch (x) {} $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
 $('out').onclick = () => lock();
 
 async function load(pin, date){
@@ -216,7 +220,8 @@ function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hid
 async function reload(){ try { await load(S.pin, S.date); render(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
 
 /* ── lists ── */
-const isDone = r => !!(r.sent || r.paid);
+const promised = r => !!(r.promise && r.promise.date >= S.date);   // open promise, date not yet passed
+const isDone = r => !!(r.sent || r.paid || promised(r));
 function lists(){
   const live = S.rows.filter(r => !isDone(r));
   return { send: live.filter(r => r.phone), nonum: live.filter(r => !r.phone), done: S.rows.filter(isDone) };
@@ -251,7 +256,7 @@ function render(){
           ${future ? '' : `<a class="btn send" style="display:grid;place-items:center;text-decoration:none" href="${esc(smsHref(r))}" data-act="sent">Text from this phone</a>`}
           <button type="button" class="btn" data-act="copy">Copy text</button>
           ${future ? '' : `<button type="button" class="btn" data-act="paid">Already paid</button>`}
-          ${r.intent === 'utang' && !future ? `<button type="button" class="btn" data-act="promise">Pay date</button>` : ''}
+          ${future ? '' : `<button type="button" class="btn" data-act="promise">Promised</button>`}
         </div>
         ${S.open === r.key + '|p' ? `<div class="pform"><input type="date" min="${t}" aria-label="Promised pay date"><button type="button" class="btn" data-act="psave">Save date</button></div>` : ''}
       </article>`).join('')
@@ -262,17 +267,17 @@ function render(){
     h += `<div class="note">Found their number? Save it and they move to To text. The number is kept for next time.</div>`;
     h += L.nonum.length ? L.nonum.map(r => `<article class="item" data-key="${esc(r.key)}">${head(r)}
         <div class="nform"><input type="tel" inputmode="tel" placeholder="09XX XXX XXXX" aria-label="Mobile number for ${esc(r.name)}"><button type="button" class="btn" data-act="phone">Save number</button></div>
-        ${future ? '' : `<div class="acts" style="margin-top:8px"><button type="button" class="btn" data-act="paid">Already paid</button>${r.intent === 'utang' ? `<button type="button" class="btn" data-act="promise">Pay date</button>` : ''}</div>`}
+        ${future ? '' : `<div class="acts" style="margin-top:8px"><button type="button" class="btn" data-act="paid">Already paid</button><button type="button" class="btn" data-act="promise">Promised</button></div>`}
         ${S.open === r.key + '|p' ? `<div class="pform"><input type="date" min="${t}" aria-label="Promised pay date"><button type="button" class="btn" data-act="psave">Save date</button></div>` : ''}
       </article>`).join('')
       : `<div class="empty"><b>Everyone has a number</b>Nothing to fill in for this day.</div>`;
   }
   if (S.tab === 'import' && S.imp) h += impHtml();
   if (S.tab === 'done') {
-    h += L.done.length ? L.done.map(r => `<div class="dl" data-key="${esc(r.key)}"><span class="ck ${r.paid ? 'p' : ''}">${r.paid ? '₱' : '✓'}</span>
-        <div class="t"><b>${esc(r.name)}</b><small>${r.paid ? `Marked already paid by ${esc(r.paid.by)} · ${tLabel(r.paid.at)}` : `Texted by ${esc(r.sent.by)} · ${tLabel(r.sent.at)}`}</small></div>
-        <button type="button" data-act="undo">Undo</button></div>`).join('')
-      : `<div class="empty"><b>Nothing done yet</b>Texts you send and people marked paid show here.</div>`;
+    h += L.done.length ? L.done.map(r => `<div class="dl" data-key="${esc(r.key)}"><span class="ck ${r.paid ? 'p' : ''}">${r.paid ? '₱' : r.sent ? '✓' : '⏳'}</span>
+        <div class="t"><b>${esc(r.name)}</b><small>${r.paid ? `Marked already paid by ${esc(r.paid.by)} · ${tLabel(r.paid.at)}` : r.sent ? `Texted by ${esc(r.sent.by)} · ${tLabel(r.sent.at)}` : `Promised to pay ${esc(dLabel(r.promise.date))}${r.promise.note ? ` · ${esc(r.promise.note)}` : ''}`}</small></div>
+        ${r.paid || r.sent ? '<button type="button" data-act="undo">Undo</button>' : ''}</div>`).join('')
+      : `<div class="empty"><b>Nothing done yet</b>Texts you send, people marked paid, and promises to pay show here.</div>`;
   }
   const sent = Number(S.stats.sent_14d || 0), paid = Number(S.stats.paid_14d || 0), all = sent + paid;
   if (S.tab !== 'import') h += `<div class="meter"><b>Last 14 days:</b> ${sent} texted · ${paid} were already paid${all ? ` (${Math.round(paid / all * 100)}%)` : ''}.<br>
@@ -304,7 +309,7 @@ $('list').addEventListener('click', async e => {
   if (act === 'psave') {
     const v = card.querySelector('.pform input').value;
     if (!v) { toast('Pick the date they promised'); return; }
-    return go('promise', { p_value:v }, `Pay date saved — ${dLabel(v)}. No utang reminder until then.`);
+    return go('promise', { p_value:v }, `Promise saved — ${dLabel(v)}. No reminder until then.`);
   }
   if (act === 'phone') {
     const v = card.querySelector('.nform input').value;
