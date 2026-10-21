@@ -316,7 +316,7 @@ function tagsOf(body){
   const s = String(body || '').toLowerCase(), digits = s.replace(/[\s-]/g, ''), T = [];
   const ref = (digits.match(/\d{13}/) || [])[0];
   if (ref || /\bref(erence)?\b/.test(s)) T.push(['ref', '💳 GCash ref' + (ref ? ' ' + ref : '')]);
-  if (/(wala|walay|no)\s*(internet|net|signal|connection|koneksyon)|hinay|slow|guba|offline|disconnect|di (ka|maka) ?connect|repair|ayo(ha|a)?\b|loading/.test(s)) T.push(['repair', '🔧 Repair']);
+  if (/(wala|walay|no)\s*(internet|net|signal|connection|koneksyon)|hinay|slow|guba|offline|disconnect|di (ka|maka) ?connect|repair|ayo(ha|a)?\b|loading|lineman|technician|teknisyan|install/.test(s)) T.push(['repair', '🔧 Repair / lineman']);
   if (/bayad na|nakabayad|nabayran|nabayaran|paid na|already paid|nagbayad/.test(s)) T.push(['paid', '✅ Says paid — check']);
   if (guessDate(s)) T.push(['promise', '📅 Date ' + dLabel(guessDate(s))]);
   if (/kinsa|who is|sino|unsa ni|asa ni gikan/.test(s)) T.push(['who', '❓ Who is this']);
