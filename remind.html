@@ -140,6 +140,16 @@ main{padding:4px 0 28px}
 .st.delivered{background:var(--done-l);color:var(--done)}.st.sent{background:var(--blue-l);color:var(--blue)}
 .st.failed{background:var(--utang-l);color:var(--utang)}.st.queued{background:var(--late-l);color:var(--late)}
 .linkbtn{color:var(--blue);font-weight:700;font-size:13.5px;padding:2px 0}
+/* Replies tab */
+.bubble.in{margin:10px 26px 4px 0;border-radius:18px 18px 18px 4px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
+.tg{padding:3px 9px;border-radius:999px;font-size:12.5px;font-weight:700;background:var(--line);color:var(--ink-2)}
+.tg.ref,.tg.paid{background:var(--done-l);color:var(--done)}.tg.repair{background:var(--utang-l);color:var(--utang)}
+.tg.promise{background:var(--blue-l);color:var(--blue)}.tg.who{background:var(--late-l);color:var(--late)}
+.sent{font-size:13px;color:var(--muted);margin:6px 0}
+.rform{margin-top:10px}.tpls{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.tpl{padding:6px 11px;border-radius:999px;font-size:13px;font-weight:700;background:var(--blue-l);color:var(--blue)}
+.rform textarea{width:100%;box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--paper);padding:10px 12px;font:inherit;font-size:15px;margin-bottom:8px;resize:vertical}
 .savebar{position:sticky;bottom:0;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--paper) 70%,transparent)}
 .savebar .btn{width:100%;height:50px;background:var(--blue);color:#fff;box-shadow:none;font-size:16px}
 .savebar .btn.ghost{background:transparent;color:var(--ink-2);height:40px;font-size:14px;margin-top:4px}
@@ -185,11 +195,13 @@ const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', { wee
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' }) : '';
 const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:'send', user:'', open:null, auto:null, showTests:false };
+const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null };
 
 function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
 const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 10 minutes.', not_on_list:'This person is no longer on the list — refresh.',
-  no_phone:'No number for this person yet.', bad_phone:'That is not a mobile number. Use 09XXXXXXXXX.', bad_date:'Pick a date from today on.' };
+  no_phone:'No number for this person yet.', bad_phone:'That is not a mobile number. Use 09XXXXXXXXX.', bad_date:'Pick a date from today on.',
+  sending_off:'Automatic texting is OFF — turn it on to send replies.', empty_text:'Type a reply first.', not_found:'This text is gone — refresh.',
+  no_subscriber:'This number is not matched to a subscriber — save their number first.' };
 async function rpc(fn, args){
   let res; try { res = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' }, body:JSON.stringify(args) }); }
   catch (e) { throw new Error('No signal — try again.'); }
@@ -226,9 +238,13 @@ async function load(pin, date){
   const r = await rpc('remind_board', { p_pin:pin, p_date:date });   // checks the PIN first
   // Auto texts breakdown: asked only after the PIN passed (a wrong PIN must count once), and optional —
   // if its database function is not there yet, the tab just stays hidden
-  const a = await rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null);
+  const [a, ib] = await Promise.all([
+    rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null),
+    rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Replies tab: hidden if missing
+  ]);
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
   S.auto = a; if (!a && S.tab === 'auto') S.tab = 'send';
+  S.inbox = ib; if (!ib && S.tab === 'replies') S.tab = 'send';
 }
 function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); }
 async function reload(){ try { await load(S.pin, S.date); render(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
@@ -250,7 +266,7 @@ function head(r){
 }
 /* Auto texts tab: what the automatic sender will send / has sent for this day */
 const ST = { queued:'Waiting', sent:'Sent', delivered:'Delivered', failed:'Failed', handled:'Skipped' };
-const WHY = { due_soon:'Due soon', late:'Late', utang:'Utang' };
+const WHY = { due_soon:'Due soon', late:'Late', utang:'Utang', reply:'Reply' };
 const SKIP = { stale_not_sent:'too late in the day — never sent late', off_list_before_send:'paid or off the list before sending',
   off_list_paid_or_promised_before_send:'paid or promised before sending', not_in_canary:'not on the trial list' };
 // test-mode texts (sent to the test number) are hidden unless "Show test texts" is on
@@ -279,6 +295,80 @@ function autoHtml(L, d, t){
       <span class="st ${esc(r.status)}">${esc(ST[r.status] || r.status)}</span></div>`).join('');
   return h;
 }
+/* Replies tab: texts that came in on the office SIM — sorted by what they look like, answered from here */
+const MON = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
+const isoD = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+function guessDate(text){   // "sa 25", "Oct 30", "30 oct", "10/30", "ugma", "karon" → YYYY-MM-DD (today or later), else ''
+  const s = ' ' + String(text || '').toLowerCase() + ' ', [ty, tm, td] = S.today.split('-').map(Number), today = new Date(ty, tm - 1, td);
+  const fwd = (m, d) => { let dt = new Date(ty, m, d); if (dt < today) dt = new Date(ty + 1, m, d); return dt.getDate() === d ? isoD(dt) : ''; };
+  let x;
+  if (/\bugma\b|\btomorrow\b/.test(s)) return isoD(new Date(ty, tm - 1, td + 1));
+  if (/\bkaron\b|\btoday\b|\bkaron dayon\b/.test(s)) return S.today;
+  if ((x = s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*(\d{1,2})\b/))) return fwd(MON[x[1]], +x[2]);
+  if ((x = s.match(/\b(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/))) return fwd(MON[x[2]], +x[1]);
+  if ((x = s.match(/\b(\d{1,2})\/(\d{1,2})\b/)) && +x[1] >= 1 && +x[1] <= 12) return fwd(+x[1] - 1, +x[2]);
+  if ((x = s.match(/\b(?:sa|on|petsa)\s+(\d{1,2})\b/)) && +x[1] >= 1 && +x[1] <= 31) {
+    const d = +x[1]; return d >= td ? fwd(tm - 1, d) : fwd(tm, d);
+  }
+  return '';
+}
+function tagsOf(body){
+  const s = String(body || '').toLowerCase(), digits = s.replace(/[\s-]/g, ''), T = [];
+  const ref = (digits.match(/\d{13}/) || [])[0];
+  if (ref || /\bref(erence)?\b/.test(s)) T.push(['ref', '💳 GCash ref' + (ref ? ' ' + ref : '')]);
+  if (/(wala|walay|no)\s*(internet|net|signal|connection|koneksyon)|hinay|slow|guba|offline|disconnect|di (ka|maka) ?connect|repair|ayo(ha|a)?\b|loading/.test(s)) T.push(['repair', '🔧 Repair']);
+  if (/bayad na|nakabayad|nabayran|nabayaran|paid na|already paid|nagbayad/.test(s)) T.push(['paid', '✅ Says paid — check']);
+  if (guessDate(s)) T.push(['promise', '📅 Date ' + dLabel(guessDate(s))]);
+  if (/kinsa|who is|sino|unsa ni|asa ni gikan/.test(s)) T.push(['who', '❓ Who is this']);
+  return T;
+}
+const TPL = {
+  who:'Maayong adlaw! Kini gikan sa Spawn Internet, ang inyong internet provider. Office: Lalawan, Dicayas, Dipolog. Para sa pangutana o bayad, tawag o text lang niining numeroa. Salamat!',
+  ref:'Salamat! Nadawat namo ang inyong reference. I-check namo ug i-record ang inyong bayad. — Spawn Internet',
+  paid:'Salamat! I-check namo ang inyong bayad ug i-update ang inyong account. — Spawn Internet',
+  repair:'Salamat sa pagpahibalo. Gilista na namo ang inyong koneksyon para sa among technician. — Spawn Internet',
+  promise:'Salamat! Na-record namo nga mobayad mo sa {date}. — Spawn Internet',
+};
+const TPLN = { who:'Who is this', ref:'Got the ref', paid:'Will check payment', repair:'Repair noted', promise:'Promise noted' };
+function repliesHtml(){
+  const I = S.inbox, rows = I.rows.filter(r => S.showHandled || r.status === 'received'), nDone = I.rows.filter(r => r.status !== 'received').length;
+  let h = `<div class="note">Texts to the office number (last 14 days). ${I.mode === 'off' ? '<b>Automatic texting is OFF — replies cannot be sent from here until it is on.</b>' : 'Replies go out from the office number within a minute (08:00–18:00).'}</div>`;
+  if (nDone) h += `<div class="note"><button type="button" class="linkbtn" data-ract="toggle">${S.showHandled ? 'Hide' : 'Show'} handled (${nDone})</button></div>`;
+  if (!rows.length) return h + `<div class="empty"><b>No new replies</b>New texts to the office number show here.</div>`;
+  return h + rows.map(r => {
+    const tg = tagsOf(r.body), open = r.status === 'received', gd = guessDate(r.body), ro = S.ropen;
+    return `<article class="item" data-mid="${r.id}"><div class="ih"><div class="nm"><b>${esc(r.name || r.from || 'Unknown')}</b><small>${r.name ? esc(r.area || '') + (r.from ? ' · ' + esc(r.from) : '') : 'Not matched to a subscriber'} · ${esc(dLabel(String(r.at).slice(0, 10)))} ${tLabel(r.at)}</small></div>
+        <span class="st ${open ? 'queued' : 'delivered'}">${open ? 'New' : 'Handled'}</span></div>
+      <div class="bubble in">${esc(r.body || '')}</div>
+      ${tg.length ? `<div class="tags">${tg.map(([k, l]) => `<span class="tg ${k}">${esc(l)}</span>`).join('')}</div>` : ''}
+      ${r.replies.map(x => `<div class="sent">You replied${x.by ? ' (' + esc(x.by) + ')' : ''}: “${esc(x.body)}” · ${esc(ST[x.status] || x.status)}</div>`).join('')}
+      ${!open ? `<div class="sent">${esc(r.done || 'Handled')}${r.done_by ? ' by ' + esc(r.done_by) : ''}</div><div class="acts"><button type="button" class="btn" data-ract="reopen">Reopen</button></div>`
+      : `<div class="acts"><button type="button" class="btn" data-ract="reply">Reply</button>${r.sub ? '<button type="button" class="btn" data-ract="promise">Promised</button>' : ''}<button type="button" class="btn" data-ract="handled">Handled</button></div>
+        ${ro === r.id + '|r' ? `<div class="rform"><div class="tpls">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-tpl="${k}">${TPLN[k]}</button>`).join('')}</div>
+          <textarea rows="4" maxlength="480" aria-label="Reply text" placeholder="Type a reply, or tap a ready answer above"></textarea>
+          <button type="button" class="btn send" data-ract="send">Send reply</button></div>` : ''}
+        ${ro === r.id + '|p' ? `<div class="pform"><input type="date" min="${S.today}" value="${gd}" aria-label="Promised pay date"><button type="button" class="btn" data-ract="psave">Save date</button></div>` : ''}`}
+    </article>`;
+  }).join('');
+}
+$('list').addEventListener('click', async e => {
+  const b = e.target.closest('[data-ract],[data-tpl]'); if (!b || !S.inbox) return;
+  if (b.dataset.ract === 'toggle') { S.showHandled = !S.showHandled; render(); return; }
+  const card = b.closest('[data-mid]'); if (!card) return;
+  const id = +card.dataset.mid, r = S.inbox.rows.find(x => x.id === id); if (!r) return;
+  if (b.dataset.tpl) { const ta = card.querySelector('textarea'); ta.value = TPL[b.dataset.tpl].replace('{date}', dLabel(guessDate(r.body))); ta.focus(); return; }
+  const a = b.dataset.ract;
+  if (a === 'reply' || a === 'promise') { S.ropen = S.ropen === id + (a === 'reply' ? '|r' : '|p') ? null : id + (a === 'reply' ? '|r' : '|p'); render(); return; }
+  const go = async (action, extra, ok) => {
+    b.disabled = true;
+    try { await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:action, ...extra }); toast(ok); S.ropen = null; await reload(); }
+    catch (x) { toast(x.message, 4000); b.disabled = false; }
+  };
+  if (a === 'send') { const t = card.querySelector('textarea').value.trim(); if (!t) { toast('Type a reply or tap a ready answer'); return; } return go('reply', { p_text:t }, 'Reply queued — goes out within a minute'); }
+  if (a === 'psave') { const v = card.querySelector('.pform input').value; if (!v) { toast('Pick the date they promised'); return; } return go('promise', { p_date:v }, `Promise saved — ${dLabel(v)}. No reminder until then.`); }
+  if (a === 'handled') return go('handled', {}, 'Marked handled');
+  if (a === 'reopen') return go('reopen', {}, 'Back to new');
+});
 function smsHref(r){ return `sms:${r.phone}${IOS ? '&' : '?'}body=${encodeURIComponent(r.body)}`; }
 
 function render(){
@@ -291,6 +381,7 @@ function render(){
   const T = [['send', 'To text', L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]];
   if (S.imp) T.push(['import', 'Contacts', S.imp.rows.filter(r => r.bucket !== 'none').length]);
   if (S.auto) T.push(['auto', 'Auto texts', autoRows().length]);
+  if (S.inbox) T.push(['replies', 'Replies', S.inbox.open]);
   $('tabs').innerHTML = T.map(([k, l, n]) => `<button type="button" class="${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-pressed="${S.tab === k}">${l}<em>${n}</em></button>`).join('');
   const box = $('list'), past = d < t, future = d > t;
   let h = '';
@@ -320,6 +411,7 @@ function render(){
   }
   if (S.tab === 'import' && S.imp) h += impHtml();
   if (S.tab === 'auto' && S.auto) h += autoHtml(L, d, t);
+  if (S.tab === 'replies' && S.inbox) h += repliesHtml();
   if (S.tab === 'done') {
     h += L.done.length ? L.done.map(r => `<div class="dl" data-key="${esc(r.key)}"><span class="ck ${r.paid ? 'p' : ''}">${r.paid ? '₱' : r.sent ? '✓' : '⏳'}</span>
         <div class="t"><b>${esc(r.name)}</b><small>${r.paid ? `Marked already paid by ${esc(r.paid.by)} · ${tLabel(r.paid.at)}` : r.sent ? `${r.sent.by ? `Texted by ${esc(r.sent.by)}` : 'Auto-texted'} · ${tLabel(r.sent.at)}` : `Promised to pay ${esc(dLabel(r.promise.date))}${r.promise.note ? ` · ${esc(r.promise.note)}` : ''}`}</small></div>
