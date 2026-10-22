@@ -65,6 +65,9 @@ main{padding:10px 0 60px}
 .btn{height:40px;padding:0 14px;border-radius:12px;font-weight:700;font-size:14px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset;display:inline-flex;align-items:center;text-decoration:none;color:var(--ink)}
 .btn.call{background:var(--blue);color:#fff;box-shadow:none}
 .btn.ok{background:var(--done);color:#fff;box-shadow:none}
+.rbox{margin-top:10px}.qk{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.tpl{padding:6px 11px;border-radius:999px;font-size:13px;font-weight:700;background:var(--blue-l);color:var(--blue)}
+.rbox textarea{width:100%;border-radius:12px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px;margin-bottom:8px;resize:vertical}
 .empty{text-align:center;padding:48px 16px;color:var(--ink-2)}.empty b{display:block;font-size:17px;color:var(--ink);margin-bottom:4px}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-size:14px;transition:transform .25s;max-width:90vw;z-index:9}
 #toast.on{transform:translateX(-50%) translateY(0)}
@@ -104,7 +107,15 @@ const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', { wee
 const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' }) : '';
 const phDay = ts => new Date(new Date(ts).getTime() + 8 * 3600e3).toISOString().slice(0, 10);
 const RESTART = 'Spawn Internet: Pasensya sa abala. Palihug i-off ang modem/router 1 minuto, dayon i-on. Kung wala gihapon human 10 minutos, tawag o text niining numeroa.';
-const S = { pin:'', rows:[], user:'', mode:'off', view:'open' };
+// ready answers for the Reply box (staff can edit before sending)
+const QUICK = [
+  ['Restart steps', RESTART],
+  ['Padala na ang lineman', 'Spawn Internet: Salamat sa pagpahibalo. Ipadala na namo ang among lineman karon. Tawagan mo namo sa dili pa moabot. Salamat!'],
+  ['Installer schedule', 'Spawn Internet: Salamat! Tawagan mo namo sa dili pa moabot ang installer. Palihug ipa-on ang inyong phone.'],
+  ['Gi-check pa', 'Spawn Internet: Salamat sa pagpahibalo. Among gi-check karon ang inyong koneksyon. Mo-update mi dayon.'],
+  ['Naayo na?', 'Spawn Internet: Naayo na ba ang inyong internet? Palihug reply-i mi. Salamat!'],
+];
+const S = { pin:'', rows:[], user:'', mode:'off', view:'open', open:null };
 
 function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
 const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 10 minutes.', sending_off:'Automatic texting is OFF — cannot send replies.', not_found:'This text is gone — refresh.' };
@@ -178,23 +189,32 @@ function render(){
       ${replies.map(x => `<div class="sent">💬 Gi-reply${x.by ? ' (' + esc(x.by) + ')' : ''}: “${esc(x.body)}”</div>`).join('')}
       ${!c.open ? `<div class="sent">✅ ${esc(c.last.done || 'Done')}${c.last.done_by ? ' · ' + esc(c.last.done_by) : ''}</div><div class="acts"><button type="button" class="btn" data-a="reopen">Reopen</button></div>`
         : `<div class="acts">${c.from ? `<a class="btn call" href="tel:${esc(c.from)}">📞 Call</a>` : ''}
-            ${S.mode !== 'off' && !replies.some(x => x.body === RESTART) ? '<button type="button" class="btn" data-a="restart">💬 Restart steps</button>' : ''}
-            <button type="button" class="btn ok" data-a="done">✅ Done — naayo na</button></div>`}
+            ${S.mode !== 'off' ? '<button type="button" class="btn" data-a="reply">💬 Reply</button>' : ''}
+            <button type="button" class="btn ok" data-a="done">✅ Done — naayo na</button></div>
+          ${S.open === c.last.id ? `<div class="rbox"><div class="qk">${QUICK.map(([l], i) => `<button type="button" class="tpl" data-q="${i}">${esc(l)}</button>`).join('')}</div>
+            <textarea rows="4" maxlength="480" placeholder="I-type ang reply, o pilia ang ready answer sa ibabaw" aria-label="Reply text"></textarea>
+            <button type="button" class="btn call" data-a="send">Send reply</button></div>` : ''}`}
     </div>`;
   }
   $('list').innerHTML = h;
 }
 $('bar').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) { S.view = b.dataset.view; render(); } });
 $('list').addEventListener('click', async e => {
+  const q = e.target.closest('[data-q]');
+  if (q) { const ta = q.closest('.card').querySelector('textarea'); ta.value = QUICK[+q.dataset.q][1]; ta.focus(); return; }
   const b = e.target.closest('[data-a]'); if (!b) return;
   const card = b.closest('[data-id]'), id = +card.dataset.id, open = card.dataset.open ? card.dataset.open.split(',').map(Number) : [];
+  if (b.dataset.a === 'reply') { S.open = S.open === id ? null : id; render(); const ta = $('list').querySelector(`[data-id="${id}"] textarea`); if (ta) ta.focus(); return; }
+  let text = '';
+  if (b.dataset.a === 'send') { text = card.querySelector('textarea').value.trim(); if (!text) { toast('I-type ang reply o pilia ang ready answer'); return; } }
   b.disabled = true;
   try {
-    if (b.dataset.a === 'restart') {
+    if (b.dataset.a === 'send' || b.dataset.a === 'restart') {
       // reply goes to the newest text; it also marks that text handled, so reopen it — the complaint stays open until Done
-      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reply', p_text:RESTART });
+      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reply', p_text:text || RESTART });
       await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reopen' });
-      toast('Restart steps sent — goes out within a minute');
+      S.open = null;
+      toast('Reply sent — goes out within a minute');
     } else if (b.dataset.a === 'done') {
       for (const m of open) await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:m, p_action:'handled' });
       toast('Done — marked fixed');
@@ -212,8 +232,8 @@ $('list').addEventListener('click', async e => {
     try { await load(x.p); S.pin = x.p; show(); } catch (e) { lock(); }
   }
 })();
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.pin) reload(); });
-setInterval(() => { if (!document.hidden && S.pin) reload(); }, 60000);   // new complaints show up by themselves
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.pin && !S.open) reload(); });
+setInterval(() => { if (!document.hidden && S.pin && !S.open) reload(); }, 60000);   // new complaints show up by themselves (not while typing a reply)
 </script>
 </body>
 </html>
