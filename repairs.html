@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#C8283C">
+<title>Spawn Repairs</title>
+<link rel="icon" type="image/png" href="remind-icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#025AC6; --blue-l:#E6EFFB; --red:#C8283C; --red-l:#FDE7EA;
+  --ink:#1E2B45; --ink-2:#4A5672; --muted:#7A859C;
+  --paper:#F3F6FB; --card:#FFFFFF; --line:#E1E7F0;
+  --done:#0F8A6B; --done-l:#E2F5EF; --late:#C77700; --late-l:#FFF2DC;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --blue:#4C93F0; --blue-l:#16263F; --red:#F07385; --red-l:#331820;
+    --ink:#E8EDF6; --ink-2:#B6C0D3; --muted:#8892A8;
+    --paper:#0E1522; --card:#162033; --line:#24304A;
+    --done:#38C79C; --done-l:#10291F; --late:#F2A93B; --late-l:#2E2210;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Figtree,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--paper);color:var(--ink);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button{font:inherit;border:0;cursor:pointer;background:none;color:inherit}
+.hide{display:none!important}
+.wrap{max-width:640px;margin:0 auto;padding:0 16px}
+/* lock */
+#lock{min-height:100vh;display:grid;place-items:center;padding:24px 16px;text-align:center}
+#lock h1{font-size:24px;margin-bottom:6px}#lock h1 span{color:var(--red)}
+#lock p{color:var(--ink-2);font-size:14px;margin-bottom:16px}
+#dots{display:flex;gap:12px;justify-content:center;margin-bottom:16px}#dots i{width:12px;height:12px;border-radius:50%;background:var(--line)}#dots i.on{background:var(--red)}
+#pad{display:grid;grid-template-columns:repeat(3,64px);gap:10px;justify-content:center}
+#pad button{height:52px;border-radius:14px;background:var(--card);font-size:20px;font-weight:700;box-shadow:0 1px 0 var(--line)}
+#perr{color:var(--red);min-height:20px;margin-top:12px;font-size:14px}
+/* app */
+header{position:sticky;top:0;background:var(--paper);z-index:5;padding:12px 0 8px;border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.brand{font-size:20px;font-weight:800}.brand span{color:var(--red)}
+.who{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.who a,.who button{color:var(--blue);font-weight:700;text-decoration:none}
+.how{background:var(--red-l);border-radius:12px;padding:10px 12px;margin:10px 0 4px;font-size:13.5px}
+.bar{display:flex;gap:6px;margin-top:8px}
+.bar button{height:34px;padding:0 14px;border-radius:999px;background:var(--card);font-weight:700;font-size:14px;color:var(--ink-2);box-shadow:0 0 0 1px var(--line) inset}
+.bar button.on{background:var(--ink);color:var(--paper);box-shadow:none}
+.bar em{font-style:normal;margin-left:6px;opacity:.75}
+main{padding:10px 0 60px}
+.day{font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 2px 8px}
+.card{background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 0 var(--line);border-left:4px solid var(--red)}
+.card.done{border-left-color:var(--done);opacity:.8}
+.ch{display:flex;justify-content:space-between;gap:8px}
+.ch b{font-size:16px}.ch small{display:block;color:var(--muted);font-size:13px}
+.st{flex:none;align-self:flex-start;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;background:var(--red-l);color:var(--red)}
+.st.done{background:var(--done-l);color:var(--done)}
+.msg{margin:8px 0 2px;padding:9px 12px;border-radius:14px 14px 14px 4px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset;white-space:pre-wrap;word-break:break-word}
+.msg small{display:block;color:var(--muted);font-size:11.5px;margin-top:3px}
+.sent{font-size:12.5px;color:var(--muted);margin-top:6px}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.btn{height:40px;padding:0 14px;border-radius:12px;font-weight:700;font-size:14px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset;display:inline-flex;align-items:center;text-decoration:none;color:var(--ink)}
+.btn.call{background:var(--blue);color:#fff;box-shadow:none}
+.btn.ok{background:var(--done);color:#fff;box-shadow:none}
+.empty{text-align:center;padding:48px 16px;color:var(--ink-2)}.empty b{display:block;font-size:17px;color:var(--ink);margin-bottom:4px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-size:14px;transition:transform .25s;max-width:90vw;z-index:9}
+#toast.on{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="lock">
+  <div>
+    <h1>Spawn <span>Repairs</span></h1>
+    <p>Mga reklamo nga guba / walay internet gikan sa text. Type your office PIN.</p>
+    <div id="dots"><i></i><i></i><i></i><i></i></div>
+    <div id="pad"></div>
+    <div id="perr" role="alert"></div>
+  </div>
+</div>
+
+<div id="app" class="hide">
+  <header><div class="wrap">
+    <div class="top"><div class="brand">Spawn <span>Repairs</span></div>
+      <div class="who"><span id="uname"></span><a href="remind.html">Remind</a><button type="button" id="out">Lock</button></div></div>
+    <div class="how">🔧 Mga reklamo gikan sa text (14 ka adlaw). <b>📞 Tawagi</b> sila, <b>💬 Restart steps</b> kung wala pa nila nasulayan, ipadala ang lineman kung kinahanglan, dayon <b>✅ Done</b> kung naayo na.</div>
+    <div class="bar" id="bar"></div>
+  </div></header>
+  <main><div class="wrap" id="list"></div></main>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+// Spawn Repairs — read-only list of repair complaints texted to the office SIM (remind_repairs_v1),
+// with Call, a ready "restart steps" reply and Done (remind_reply_act_v1). Same PIN/session as Spawn Remind.
+const SB  = 'https://cviraqfhphhsonjmrtvu.supabase.co';
+const KEY = 'sb_publishable_6J1xIrlkpHf6jir4DtUh4g_xX7Fm9ln';
+const SESS = 'spawn-remind-sess', IDLE = 3 * 60 * 60 * 1000;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', { weekday:'short', month:'short', day:'numeric', timeZone:'UTC' });
+const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' }) : '';
+const phDay = ts => new Date(new Date(ts).getTime() + 8 * 3600e3).toISOString().slice(0, 10);
+const RESTART = 'Spawn Internet: Pasensya sa abala. Palihug i-off ang modem/router 1 minuto, dayon i-on. Kung wala gihapon human 10 minutos, tawag o text niining numeroa.';
+const S = { pin:'', rows:[], user:'', mode:'off', view:'open' };
+
+function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
+const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 10 minutes.', sending_off:'Automatic texting is OFF — cannot send replies.', not_found:'This text is gone — refresh.' };
+async function rpc(fn, args){
+  let res; try { res = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' }, body:JSON.stringify(args) }); }
+  catch (e) { throw new Error('No signal — try again.'); }
+  let j = null; try { j = await res.json(); } catch (e) {}
+  if (!res.ok) { const m = (j && (j.message || j.hint)) || ('Error ' + res.status); throw new Error(/remind_repairs_v1/.test(m) ? 'Repairs page is not set up yet.' : (ERR[m] || m)); }
+  if (j && j.ok === false) throw new Error(ERR[j.error] || j.error || 'Not done');
+  return j;
+}
+
+/* PIN */
+['1','2','3','4','5','6','7','8','9','c','0','b'].forEach(k => {
+  const b = document.createElement('button'); b.type = 'button'; b.dataset.k = k;
+  b.textContent = k === 'c' ? 'Clear' : k === 'b' ? '⌫' : k; if (k === 'c') b.style.fontSize = '15px';
+  b.setAttribute('aria-label', k === 'c' ? 'Clear' : k === 'b' ? 'Delete' : k); $('pad').appendChild(b);
+});
+let typed = '';
+const dots = () => [...$('dots').children].forEach((i, n) => i.classList.toggle('on', n < typed.length));
+async function key(k){
+  if (k === 'c') typed = ''; else if (k === 'b') typed = typed.slice(0, -1); else if (typed.length < 4) typed += k;
+  dots(); $('perr').textContent = '';
+  if (typed.length === 4) {
+    const p = typed;
+    try { await load(p); S.pin = p; try { sessionStorage.setItem(SESS, JSON.stringify({ p, t:Date.now() })); } catch (x) {} show(); }
+    catch (e) { $('perr').textContent = e.message; typed = ''; dots(); }
+  }
+}
+$('pad').addEventListener('click', e => { const b = e.target.closest('button'); if (b) key(b.dataset.k); });
+document.addEventListener('keydown', e => { if (!$('lock').classList.contains('hide')) { if (/^\d$/.test(e.key)) key(e.key); else if (e.key === 'Backspace') key('b'); } });
+function lock(msg){ S.pin = ''; typed = ''; dots(); try { sessionStorage.removeItem(SESS); } catch (x) {} $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
+$('out').onclick = () => lock();
+
+async function load(pin){
+  const r = await rpc('remind_repairs_v1', { p_pin:pin, p_days:14 });
+  S.rows = r.rows || []; S.user = r.user || ''; S.mode = r.mode || 'off';
+}
+function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); }
+async function reload(){ try { await load(S.pin); render(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
+
+/* one card per number per day: several texts from the same person count as one complaint */
+function cards(){
+  const by = new Map();
+  for (const r of S.rows) {
+    const k = (r.from || 'id' + r.id) + '|' + phDay(r.at);
+    if (!by.has(k)) by.set(k, { day:phDay(r.at), from:r.from, sub:r.sub, name:r.name, area:r.area, plan:r.plan, msgs:[] });
+    by.get(k).msgs.push(r);
+  }
+  return [...by.values()].map(c => {
+    c.msgs.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    c.last = c.msgs[c.msgs.length - 1]; c.openIds = c.msgs.filter(m => m.status === 'received').map(m => m.id); c.open = c.openIds.length > 0;
+    return c;
+  }).sort((a, b) => String(b.last.at).localeCompare(String(a.last.at)));
+}
+function render(){
+  $('uname').textContent = S.user;
+  const C = cards(), nOpen = C.filter(c => c.open).length, shown = C.filter(c => S.view === 'all' || c.open);
+  $('bar').innerHTML = [['open', 'Open', nOpen], ['all', 'All', C.length]]
+    .map(([k, l, n]) => `<button type="button" data-view="${k}" class="${S.view === k ? 'on' : ''}">${l}<em>${n}</em></button>`).join('');
+  if (!shown.length) { $('list').innerHTML = `<div class="empty"><b>${S.view === 'open' ? 'Walay bukas nga reklamo 🎉' : 'Walay reklamo'}</b>Ang mga text nga "guba / walay internet" mogawas diri.</div>`; return; }
+  let h = '', day = '';
+  for (const c of shown) {
+    if (c.day !== day) { day = c.day; h += `<div class="day">${esc(dLabel(day))}</div>`; }
+    const replies = c.msgs.flatMap(m => m.replies || []);
+    h += `<div class="card ${c.open ? '' : 'done'}" data-id="${c.last.id}" data-open="${c.openIds.join(',')}">
+      <div class="ch"><div><b>${esc(c.name || c.from || 'Unknown')}</b>
+        <small>${c.name ? esc(c.area || '') + (c.plan ? ' · ₱' + Number(c.plan).toLocaleString('en-PH') : '') : 'Number not linked to a subscriber'}${c.from ? ' · ' + esc(c.from) : ''}</small></div>
+        <span class="st ${c.open ? '' : 'done'}">${c.open ? 'Open' : 'Done'}</span></div>
+      ${c.msgs.map(m => `<div class="msg">${esc(m.body || '')}<small>${tLabel(m.at)}</small></div>`).join('')}
+      ${replies.map(x => `<div class="sent">💬 Gi-reply${x.by ? ' (' + esc(x.by) + ')' : ''}: “${esc(x.body)}”</div>`).join('')}
+      ${!c.open ? `<div class="sent">✅ ${esc(c.last.done || 'Done')}${c.last.done_by ? ' · ' + esc(c.last.done_by) : ''}</div><div class="acts"><button type="button" class="btn" data-a="reopen">Reopen</button></div>`
+        : `<div class="acts">${c.from ? `<a class="btn call" href="tel:${esc(c.from)}">📞 Call</a>` : ''}
+            ${S.mode !== 'off' && !replies.some(x => x.body === RESTART) ? '<button type="button" class="btn" data-a="restart">💬 Restart steps</button>' : ''}
+            <button type="button" class="btn ok" data-a="done">✅ Done — naayo na</button></div>`}
+    </div>`;
+  }
+  $('list').innerHTML = h;
+}
+$('bar').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) { S.view = b.dataset.view; render(); } });
+$('list').addEventListener('click', async e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const card = b.closest('[data-id]'), id = +card.dataset.id, open = card.dataset.open ? card.dataset.open.split(',').map(Number) : [];
+  b.disabled = true;
+  try {
+    if (b.dataset.a === 'restart') {
+      // reply goes to the newest text; it also marks that text handled, so reopen it — the complaint stays open until Done
+      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reply', p_text:RESTART });
+      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reopen' });
+      toast('Restart steps sent — goes out within a minute');
+    } else if (b.dataset.a === 'done') {
+      for (const m of open) await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:m, p_action:'handled' });
+      toast('Done — marked fixed');
+    } else if (b.dataset.a === 'reopen') {
+      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reopen' });
+      toast('Back to open');
+    }
+    await reload();
+  } catch (x) { toast(x.message, 4000); b.disabled = false; }
+});
+
+(async () => {
+  let x = null; try { x = JSON.parse(sessionStorage.getItem(SESS) || 'null'); } catch (e) {}
+  if (x && /^\d{4}$/.test(x.p || '') && Date.now() - (x.t || 0) < IDLE) {
+    try { await load(x.p); S.pin = x.p; show(); } catch (e) { lock(); }
+  }
+})();
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.pin) reload(); });
+setInterval(() => { if (!document.hidden && S.pin) reload(); }, 60000);   // new complaints show up by themselves
+</script>
+</body>
+</html>
