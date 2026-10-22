@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#025AC6">
-<title>Spawn Remind</title>
+<title>Spawn Text</title>
 <link rel="manifest" href="remind.webmanifest">
 <link rel="icon" type="image/png" href="remind-icon-192.png">
 <link rel="apple-touch-icon" href="remind-apple-touch-icon.png">
-<meta name="apple-mobile-web-app-title" content="Spawn Remind">
+<meta name="apple-mobile-web-app-title" content="Spawn Text">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -168,7 +168,7 @@ main{padding:4px 0 28px}
 <body>
 
 <section id="lock">
-  <div class="brand"><b>Spawn</b><span>Remind</span></div>
+  <div class="brand"><b>Spawn</b><span>Text</span></div>
   <p>Payment reminders for today. Type your office PIN.</p>
   <div class="dots" id="dots"><i></i><i></i><i></i><i></i></div>
   <div class="pad" id="pad"></div>
@@ -177,14 +177,15 @@ main{padding:4px 0 28px}
 
 <div id="app" class="hide">
   <header><div class="wrap">
-    <div class="top"><div class="brand"><b>Spawn</b><span>Remind</span></div><div class="who"><span id="uname"></span><a href="repairs.html" style="color:var(--utang);font-weight:700;text-decoration:none;margin-right:8px">🔧 Repairs</a><button type="button" id="helpbtn" aria-label="How to use" title="How to use">?</button><button type="button" id="out">Lock</button></div></div>
-    <div id="helpbox" class="help hide" role="dialog" aria-label="How to use Spawn Remind">
-      <b>Unsaon paggamit ang Spawn Remind</b>
+    <div class="top"><div class="brand"><b>Spawn</b><span>Text</span></div><div class="who"><span id="uname"></span><button type="button" id="helpbtn" aria-label="How to use" title="How to use">?</button><button type="button" id="out">Lock</button></div></div>
+    <div id="helpbox" class="help hide" role="dialog" aria-label="How to use Spawn Text">
+      <b>Unsaon paggamit ang Spawn Text</b>
       <ol>
         <li><b>Today's list</b> — kinsa ang ma-remind karon. <b>Automatic na ang text</b> (8:05 AM), ayaw na i-text sa phone. Bayad na? → <b>Already paid</b>. Mosaad og petsa? → <b>Promised</b>.</li>
         <li><b>Messages</b> — mga reply sa subscribers. <b>Reply</b> (naay ready answers: GCash number, Who is this…), <b>Promised</b> (petsa), <b>To check</b> (GCash ref), <b>Handled</b> kung human na. Wala pa nakilala ang number? → <b>Link to subscriber</b>.</li>
         <li><b>To check</b> — GCash ref nga i-verify. Kung makita na ang bayad sa libro, <b>Confirmed</b> (o automatic). Number nga dili mo-work → <b>Block number</b>.</li>
         <li><b>Sent &amp; coming</b> — kinsa na ang na-text, ug kinsa ang sunod (pindota ▶ para ugma).</li>
+        <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet. <b>📞 Call</b>, <b>📋 Copy</b> (para sa lineman o Spawn Jobs), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
         <li><b>No number</b> — i-save ang number aron ma-text sila.</li>
       </ol>
       <p><b>Pahinumdom:</b> i-reply gikan sa <b>Messages</b> (dili sa phone) aron ma-record. Ang spare phone (SMS sender) ayaw hilabti.</p>
@@ -213,7 +214,7 @@ const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', { wee
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' }) : '';
 const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null };
+const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null };
 
 function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
 const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 10 minutes.', not_on_list:'This person is no longer on the list — refresh.',
@@ -258,15 +259,17 @@ async function load(pin, date){
   const r = await rpc('remind_board', { p_pin:pin, p_date:date });   // checks the PIN first
   // Auto texts breakdown: asked only after the PIN passed (a wrong PIN must count once), and optional —
   // if its database function is not there yet, the tab just stays hidden
-  const [a, ib] = await Promise.all([
+  const [a, ib, rp] = await Promise.all([
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null),
     rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Replies tab: hidden if missing
+    rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Job orders tab: hidden if missing
   ]);
   S.ops = await rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null);   // Checks tab: hidden if missing
   if (!S.ops && S.tab === 'checks') S.tab = 'send';
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
   S.auto = a; if (!a && S.tab === 'auto') S.tab = 'send';
   S.inbox = ib; if (!ib && S.tab === 'replies') S.tab = 'send';
+  S.repairs = rp; if (!rp && S.tab === 'jobs') S.tab = 'send';
 }
 function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); }
 async function reload(){ try { await load(S.pin, S.date); render(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
@@ -464,6 +467,95 @@ $('list').addEventListener('click', async e => {
   }
   if (a === 'lpick') { b.disabled = true; try { await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'link', p_msg_id:id, p_sub:+b.dataset.sub }); toast('Linked — number saved to that subscriber'); S.ropen = null; S.lres = []; await reload(); } catch (x) { toast(x.message, 4000); b.disabled = false; } }
 });
+/* Job orders tab: repair complaints texted to the office number (remind_repairs_v1) = possible job orders.
+   One card per number per day; Call, Copy (ready job-order text), Reply (ready answers), Done / Reopen. */
+const phDay = ts => new Date(new Date(ts).getTime() + 8 * 3600e3).toISOString().slice(0, 10);
+const RESTART = 'Spawn Internet: Pasensya sa abala. Palihug i-off ang modem/router 1 minuto, dayon i-on. Kung wala gihapon human 10 minutos, tawag o text niining numeroa.';
+const JOBQ = [
+  ['Restart steps', RESTART],
+  ['Padala na ang lineman', 'Spawn Internet: Salamat sa pagpahibalo. Ipadala na namo ang among lineman karon. Tawagan mo namo sa dili pa moabot. Salamat!'],
+  ['Installer schedule', 'Spawn Internet: Salamat! Tawagan mo namo sa dili pa moabot ang installer. Palihug ipa-on ang inyong phone.'],
+  ['Gi-check pa', 'Spawn Internet: Salamat sa pagpahibalo. Among gi-check karon ang inyong koneksyon. Mo-update mi dayon.'],
+  ['Naayo na?', 'Spawn Internet: Naayo na ba ang inyong internet? Palihug reply-i mi. Salamat!'],
+];
+function jobCards(){
+  const by = new Map();
+  for (const r of (S.repairs ? S.repairs.rows : [])) {
+    const k = (r.from || 'id' + r.id) + '|' + phDay(r.at);
+    if (!by.has(k)) by.set(k, { day:phDay(r.at), from:r.from, sub:r.sub, name:r.name, area:r.area, plan:r.plan, msgs:[] });
+    by.get(k).msgs.push(r);
+  }
+  return [...by.values()].map(c => {
+    c.msgs.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    c.last = c.msgs[c.msgs.length - 1]; c.openIds = c.msgs.filter(m => m.status === 'received').map(m => m.id); c.open = c.openIds.length > 0;
+    return c;
+  }).sort((a, b) => (b.open - a.open) || String(b.last.at).localeCompare(String(a.last.at)));
+}
+// plain text for the lineman / Spawn Jobs / a group chat
+const jobText = c => ['JOB ORDER (text) — ' + dLabel(c.day),
+  'Name: ' + (c.name || 'unknown (number not linked)'),
+  c.area ? 'Area: ' + c.area : '', c.plan ? 'Plan: ₱' + Number(c.plan).toLocaleString('en-PH') : '',
+  c.from ? 'Contact: ' + c.from : '',
+  'Reklamo: ' + c.msgs.map(m => `${(m.body || '').trim()} (${tLabel(m.at)})`).join(' / ')].filter(Boolean).join('\n');
+function jobsHtml(){
+  const C = jobCards(), nOpen = C.filter(c => c.open).length, shown = C.filter(c => S.rpView === 'all' || c.open);
+  let h = `<div class="note"><button type="button" class="linkbtn" data-ja="view">${S.rpView === 'all' ? `Show open only (${nOpen})` : `Show all (${C.length})`}</button></div>`;
+  if (!shown.length) return h + `<div class="empty"><b>${S.rpView === 'all' ? 'Walay reklamo' : 'Walay bukas nga reklamo 🎉'}</b>Ang mga text nga "guba / walay internet" mogawas diri.</div>`;
+  let day = '';
+  for (const c of shown) {
+    if (c.day !== day) { day = c.day; h += `<div class="sec"><b>${esc(dLabel(day))}</b></div>`; }
+    const id = c.last.id, replies = c.msgs.flatMap(m => m.replies || []);
+    h += `<article class="item" data-jid="${id}" data-jopen="${c.openIds.join(',')}"><div class="ih"><div class="nm"><b>${esc(c.name || c.from || 'Unknown')}</b>
+        <small>${c.name ? esc(c.area || '') + (c.plan ? ' · ₱' + Number(c.plan).toLocaleString('en-PH') : '') : 'not linked to a subscriber'}${c.from ? ' · ' + esc(c.from) : ''}</small></div>
+        <span class="st ${c.open ? 'failed' : 'delivered'}">${c.open ? 'Open' : 'Done'}</span></div>
+      ${c.msgs.map(m => `<div class="bubble in">${esc(m.body || '')}<small class="bt">${tLabel(m.at)}</small></div>`).join('')}
+      ${replies.map(x => `<div class="sent">💬 Gi-reply${x.by ? ' (' + esc(x.by) + ')' : ''}: “${esc(x.body)}”</div>`).join('')}
+      ${!c.open ? `<div class="sent">✅ ${esc(c.last.done || 'Done')}${c.last.done_by ? ' · ' + esc(c.last.done_by) : ''}</div><div class="acts"><button type="button" class="btn" data-ja="copy">📋 Copy</button><button type="button" class="btn" data-ja="reopen">Reopen</button></div>`
+        : `<div class="acts">${c.from ? `<a class="btn" style="display:inline-grid;place-items:center;text-decoration:none" href="tel:${esc(c.from)}">📞 Call</a>` : ''}
+            <button type="button" class="btn" data-ja="copy">📋 Copy</button>
+            <button type="button" class="btn" data-ja="reply">💬 Reply</button>
+            <button type="button" class="btn" data-ja="done">✅ Done — naayo na</button></div>
+          ${S.rpOpen === id ? `<div class="rform"><div class="tpls">${JOBQ.map(([l], i) => `<button type="button" class="tpl" data-jq="${i}">${esc(l)}</button>`).join('')}</div>
+            <textarea rows="4" maxlength="480" aria-label="Reply text" placeholder="I-type ang reply, o pilia ang ready answer sa ibabaw"></textarea>
+            <button type="button" class="btn send" data-ja="send">Send reply</button></div>` : ''}`}
+    </article>`;
+  }
+  return h;
+}
+$('list').addEventListener('click', async e => {
+  const q = e.target.closest('[data-jq]');
+  if (q) { const ta = q.closest('[data-jid]').querySelector('textarea'); ta.value = JOBQ[+q.dataset.jq][1]; ta.focus(); return; }
+  const b = e.target.closest('[data-ja]'); if (!b || !S.repairs) return;
+  if (b.dataset.ja === 'view') { S.rpView = S.rpView === 'all' ? 'open' : 'all'; render(); return; }
+  const card = b.closest('[data-jid]'); if (!card) return;
+  const id = +card.dataset.jid, open = card.dataset.jopen ? card.dataset.jopen.split(',').map(Number) : [];
+  const c = jobCards().find(x => x.last.id === id); if (!c) return;
+  if (b.dataset.ja === 'copy') {
+    const t = jobText(c);
+    try { await navigator.clipboard.writeText(t); toast('Copied — paste it to the lineman or Spawn Jobs'); }
+    catch (x) { window.prompt('Copy this job order:', t); }
+    return;
+  }
+  if (b.dataset.ja === 'reply') { S.rpOpen = S.rpOpen === id ? null : id; render(); const ta = $('list').querySelector(`[data-jid="${id}"] textarea`); if (ta) ta.focus(); return; }
+  let text = '';
+  if (b.dataset.ja === 'send') { text = card.querySelector('textarea').value.trim(); if (!text) { toast('I-type ang reply o pilia ang ready answer'); return; } }
+  b.disabled = true;
+  try {
+    if (b.dataset.ja === 'send') {
+      // the reply marks the newest text handled; reopen it — the job order stays open until Done
+      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reply', p_text:text });
+      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reopen' });
+      S.rpOpen = null; toast('Reply sent — goes out in a few seconds');
+    } else if (b.dataset.ja === 'done') {
+      for (const m of open) await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:m, p_action:'handled' });
+      toast('Done — marked fixed');
+    } else if (b.dataset.ja === 'reopen') {
+      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reopen' });
+      toast('Back to open');
+    }
+    await reload();
+  } catch (x) { toast(x.message, 4000); b.disabled = false; }
+});
 function smsHref(r){ return `sms:${r.phone}${IOS ? '&' : '?'}body=${encodeURIComponent(r.body)}`; }
 
 function render(){
@@ -476,6 +568,7 @@ function render(){
   const T = [['send', "Today's list", L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]];
   if (S.imp) T.push(['import', 'Contacts', S.imp.rows.filter(r => r.bucket !== 'none').length]);
   if (S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
+  if (S.repairs) T.push(['jobs', '🔧 Job orders', jobCards().filter(c => c.open).length]);
   if (S.ops) T.push(['checks', 'To check', S.ops.to_check.length + S.ops.failed.length]);
   if (S.auto) T.push(['auto', 'Sent & coming', autoRows().length]);
   $('tabs').innerHTML = T.map(([k, l, n]) => `<button type="button" class="${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-pressed="${S.tab === k}">${l}<em>${n}</em></button>`).join('');
@@ -489,6 +582,7 @@ function render(){
     done: 'Na-text na, bayad na, naay saad, o <b>To check</b>. <b>Undo</b> kung nasayop.',
     auto: 'Kinsa na ang na-text karon (Delivered / Failed), ug kinsa ang sunod — pindota ▶ para ugma.',
     replies: 'Mga text gikan sa subscribers. <b>Reply</b> (naay ready answers), <b>Promised</b>, <b>To check</b> (GCash ref), <b>Handled</b> kung human na.',
+    jobs: '🔧 Mga reklamo nga guba / walay internet = posible nga job order. <b>📞 Call</b>, <b>📋 Copy</b> (para sa lineman o Spawn Jobs), <b>💬 Reply</b>, dayon <b>✅ Done</b> kung naayo na.',
     checks: '💳 GCash ref nga i-verify: makita na sa libro? → <b>Confirmed</b> (o automatic). 📵 Number nga dili mo-work → <b>Block number</b>.',
   };
   let h = HOW[S.tab] ? `<div class="how">${HOW[S.tab]}</div>` : '';
@@ -520,6 +614,7 @@ function render(){
   if (S.tab === 'auto' && S.auto) h += autoHtml(L, d, t);
   if (S.tab === 'replies' && S.inbox) h += repliesHtml();
   if (S.tab === 'checks' && S.ops) h += checksHtml();
+  if (S.tab === 'jobs' && S.repairs) h += jobsHtml();
   if (S.tab === 'done') {
     h += L.done.length ? L.done.map(r => `<div class="dl" data-key="${esc(r.key)}"><span class="ck ${r.paid ? 'p' : ''}">${r.paid ? '₱' : r.sent ? '✓' : '⏳'}</span>
         <div class="t"><b>${esc(r.name)}</b><small>${r.paid ? `Marked already paid by ${esc(r.paid.by)} · ${tLabel(r.paid.at)}` : r.sent ? `${r.sent.by ? `Texted by ${esc(r.sent.by)}` : 'Auto-texted'} · ${tLabel(r.sent.at)}` : /^TO CHECK/.test(r.promise.note || '') ? `💳 To check (${esc((r.promise.note.match(/ref ([^·]+)/) || [])[1] || 'GCash ref')}) — paused until ${esc(dLabel(r.promise.date))}` : `Promised to pay ${esc(dLabel(r.promise.date))}${r.promise.note ? ` · ${esc(r.promise.note)}` : ''}`}</small></div>
@@ -527,7 +622,7 @@ function render(){
       : `<div class="empty"><b>Nothing done yet</b>Texts you send, people marked paid, and promises to pay show here.</div>`;
   }
   const sent = Number(S.stats.sent_14d || 0), paid = Number(S.stats.paid_14d || 0), all = sent + paid;
-  if (S.tab !== 'import') h += `<div class="meter"><b>Last 14 days:</b> ${sent} texted · ${paid} were already paid${all ? ` (${Math.round(paid / all * 100)}%)` : ''}.<br>
+  if (S.tab !== 'import' && S.tab !== 'jobs') h += `<div class="meter"><b>Last 14 days:</b> ${sent} texted · ${paid} were already paid${all ? ` (${Math.round(paid / all * 100)}%)` : ''}.<br>
     When “already paid” stays rare, the list is accurate enough to send by itself.${all ? `<div class="bar"><i style="width:${Math.round(sent / all * 100)}%"></i></div>` : ''}</div>`;
   box.innerHTML = h;
 }

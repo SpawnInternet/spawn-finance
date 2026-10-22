@@ -1,8 +1,8 @@
 {
   "id": "./remind.html",
-  "name": "Spawn Remind",
-  "short_name": "Spawn Remind",
-  "description": "Spawn Internet payment reminders",
+  "name": "Spawn Text",
+  "short_name": "Spawn Text",
+  "description": "Spawn Internet texts: payment reminders, messages and job orders",
   "start_url": "./remind.html",
   "scope": "./remind",
   "display": "standalone",
