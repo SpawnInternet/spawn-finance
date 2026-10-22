@@ -147,6 +147,8 @@ main{padding:4px 0 28px}
 .tg.ref,.tg.paid{background:var(--done-l);color:var(--done)}.tg.repair{background:var(--utang-l);color:var(--utang)}
 .tg.promise{background:var(--blue-l);color:var(--blue)}.tg.who{background:var(--late-l);color:var(--late)}
 .sent{font-size:13px;color:var(--muted);margin:6px 0}
+.bubble.in .bt{display:block;font-size:11px;color:var(--muted);margin-top:4px}
+.lres{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .rform{margin-top:10px}.tpls{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .tpl{padding:6px 11px;border-radius:999px;font-size:13px;font-weight:700;background:var(--blue-l);color:var(--blue)}
 .rform textarea{width:100%;box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--paper);padding:10px 12px;font:inherit;font-size:15px;margin-bottom:8px;resize:vertical}
@@ -242,6 +244,8 @@ async function load(pin, date){
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null),
     rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Replies tab: hidden if missing
   ]);
+  S.ops = await rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null);   // Checks tab: hidden if missing
+  if (!S.ops && S.tab === 'checks') S.tab = 'send';
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
   S.auto = a; if (!a && S.tab === 'auto') S.tab = 'send';
   S.inbox = ib; if (!ib && S.tab === 'replies') S.tab = 'send';
@@ -317,9 +321,10 @@ function tagsOf(body){
   const ref = (digits.match(/\d{13}/) || [])[0];
   if (ref || /\bref(erence)?\b/.test(s)) T.push(['ref', '💳 GCash ref' + (ref ? ' ' + ref : '')]);
   if (/(wala|walay|no)\s*(internet|net|signal|connection|koneksyon)|hinay|slow|guba|offline|disconnect|di (ka|maka) ?connect|repair|ayo(ha|a)?\b|loading|lineman|technician|teknisyan|install/.test(s)) T.push(['repair', '🔧 Repair / lineman']);
-  if (/bayad na|nakabayad|nabayran|nabayaran|paid na|already paid|nagbayad/.test(s)) T.push(['paid', '✅ Says paid — check']);
+  if (/bayad na|nakabayad|nabayran|nabayaran|paid na|already paid|nagbayad|payment done|done paying|paid for|i paid|i have paid|bayad nako/.test(s)) T.push(['paid', '✅ Says paid — check']);
   if (guessDate(s)) T.push(['promise', '📅 Date ' + dLabel(guessDate(s))]);
   if (/kinsa|who is|sino|unsa ni|asa ni gikan/.test(s)) T.push(['who', '❓ Who is this']);
+  if (/dili (ni |na )?akoa|wrong (number|send|sent)|\bstop\b|unsubscribe|ayaw (na )?(ko )?(i-?)?text|wala ko kaila|di ko kaila/.test(s)) T.push(['repair', '🚫 Wrong number / stop? → More…']);
   return T;
 }
 const TPL = {
@@ -330,44 +335,113 @@ const TPL = {
   promise:'Salamat! Na-record namo nga mobayad mo sa {date}. — Spawn Internet',
 };
 const TPLN = { who:'Who is this', ref:'Got the ref', paid:'Will check payment', repair:'Repair noted', promise:'Promise noted' };
+// texts from the same number form one conversation; actions apply to the newest text (and close the older open ones)
+function threads(){
+  const by = new Map();
+  for (const r of S.inbox.rows) {
+    const k = r.from || 'id' + r.id;
+    if (!by.has(k)) by.set(k, { key:k, from:r.from, sub:r.sub, name:r.name, area:r.area, msgs:[] });
+    const t = by.get(k); t.msgs.push(r); if (!t.sub && r.sub) { t.sub = r.sub; t.name = r.name; t.area = r.area; }
+  }
+  return [...by.values()].map(t => {
+    t.msgs.sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.id - b.id);
+    t.last = t.msgs[t.msgs.length - 1]; t.openIds = t.msgs.filter(m => m.status === 'received').map(m => m.id);
+    t.open = t.openIds.length > 0; t.text = t.msgs.map(m => m.body || '').join(' \n ');
+    return t;
+  }).sort((a, b) => (b.open - a.open) || String(b.last.at).localeCompare(String(a.last.at)));
+}
+const refOf = text => (String(text || '').replace(/[\s-]/g, '').match(/\d{13}/) || [])[0] || '';
 function repliesHtml(){
-  const I = S.inbox, rows = I.rows.filter(r => S.showHandled || r.status === 'received'), nDone = I.rows.filter(r => r.status !== 'received').length;
-  let h = `<div class="note">Texts to the office number (last 14 days). ${I.mode === 'off' ? '<b>Automatic texting is OFF — replies cannot be sent from here until it is on.</b>' : 'Replies go out from the office number within a minute (08:00–18:00).'}</div>`;
+  const I = S.inbox, T = threads(), shown = T.filter(t => S.showHandled || t.open), nDone = T.filter(t => !t.open).length;
+  let h = `<div class="note">Texts to the office number (last 14 days), one card per person. ${I.mode === 'off' ? '<b>Automatic texting is OFF — replies cannot be sent from here until it is on.</b>' : 'Replies go out from the office number within a minute (08:00–18:00).'}</div>`;
   if (nDone) h += `<div class="note"><button type="button" class="linkbtn" data-ract="toggle">${S.showHandled ? 'Hide' : 'Show'} handled (${nDone})</button></div>`;
-  if (!rows.length) return h + `<div class="empty"><b>No new replies</b>New texts to the office number show here.</div>`;
-  return h + rows.map(r => {
-    const tg = tagsOf(r.body), open = r.status === 'received', gd = guessDate(r.body), ro = S.ropen;
-    return `<article class="item" data-mid="${r.id}"><div class="ih"><div class="nm"><b>${esc(r.name || r.from || 'Unknown')}</b><small>${r.name ? esc(r.area || '') + (r.from ? ' · ' + esc(r.from) : '') : 'Not matched to a subscriber'} · ${esc(dLabel(String(r.at).slice(0, 10)))} ${tLabel(r.at)}</small></div>
-        <span class="st ${open ? 'queued' : 'delivered'}">${open ? 'New' : 'Handled'}</span></div>
-      <div class="bubble in">${esc(r.body || '')}</div>
+  if (!shown.length) return h + `<div class="empty"><b>No new replies</b>New texts to the office number show here.</div>`;
+  return h + shown.map(t => {
+    const tg = tagsOf(t.text), gd = guessDate(t.text), ro = S.ropen, id = t.last.id, ref = refOf(t.text);
+    const sent = t.msgs.flatMap(m => m.replies || []);
+    return `<article class="item" data-mid="${id}" data-open="${t.openIds.join(',')}"><div class="ih"><div class="nm"><b>${esc(t.name || t.from || 'Unknown')}</b><small>${t.name ? esc(t.area || '') + (t.from ? ' · ' + esc(t.from) : '') : (t.from ? esc(t.from) + ' · ' : '') + 'not linked to a subscriber'} · ${esc(dLabel(String(t.last.at).slice(0, 10)))} ${tLabel(t.last.at)}</small></div>
+        <span class="st ${t.open ? 'queued' : 'delivered'}">${t.open ? (t.openIds.length > 1 ? t.openIds.length + ' new' : 'New') : 'Handled'}</span></div>
+      ${t.msgs.map(m => `<div class="bubble in">${esc(m.body || '')}<small class="bt">${tLabel(m.at)}</small></div>`).join('')}
       ${tg.length ? `<div class="tags">${tg.map(([k, l]) => `<span class="tg ${k}">${esc(l)}</span>`).join('')}</div>` : ''}
-      ${r.replies.map(x => `<div class="sent">You replied${x.by ? ' (' + esc(x.by) + ')' : ''}: “${esc(x.body)}” · ${esc(ST[x.status] || x.status)}</div>`).join('')}
-      ${!open ? `<div class="sent">${esc(r.done || 'Handled')}${r.done_by ? ' by ' + esc(r.done_by) : ''}</div><div class="acts"><button type="button" class="btn" data-ract="reopen">Reopen</button></div>`
-      : `<div class="acts"><button type="button" class="btn" data-ract="reply">Reply</button>${r.sub ? '<button type="button" class="btn" data-ract="promise">Promised</button>' : ''}<button type="button" class="btn" data-ract="handled">Handled</button></div>
-        ${ro === r.id + '|r' ? `<div class="rform"><div class="tpls">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-tpl="${k}">${TPLN[k]}</button>`).join('')}</div>
+      ${sent.map(x => `<div class="sent">You replied${x.by ? ' (' + esc(x.by) + ')' : ''}: “${esc(x.body)}” · ${esc(ST[x.status] || x.status)}</div>`).join('')}
+      ${!t.open ? `<div class="sent">${esc(t.last.done || 'Handled')}${t.last.done_by ? ' by ' + esc(t.last.done_by) : ''}</div><div class="acts"><button type="button" class="btn" data-ract="reopen">Reopen</button></div>`
+      : `<div class="acts"><button type="button" class="btn" data-ract="reply">Reply</button>
+          ${t.sub ? '<button type="button" class="btn" data-ract="promise">Promised</button><button type="button" class="btn" data-ract="tocheck">To check</button>' : '<button type="button" class="btn" data-ract="linkopen">Link to subscriber</button>'}
+          <button type="button" class="btn" data-ract="handled">Handled</button>
+          <button type="button" class="btn" data-ract="more">More…</button></div>
+        ${ro === id + '|m' ? `<div class="acts" style="margin-top:8px"><button type="button" class="btn" data-ract="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-ract="block" data-why="stop">Stop texting them</button></div>
+          <div class="sent">Either one: this number is never texted again (Checks tab → Unblock to undo).</div>` : ''}
+        ${ro === id + '|r' ? `<div class="rform"><div class="tpls">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-tpl="${k}">${TPLN[k]}</button>`).join('')}</div>
           <textarea rows="4" maxlength="480" aria-label="Reply text" placeholder="Type a reply, or tap a ready answer above"></textarea>
           <button type="button" class="btn send" data-ract="send">Send reply</button></div>` : ''}
-        ${ro === r.id + '|p' ? `<div class="pform"><input type="date" min="${S.today}" value="${gd}" aria-label="Promised pay date"><button type="button" class="btn" data-ract="psave">Save date</button></div>` : ''}`}
+        ${ro === id + '|p' ? `<div class="pform"><input type="date" min="${S.today}" value="${gd}" aria-label="Promised pay date"><button type="button" class="btn" data-ract="psave">Save date</button></div>` : ''}
+        ${ro === id + '|c' ? `<div class="pform"><input type="text" inputmode="numeric" value="${esc(ref)}" placeholder="GCash ref no." aria-label="GCash reference number"><button type="button" class="btn" data-ract="csave">Pause 3 days</button></div>
+          <div class="sent">Reminders pause 3 days. Check the ref in GCash, record the payment, then Checks tab → Confirmed.</div>` : ''}
+        ${ro === id + '|l' ? `<div class="pform"><input type="search" placeholder="Type the subscriber's name" aria-label="Find subscriber"><button type="button" class="btn" data-ract="lsearch">Find</button></div>
+          <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-ract="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || ''}</div>` : ''}`}
     </article>`;
   }).join('');
 }
+// Checks tab: GCash refs to verify, numbers that failed, blocked numbers
+function checksHtml(){
+  const O = S.ops; let h = '';
+  const ref = n => (String(n || '').match(/ref ([^·]+)/) || [])[1] || '?';
+  h += `<div class="sec"><b>💳 To check</b><small>${O.to_check.length} · GCash refs to verify — reminders paused meanwhile</small></div>`;
+  h += O.to_check.length ? O.to_check.map(c => `<div class="dl" data-csub="${c.sub}"><div class="t"><b>${esc(c.name)}</b><small>ref ${esc(ref(c.note).trim())} · paused until ${esc(dLabel(c.until))}${c.area ? ' · ' + esc(c.area) : ''}</small></div>
+      <button type="button" data-cact="check_ok" title="Payment found and recorded">Confirmed</button><button type="button" data-cact="check_fail" title="Not found in GCash — reminders resume">Not found</button></div>`).join('')
+    : `<div class="note">Nothing to check.</div>`;
+  h += `<div class="sec"><b>📵 Not working</b><small>${O.failed.length} · texts that did not reach the number (last 14 days)</small></div>`;
+  h += O.failed.length ? O.failed.map(f => `<div class="dl" data-csub="${f.sub || ''}"><div class="t"><b>${esc(f.name || f.address)}</b><small>${esc(f.address)} · ${esc(dLabel(String(f.at).slice(0, 10)))} ${tLabel(f.at)} · ${esc(f.error || 'failed')}</small></div>
+      ${f.sub ? '<button type="button" data-cact="block" data-why="not_working" title="Stop using this number; they move to No number">Block number</button>' : ''}</div>`).join('')
+    : `<div class="note">No failed texts.</div>`;
+  h += `<div class="sec"><b>⛔ Blocked</b><small>${O.blocked.length} · never texted</small></div>`;
+  h += O.blocked.length ? O.blocked.map(b => `<div class="dl" data-addr="${esc(b.address)}"><div class="t"><b>${esc(b.name || b.address)}</b><small>${esc(b.address)} · ${esc(String(b.reason).replace('_', ' '))}${b.by ? ' · by ' + esc(b.by) : ''}</small></div>
+      <button type="button" data-cact="unblock">Unblock</button></div>`).join('')
+    : `<div class="note">No blocked numbers.</div>`;
+  return h;
+}
+const ops = (args, ok) => rpc('remind_ops_v1', { p_pin:S.pin, ...args }).then(() => toast(ok));
+$('list').addEventListener('click', async e => {
+  const c = e.target.closest('[data-cact]'); if (!c || !S.ops) return;
+  const row = c.closest('[data-csub],[data-addr]'), sub = row && row.dataset.csub ? +row.dataset.csub : null, a = c.dataset.cact;
+  c.disabled = true;
+  try {
+    if (a === 'unblock') await ops({ p_action:'unblock', p_text:row.dataset.addr }, 'Unblocked');
+    else if (a === 'block') await ops({ p_action:'block', p_sub:sub, p_text:c.dataset.why }, 'Number blocked — they move to No number');
+    else await ops({ p_action:a, p_sub:sub }, a === 'check_ok' ? 'Confirmed' : 'Not found — reminders resume');
+    await reload();
+  } catch (x) { toast(x.message, 4000); c.disabled = false; }
+});
 $('list').addEventListener('click', async e => {
   const b = e.target.closest('[data-ract],[data-tpl]'); if (!b || !S.inbox) return;
   if (b.dataset.ract === 'toggle') { S.showHandled = !S.showHandled; render(); return; }
   const card = b.closest('[data-mid]'); if (!card) return;
-  const id = +card.dataset.mid, r = S.inbox.rows.find(x => x.id === id); if (!r) return;
-  if (b.dataset.tpl) { const ta = card.querySelector('textarea'); ta.value = TPL[b.dataset.tpl].replace('{date}', dLabel(guessDate(r.body))); ta.focus(); return; }
-  const a = b.dataset.ract;
-  if (a === 'reply' || a === 'promise') { S.ropen = S.ropen === id + (a === 'reply' ? '|r' : '|p') ? null : id + (a === 'reply' ? '|r' : '|p'); render(); return; }
-  const go = async (action, extra, ok) => {
+  const id = +card.dataset.mid, t = threads().find(x => x.last.id === id); if (!t) return;
+  const others = t.openIds.filter(x => x !== id);
+  if (b.dataset.tpl) { const ta = card.querySelector('textarea'); ta.value = TPL[b.dataset.tpl].replace('{date}', dLabel(guessDate(t.text))); ta.focus(); return; }
+  const a = b.dataset.ract, panel = { reply:'|r', promise:'|p', tocheck:'|c', linkopen:'|l', more:'|m' }[a];
+  if (panel) { S.ropen = S.ropen === id + panel ? null : id + panel; S.lres = []; render(); const i = $('list').querySelector(`[data-mid="${id}"] .pform input, [data-mid="${id}"] textarea`); if (i) i.focus(); return; }
+  // close the older open texts of the same conversation too
+  const closeOthers = async () => { for (const o of others) await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:o, p_action:'handled' }); };
+  const run = async (fn, ok) => {
     b.disabled = true;
-    try { await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:action, ...extra }); toast(ok); S.ropen = null; await reload(); }
+    try { await fn(); await closeOthers(); toast(ok); S.ropen = null; await reload(); }
     catch (x) { toast(x.message, 4000); b.disabled = false; }
   };
-  if (a === 'send') { const t = card.querySelector('textarea').value.trim(); if (!t) { toast('Type a reply or tap a ready answer'); return; } return go('reply', { p_text:t }, 'Reply queued — goes out within a minute'); }
-  if (a === 'psave') { const v = card.querySelector('.pform input').value; if (!v) { toast('Pick the date they promised'); return; } return go('promise', { p_date:v }, `Promise saved — ${dLabel(v)}. No reminder until then.`); }
-  if (a === 'handled') return go('handled', {}, 'Marked handled');
-  if (a === 'reopen') return go('reopen', {}, 'Back to new');
+  const act = (action, extra) => () => rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:action, ...extra });
+  if (a === 'send') { const v = card.querySelector('textarea').value.trim(); if (!v) { toast('Type a reply or tap a ready answer'); return; } return run(act('reply', { p_text:v }), 'Reply queued — goes out within a minute'); }
+  if (a === 'psave') { const v = card.querySelector('.pform input').value; if (!v) { toast('Pick the date they promised'); return; } return run(act('promise', { p_date:v }), `Promise saved — ${dLabel(v)}. No reminder until then.`); }
+  if (a === 'csave') { const v = card.querySelector('.pform input').value.trim(); return run(() => rpc('remind_ops_v1', { p_pin:S.pin, p_action:'to_check', p_msg_id:id, p_text:v }), 'Paused 3 days — see Checks tab'); }
+  if (a === 'block') return run(() => rpc('remind_ops_v1', { p_pin:S.pin, p_action:'block', p_msg_id:id, p_text:b.dataset.why }), 'Number blocked — never texted again');
+  if (a === 'handled') return run(act('handled', {}), 'Marked handled');
+  if (a === 'reopen') { b.disabled = true; try { await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reopen' }); toast('Back to new'); await reload(); } catch (x) { toast(x.message, 4000); b.disabled = false; } return; }
+  if (a === 'lsearch') {
+    const q = card.querySelector('.pform input').value.trim(); if (q.length < 2) { toast('Type at least 2 letters'); return; }
+    try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); S.lres = j.rows || []; if (!S.lres.length) toast('No subscriber found'); render(); const i = $('list').querySelector(`[data-mid="${id}"] .pform input`); if (i) i.value = q; }
+    catch (x) { toast(x.message, 4000); }
+    return;
+  }
+  if (a === 'lpick') { b.disabled = true; try { await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'link', p_msg_id:id, p_sub:+b.dataset.sub }); toast('Linked — number saved to that subscriber'); S.ropen = null; S.lres = []; await reload(); } catch (x) { toast(x.message, 4000); b.disabled = false; } }
 });
 function smsHref(r){ return `sms:${r.phone}${IOS ? '&' : '?'}body=${encodeURIComponent(r.body)}`; }
 
@@ -382,6 +456,7 @@ function render(){
   if (S.imp) T.push(['import', 'Contacts', S.imp.rows.filter(r => r.bucket !== 'none').length]);
   if (S.auto) T.push(['auto', 'Auto texts', autoRows().length]);
   if (S.inbox) T.push(['replies', 'Replies', S.inbox.open]);
+  if (S.ops) T.push(['checks', 'Checks', S.ops.to_check.length + S.ops.failed.length]);
   $('tabs').innerHTML = T.map(([k, l, n]) => `<button type="button" class="${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-pressed="${S.tab === k}">${l}<em>${n}</em></button>`).join('');
   const box = $('list'), past = d < t, future = d > t;
   let h = '';
@@ -412,9 +487,10 @@ function render(){
   if (S.tab === 'import' && S.imp) h += impHtml();
   if (S.tab === 'auto' && S.auto) h += autoHtml(L, d, t);
   if (S.tab === 'replies' && S.inbox) h += repliesHtml();
+  if (S.tab === 'checks' && S.ops) h += checksHtml();
   if (S.tab === 'done') {
     h += L.done.length ? L.done.map(r => `<div class="dl" data-key="${esc(r.key)}"><span class="ck ${r.paid ? 'p' : ''}">${r.paid ? '₱' : r.sent ? '✓' : '⏳'}</span>
-        <div class="t"><b>${esc(r.name)}</b><small>${r.paid ? `Marked already paid by ${esc(r.paid.by)} · ${tLabel(r.paid.at)}` : r.sent ? `${r.sent.by ? `Texted by ${esc(r.sent.by)}` : 'Auto-texted'} · ${tLabel(r.sent.at)}` : `Promised to pay ${esc(dLabel(r.promise.date))}${r.promise.note ? ` · ${esc(r.promise.note)}` : ''}`}</small></div>
+        <div class="t"><b>${esc(r.name)}</b><small>${r.paid ? `Marked already paid by ${esc(r.paid.by)} · ${tLabel(r.paid.at)}` : r.sent ? `${r.sent.by ? `Texted by ${esc(r.sent.by)}` : 'Auto-texted'} · ${tLabel(r.sent.at)}` : /^TO CHECK/.test(r.promise.note || '') ? `💳 To check (${esc((r.promise.note.match(/ref ([^·]+)/) || [])[1] || 'GCash ref')}) — paused until ${esc(dLabel(r.promise.date))}` : `Promised to pay ${esc(dLabel(r.promise.date))}${r.promise.note ? ` · ${esc(r.promise.note)}` : ''}`}</small></div>
         ${r.paid || r.sent ? '<button type="button" data-act="undo">Undo</button>' : ''}</div>`).join('')
       : `<div class="empty"><b>Nothing done yet</b>Texts you send, people marked paid, and promises to pay show here.</div>`;
   }
