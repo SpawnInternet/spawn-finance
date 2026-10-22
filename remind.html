@@ -140,6 +140,10 @@ main{padding:4px 0 28px}
 .st.delivered{background:var(--done-l);color:var(--done)}.st.sent{background:var(--blue-l);color:var(--blue)}
 .st.failed{background:var(--utang-l);color:var(--utang)}.st.queued{background:var(--late-l);color:var(--late)}
 .linkbtn{color:var(--blue);font-weight:700;font-size:13.5px;padding:2px 0}
+#helpbtn{width:30px;height:30px;border-radius:50%;margin-right:8px;font-weight:800;background:var(--blue-l);color:var(--blue)}
+.help{background:var(--card);border-radius:16px;padding:14px 16px;margin:8px 0 10px;box-shadow:0 0 0 1px var(--line) inset;font-size:14px;color:var(--ink)}
+.help ol{padding-left:20px;margin:8px 0}.help li{margin-bottom:6px}.help p{margin:6px 0 10px;color:var(--ink-2)}
+.how{background:var(--blue-l);color:var(--ink);border-radius:12px;padding:9px 12px;margin-bottom:10px;font-size:13.5px}
 /* Replies tab */
 .bubble.in{margin:10px 26px 4px 0;border-radius:18px 18px 18px 4px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
@@ -173,7 +177,19 @@ main{padding:4px 0 28px}
 
 <div id="app" class="hide">
   <header><div class="wrap">
-    <div class="top"><div class="brand"><b>Spawn</b><span>Remind</span></div><div class="who"><span id="uname"></span><button type="button" id="out">Lock</button></div></div>
+    <div class="top"><div class="brand"><b>Spawn</b><span>Remind</span></div><div class="who"><span id="uname"></span><button type="button" id="helpbtn" aria-label="How to use" title="How to use">?</button><button type="button" id="out">Lock</button></div></div>
+    <div id="helpbox" class="help hide" role="dialog" aria-label="How to use Spawn Remind">
+      <b>Unsaon paggamit ang Spawn Remind</b>
+      <ol>
+        <li><b>Today's list</b> — kinsa ang ma-remind karon. <b>Automatic na ang text</b> (8:05 AM), ayaw na i-text sa phone. Bayad na? → <b>Already paid</b>. Mosaad og petsa? → <b>Promised</b>.</li>
+        <li><b>Messages</b> — mga reply sa subscribers. <b>Reply</b> (naay ready answers: GCash number, Who is this…), <b>Promised</b> (petsa), <b>To check</b> (GCash ref), <b>Handled</b> kung human na. Wala pa nakilala ang number? → <b>Link to subscriber</b>.</li>
+        <li><b>To check</b> — GCash ref nga i-verify. Kung makita na ang bayad sa libro, <b>Confirmed</b> (o automatic). Number nga dili mo-work → <b>Block number</b>.</li>
+        <li><b>Sent &amp; coming</b> — kinsa na ang na-text, ug kinsa ang sunod (pindota ▶ para ugma).</li>
+        <li><b>No number</b> — i-save ang number aron ma-text sila.</li>
+      </ol>
+      <p><b>Pahinumdom:</b> i-reply gikan sa <b>Messages</b> (dili sa phone) aron ma-record. Ang spare phone (SMS sender) ayaw hilabti.</p>
+      <button type="button" class="btn" id="helpclose">Sige, sabot na</button>
+    </div>
     <div class="day">
       <button type="button" class="nv" id="prev" aria-label="Previous day">◀</button>
       <div class="dt"><b id="dlabel"></b><small id="dsub"></small></div>
@@ -235,6 +251,8 @@ pad.addEventListener('click', e => { const b = e.target.closest('button'); if (b
 document.addEventListener('keydown', e => { if (!$('lock').classList.contains('hide')) { if (/^\d$/.test(e.key)) key(e.key); else if (e.key === 'Backspace') key('b'); } });
 function lock(msg){ S.pin = ''; typed = ''; dots(); try { sessionStorage.removeItem(SESS); } catch (x) {} $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
 $('out').onclick = () => lock();
+$('helpbtn').onclick = () => $('helpbox').classList.toggle('hide');
+$('helpclose').onclick = () => $('helpbox').classList.add('hide');
 
 async function load(pin, date){
   const r = await rpc('remind_board', { p_pin:pin, p_date:date });   // checks the PIN first
@@ -372,13 +390,13 @@ function repliesHtml(){
           <button type="button" class="btn" data-ract="handled">Handled</button>
           <button type="button" class="btn" data-ract="more">More…</button></div>
         ${ro === id + '|m' ? `<div class="acts" style="margin-top:8px"><button type="button" class="btn" data-ract="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-ract="block" data-why="stop">Stop texting them</button></div>
-          <div class="sent">Either one: this number is never texted again (Checks tab → Unblock to undo).</div>` : ''}
+          <div class="sent">Either one: this number is never texted again (To check tab → Unblock to undo).</div>` : ''}
         ${ro === id + '|r' ? `<div class="rform"><div class="tpls">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-tpl="${k}">${TPLN[k]}</button>`).join('')}</div>
           <textarea rows="4" maxlength="480" aria-label="Reply text" placeholder="Type a reply, or tap a ready answer above"></textarea>
           <button type="button" class="btn send" data-ract="send">Send reply</button></div>` : ''}
         ${ro === id + '|p' ? `<div class="pform"><input type="date" min="${S.today}" value="${gd}" aria-label="Promised pay date"><button type="button" class="btn" data-ract="psave">Save date</button></div>` : ''}
         ${ro === id + '|c' ? `<div class="pform"><input type="text" inputmode="numeric" value="${esc(ref)}" placeholder="GCash ref no." aria-label="GCash reference number"><button type="button" class="btn" data-ract="csave">Pause 3 days</button></div>
-          <div class="sent">Reminders pause 3 days. Check the ref in GCash, record the payment, then Checks tab → Confirmed.</div>` : ''}
+          <div class="sent">Reminders pause 3 days. When the payment shows in the book it is confirmed automatically — or To check tab → Confirmed.</div>` : ''}
         ${ro === id + '|l' ? `<div class="pform"><input type="search" placeholder="Type the subscriber's name" aria-label="Find subscriber"><button type="button" class="btn" data-ract="lsearch">Find</button></div>
           <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-ract="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || ''}</div>` : ''}`}
     </article>`;
@@ -433,7 +451,7 @@ $('list').addEventListener('click', async e => {
   const act = (action, extra) => () => rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:action, ...extra });
   if (a === 'send') { const v = card.querySelector('textarea').value.trim(); if (!v) { toast('Type a reply or tap a ready answer'); return; } return run(act('reply', { p_text:v }), 'Reply queued — goes out within a minute'); }
   if (a === 'psave') { const v = card.querySelector('.pform input').value; if (!v) { toast('Pick the date they promised'); return; } return run(act('promise', { p_date:v }), `Promise saved — ${dLabel(v)}. No reminder until then.`); }
-  if (a === 'csave') { const v = card.querySelector('.pform input').value.trim(); return run(() => rpc('remind_ops_v1', { p_pin:S.pin, p_action:'to_check', p_msg_id:id, p_text:v }), 'Paused 3 days — see Checks tab'); }
+  if (a === 'csave') { const v = card.querySelector('.pform input').value.trim(); return run(() => rpc('remind_ops_v1', { p_pin:S.pin, p_action:'to_check', p_msg_id:id, p_text:v }), 'Paused 3 days — see To check tab'); }
   if (a === 'block') return run(() => rpc('remind_ops_v1', { p_pin:S.pin, p_action:'block', p_msg_id:id, p_text:b.dataset.why }), 'Number blocked — never texted again');
   if (a === 'handled') return run(act('handled', {}), 'Marked handled');
   if (a === 'reopen') { b.disabled = true; try { await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'reopen' }); toast('Back to new'); await reload(); } catch (x) { toast(x.message, 4000); b.disabled = false; } return; }
@@ -454,20 +472,31 @@ function render(){
   $('dsub').textContent = d === t ? dLabel(d) : d > t ? 'Preview — not yet due' : 'Past day';
   $('prev').disabled = d <= addDays(t, -14);
   $('next').disabled = d >= addDays(t, 7);
-  const T = [['send', 'To text', L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]];
+  const T = [['send', "Today's list", L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]];
   if (S.imp) T.push(['import', 'Contacts', S.imp.rows.filter(r => r.bucket !== 'none').length]);
-  if (S.auto) T.push(['auto', 'Auto texts', autoRows().length]);
-  if (S.inbox) T.push(['replies', 'Replies', S.inbox.open]);
-  if (S.ops) T.push(['checks', 'Checks', S.ops.to_check.length + S.ops.failed.length]);
+  if (S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
+  if (S.ops) T.push(['checks', 'To check', S.ops.to_check.length + S.ops.failed.length]);
+  if (S.auto) T.push(['auto', 'Sent & coming', autoRows().length]);
   $('tabs').innerHTML = T.map(([k, l, n]) => `<button type="button" class="${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-pressed="${S.tab === k}">${l}<em>${n}</em></button>`).join('');
   const box = $('list'), past = d < t, future = d > t;
-  let h = '';
+  const auto = !!(S.auto && (S.auto.mode === 'live' || S.auto.mode === 'dry_run')), live = !!(S.auto && S.auto.mode === 'live');
+  // one plain instruction per tab (Bisaya-English) — the "?" button has the full guide
+  const HOW = {
+    send: live ? '🤖 <b>Automatic</b>: ang system mo-text ani sa 8:05 AM — ayaw na i-text sa phone. Bayad na? → <b>Already paid</b>. Mosaad og petsa? → <b>Promised</b>.'
+               : 'Mga kinahanglan i-remind karon. Bayad na? → <b>Already paid</b>. Mosaad og petsa? → <b>Promised</b>.',
+    nonum: 'Wala pay number — dili ma-text. I-type ang number ug <b>Save number</b>, o <b>Find numbers in contacts</b>.',
+    done: 'Na-text na, bayad na, naay saad, o <b>To check</b>. <b>Undo</b> kung nasayop.',
+    auto: 'Kinsa na ang na-text karon (Delivered / Failed), ug kinsa ang sunod — pindota ▶ para ugma.',
+    replies: 'Mga text gikan sa subscribers. <b>Reply</b> (naay ready answers), <b>Promised</b>, <b>To check</b> (GCash ref), <b>Handled</b> kung human na.',
+    checks: '💳 GCash ref nga i-verify: makita na sa libro? → <b>Confirmed</b> (o automatic). 📵 Number nga dili mo-work → <b>Block number</b>.',
+  };
+  let h = HOW[S.tab] ? `<div class="how">${HOW[S.tab]}</div>` : '';
   if (S.tab === 'send') {
-    h += `<div class="note">${future ? 'A look ahead — these go out on that day.' : 'Each text goes from this phone. Nothing is sent by itself.'}</div>`;
+    h += `<div class="note">${future ? 'A look ahead — these go out on that day.' : auto ? 'Gikan sa office number, automatic.' : 'Each text goes from this phone. Nothing is sent by itself.'}</div>`;
     h += L.send.length ? L.send.map(r => `<article class="item" data-key="${esc(r.key)}">${head(r)}
         <div class="bubble">${esc(r.body)}</div><div class="to">to ${esc(r.phone)}</div>
         <div class="acts">
-          ${future ? '' : `<a class="btn send" style="display:grid;place-items:center;text-decoration:none" href="${esc(smsHref(r))}" data-act="sent">Text from this phone</a>`}
+          ${future || live ? '' : `<a class="btn send" style="display:grid;place-items:center;text-decoration:none" href="${esc(smsHref(r))}" data-act="sent">Text from this phone</a>`}
           <button type="button" class="btn" data-act="copy">Copy text</button>
           ${future ? '' : `<button type="button" class="btn" data-act="paid">Already paid</button>`}
           ${future ? '' : `<button type="button" class="btn" data-act="promise">Promised</button>`}
