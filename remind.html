@@ -324,17 +324,19 @@ function tagsOf(body){
   if (/bayad na|nakabayad|nabayran|nabayaran|paid na|already paid|nagbayad|payment done|done paying|paid for|i paid|i have paid|bayad nako/.test(s)) T.push(['paid', '✅ Says paid — check']);
   if (guessDate(s)) T.push(['promise', '📅 Date ' + dLabel(guessDate(s))]);
   if (/kinsa|who is|sino|unsa ni|asa ni gikan/.test(s)) T.push(['who', '❓ Who is this']);
+  if (/(g[- ]?cash).{0,40}(number|numero|#|\bnum\b)|(number|numero|\bnum\b).{0,30}g[- ]?cash/.test(s)) T.push(['who', '📲 Asks GCash number']);
   if (/dili (ni |na )?akoa|wrong (number|send|sent)|\bstop\b|unsubscribe|ayaw (na )?(ko )?(i-?)?text|wala ko kaila|di ko kaila/.test(s)) T.push(['repair', '🚫 Wrong number / stop? → More…']);
   return T;
 }
 const TPL = {
+  gcash:'Maayong adlaw! Spawn Internet GCash: 0909 990 0556 (WE...L D.). Human mobayad, palihug i-text dinhi ang reference number. Salamat!',
   who:'Maayong adlaw! Kini gikan sa Spawn Internet, ang inyong internet provider. Office: Lalawan, Dicayas, Dipolog. Para sa pangutana o bayad, tawag o text lang niining numeroa. Salamat!',
   ref:'Salamat! Nadawat namo ang inyong reference. I-check namo ug i-record ang inyong bayad. — Spawn Internet',
   paid:'Salamat! I-check namo ang inyong bayad ug i-update ang inyong account. — Spawn Internet',
   repair:'Salamat sa pagpahibalo. Gilista na namo ang inyong koneksyon para sa among technician. — Spawn Internet',
   promise:'Salamat! Na-record namo nga mobayad mo sa {date}. — Spawn Internet',
 };
-const TPLN = { who:'Who is this', ref:'Got the ref', paid:'Will check payment', repair:'Repair noted', promise:'Promise noted' };
+const TPLN = { gcash:'GCash number', who:'Who is this', ref:'Got the ref', paid:'Will check payment', repair:'Repair noted', promise:'Promise noted' };
 // texts from the same number form one conversation; actions apply to the newest text (and close the older open ones)
 function threads(){
   const by = new Map();
