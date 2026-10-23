@@ -262,7 +262,8 @@ async function load(pin, date){
   // if its database function is not there yet, the tab just stays hidden
   const [a, ib, rp, lm] = await Promise.all([
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null),
-    rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Replies tab: hidden if missing
+    // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
+    rpc('remind_inbox_v2', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null)),
     rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Job orders tab: hidden if missing
     // Lineman list: v2 = names with optional number (sms flag); v1 = names with numbers only. Hidden if none set.
     rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
@@ -370,6 +371,9 @@ function threads(){
     const k = r.from || 'id' + r.id;
     if (!by.has(k)) by.set(k, { key:k, from:r.from, sub:r.sub, name:r.name, area:r.area, msgs:[] });
     const t = by.get(k); t.msgs.push(r); if (!t.sub && r.sub) { t.sub = r.sub; t.name = r.name; t.area = r.area; }
+    if (r.suggest && r.suggest.length) t.suggest = r.suggest;   // newest text's candidates win (rows come newest first)
+    if (r.kind === 'vendo') t.vendo = true;
+    if (r.auto_linked) t.autoLinked = r.auto_linked;
   }
   return [...by.values()].map(t => {
     t.msgs.sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.id - b.id);
@@ -379,10 +383,13 @@ function threads(){
   }).sort((a, b) => (b.open - a.open) || String(b.last.at).localeCompare(String(a.last.at)));
 }
 const refOf = text => (String(text || '').replace(/[\s-]/g, '').match(/\d{13}/) || [])[0] || '';
+// phone contacts: a .vcf the office phone opens as "Add contact" (one person) or imports (everyone)
+const vcfHref = rows => 'data:text/vcard;charset=utf-8,' + encodeURIComponent(rows.map(r =>
+  `BEGIN:VCARD\nVERSION:3.0\nFN:${String(r.name || '').replace(/[\n;]/g, ' ')} (Spawn)\nTEL;TYPE=CELL:${r.phone}\n${r.area ? 'NOTE:' + String(r.area).replace(/[\n;]/g, ' ') + '\n' : ''}END:VCARD`).join('\n'));
 function repliesHtml(){
   const I = S.inbox, T = threads(), shown = T.filter(t => S.showHandled || t.open), nDone = T.filter(t => !t.open).length;
   let h = `<div class="note">Texts to the office number (last 14 days), one card per person. ${I.mode === 'off' ? '<b>Automatic texting is OFF — replies cannot be sent from here until it is on.</b>' : 'Replies go out from the office number within a minute (08:00–18:00).'}</div>`;
-  if (nDone) h += `<div class="note"><button type="button" class="linkbtn" data-ract="toggle">${S.showHandled ? 'Hide' : 'Show'} handled (${nDone})</button></div>`;
+  h += `<div class="note">${nDone ? `<button type="button" class="linkbtn" data-ract="toggle">${S.showHandled ? 'Hide' : 'Show'} handled (${nDone})</button> · ` : ''}<button type="button" class="linkbtn" data-ract="export">📇 Export all numbers to the phone</button></div>`;
   if (!shown.length) return h + `<div class="empty"><b>No new replies</b>New texts to the office number show here.</div>`;
   return h + shown.map(t => {
     const tg = tagsOf(t.text), gd = guessDate(t.text), ro = S.ropen, id = t.last.id, ref = refOf(t.text);
@@ -391,11 +398,15 @@ function repliesHtml(){
         <span class="st ${t.open ? 'queued' : 'delivered'}">${t.open ? (t.openIds.length > 1 ? t.openIds.length + ' new' : 'New') : 'Handled'}</span></div>
       ${t.msgs.map(m => `<div class="bubble in">${esc(m.body || '')}<small class="bt">${tLabel(m.at)}</small></div>`).join('')}
       ${tg.length ? `<div class="tags">${tg.map(([k, l]) => `<span class="tg ${k}">${esc(l)}</span>`).join('')}</div>` : ''}
-      ${sent.map(x => `<div class="sent">You replied${x.by ? ' (' + esc(x.by) + ')' : ''}: “${esc(x.body)}” · ${esc(ST[x.status] || x.status)}</div>`).join('')}
+      ${sent.map(x => `<div class="sent">${x.by === 'auto' ? 'Auto-reply' : 'You replied' + (x.by ? ' (' + esc(x.by) + ')' : '')}: “${esc(x.body)}” · ${esc(ST[x.status] || x.status)}</div>`).join('')}
+      ${t.autoLinked ? `<div class="sent">🔗 Auto-linked to ${esc(t.autoLinked)} from the name they texted</div>` : ''}
+      ${t.vendo && !t.sub ? `<div class="sent">🏪 Says <b>vendo</b> — a vendo owner, not a subscriber (do not link)</div>` : ''}
+      ${!t.sub && t.suggest && t.open ? `<div class="sent">Maybe this subscriber? Tap to link:</div><div class="tpls">${t.suggest.map(s => `<button type="button" class="tpl" data-ract="lpick" data-sub="${s.sub}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''} · ${Math.round(s.score * 100)}%${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('')}</div>` : ''}
       ${!t.open ? `<div class="sent">${esc(t.last.done || 'Handled')}${t.last.done_by ? ' by ' + esc(t.last.done_by) : ''}</div><div class="acts"><button type="button" class="btn" data-ract="reopen">Reopen</button></div>`
       : `<div class="acts"><button type="button" class="btn" data-ract="reply">Reply</button>
           ${t.sub ? '<button type="button" class="btn" data-ract="promise">Promised</button><button type="button" class="btn" data-ract="tocheck">To check</button>' : '<button type="button" class="btn" data-ract="linkopen">Link to subscriber</button>'}
           <button type="button" class="btn" data-ract="handled">Handled</button>
+          ${t.sub && t.from ? `<a class="btn" style="display:inline-grid;place-items:center;text-decoration:none" download="${esc((t.name || 'Spawn subscriber').replace(/[^\w .-]/g, ''))}.vcf" href="${vcfHref([{ name:t.name, area:t.area, phone:t.from }])}">📇 Save contact</a>` : ''}
           <button type="button" class="btn" data-ract="more">More…</button></div>
         ${ro === id + '|m' ? `<div class="acts" style="margin-top:8px"><button type="button" class="btn" data-ract="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-ract="block" data-why="stop">Stop texting them</button></div>
           <div class="sent">Either one: this number is never texted again (To check tab → Unblock to undo).</div>` : ''}
@@ -443,6 +454,15 @@ $('list').addEventListener('click', async e => {
 $('list').addEventListener('click', async e => {
   const b = e.target.closest('[data-ract],[data-tpl]'); if (!b || !S.inbox) return;
   if (b.dataset.ract === 'toggle') { S.showHandled = !S.showHandled; render(); return; }
+  if (b.dataset.ract === 'export') {   // one .vcf with every subscriber that has a number → import once on the office phone
+    b.disabled = true;
+    try {
+      const j = await rpc('remind_phonebook_v1', { p_pin:S.pin });
+      const a = document.createElement('a'); a.href = vcfHref(j.rows || []); a.download = `spawn-subscribers-${S.today}.vcf`; document.body.appendChild(a); a.click(); a.remove();
+      toast(`${(j.rows || []).length} contacts — open the file on the phone and choose Import`, 4000);
+    } catch (x) { toast(x.message, 4000); }
+    b.disabled = false; return;
+  }
   const card = b.closest('[data-mid]'); if (!card) return;
   const id = +card.dataset.mid, t = threads().find(x => x.last.id === id); if (!t) return;
   const others = t.openIds.filter(x => x !== id);
