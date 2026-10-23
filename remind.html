@@ -220,10 +220,10 @@ main{padding:4px 0 28px}
       <b>Unsaon paggamit ang Spawn Text</b>
       <ol>
         <li><b>Today's list</b> — kinsa ang ma-remind karon. <b>Automatic na ang text</b> (8:05 AM), ayaw na i-text sa phone. Bayad na? → <b>Already paid</b>. Mosaad og petsa? → <b>Promised</b>.</li>
-        <li><b>Messages</b> — mga reply sa subscribers. <b>Reply</b> (naay ready answers: GCash number, Who is this…), <b>Promised</b> (petsa), <b>To check</b> (GCash ref), <b>Handled</b> kung human na. Wala pa nakilala ang number? → <b>Link to subscriber</b>.</li>
+        <li><b>💬 Chats</b> — sama sa Messages sa phone. Pindota ang tawo → makita ang tanan nga text (ila ug ato), reply sa ubos (laptop: Enter = send). Mga chip: <b>Handled</b>, <b>To check</b> (GCash ref), <b>Promised</b> (petsa), <b>Link</b> (wala pa nakilala ang number), <b>Job order</b>. <b>✏️ New text</b> = text kang bisan kinsa. Bag-ong text → 🔔 pop-up ug ringtone.</li>
         <li><b>To check</b> — GCash ref nga i-verify. Kung makita na ang bayad sa libro, <b>Confirmed</b> (o automatic). Number nga dili mo-work → <b>Block number</b>.</li>
         <li><b>Sent &amp; coming</b> — kinsa na ang na-text, ug kinsa ang sunod (pindota ▶ para ugma).</li>
-        <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
+        <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet; 🏪 = vendo (di mahulugan, validity). <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
         <li><b>No number</b> — i-save ang number aron ma-text sila.</li>
       </ol>
       <p><b>Pahinumdom:</b> i-reply gikan sa <b>Messages</b> (dili sa phone) aron ma-record. Ang spare phone (SMS sender) ayaw hilabti.</p>
@@ -252,7 +252,7 @@ const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', { wee
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' }) : '';
 const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null, linemen:[], lmOpen:null, q:'', thread:null, chats:null, chat:null, cq:'', cf:'all', cform:null };
+const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null, linemen:[], lmOpen:null, q:'', thread:null, chats:null, chat:null, cq:'', cf:'all', cform:null, tabPicked:/^#(jobs|repairs)$/.test(location.hash), newText:false };
 
 function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
 const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 10 minutes.', not_on_list:'This person is no longer on the list — refresh.',
@@ -302,12 +302,15 @@ async function load(pin, date){
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null),
     // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
     rpc('remind_inbox_v2', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null)),
-    rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Job orders tab: hidden if missing
+    // Job orders tab: v2 includes vendo complaints (kind); v1 until v2 exists; hidden if neither
+    rpc('remind_repairs_v2', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null)),
     // Lineman list: v2 = names with optional number (sms flag); v1 = names with numbers only. Hidden if none set.
     rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
     rpc('remind_chats_v1', { p_pin:pin, p_days:60 }).catch(() => null),   // 💬 Chats tab: the old Messages tab shows if missing
   ]);
   S.chats = ch ? (ch.rows || []) : null; if (!S.chats && S.tab === 'chats') S.tab = 'send';
+  if (S.chats && !S.tabPicked && S.tab === 'send') S.tab = 'chats';   // Chats opens first (unless a tab or #jobs was chosen)
+  S.tabPicked = true;
   if (S.chat) await refreshChat();   // keep the open conversation fresh
   S.linemen = lm ? (lm.linemen || (lm.names || []).map(name => ({ name, sms:true }))) : [];
   S.ops = await rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null);   // Checks tab: hidden if missing
@@ -453,6 +456,10 @@ const chatRows = () => {
 function chatsHtml(){
   const C = chatRows(), open = S.chat;
   const list = `<div class="clist">
+    <div class="acts" style="margin-bottom:10px"><button type="button" class="btn" data-cx="newtext">✏️ New text</button></div>
+    ${S.newText ? `<div class="pform" style="display:grid;gap:8px;margin-bottom:12px"><input type="tel" inputmode="numeric" id="ntnum" placeholder="09XXXXXXXXX" aria-label="Mobile number" maxlength="13">
+      <textarea id="nttext" rows="3" maxlength="480" aria-label="Message" placeholder="Text message" style="box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px"></textarea>
+      <div class="acts"><button type="button" class="btn send" data-cx="newsend">Send</button><button type="button" class="btn" data-cx="newcancel">Cancel</button></div></div>` : ''}
     <input class="q" id="cq" type="search" placeholder="Search name or number" aria-label="Search chats" value="${esc(S.cq || '')}">
     <div class="cfil">${[['all', 'All'], ['unread', 'Unread'], ['repair', '🔧 Repairs'], ['check', '💳 To check']].map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}</div>
     ${C.length ? C.map(c => `<button type="button" class="crow${c.unread ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
@@ -486,16 +493,16 @@ function chatHtml(ch){
       ${f === 'link' ? `<div class="pform"><input type="search" placeholder="Type the subscriber's name" aria-label="Find subscriber"><button type="button" class="btn" data-cx="lsearch">Find</button></div>
         <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('')}</div>` : ''}
       ${f === 'more' ? `<div class="acts" style="margin:4px 0 8px"><button type="button" class="btn" data-cx="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-cx="block" data-why="stop">Stop texting them</button></div>` : ''}
-      ${lastIn ? `<div class="chips">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-ctpl="${k}">${TPLN[k]}</button>`).join('')}</div>
-        <div class="row"><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>`
-        : `<div class="sent">They have not texted the office number yet — the reply box opens once they do.</div>`}
+      ${lastIn ? `<div class="chips">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-ctpl="${k}">${TPLN[k]}</button>`).join('')}</div>` : ''}
+      <div class="row"><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
     </div></div>`;
 }
 async function openChat(address){
   const c = S.chats.find(x => x.address === address); if (!c) return;
   S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, rows:[], lastIn:c.last_in_id, loading:true }; S.cform = null; S.lres = []; render();
   await refreshChat(); render();
-  if (!matchMedia('(min-width:900px)').matches) window.scrollTo({ top:0 });
+  const end = $('list').querySelector('.chat .compose');   // open at the newest message, like a phone
+  if (end) end.scrollIntoView({ block:'end' });
 }
 async function refreshChat(){
   if (!S.chat) return;
@@ -511,7 +518,19 @@ $('list').addEventListener('click', async e => {
   const row = e.target.closest('[data-ch]'); if (row) { openChat(row.dataset.ch); return; }
   const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; render(); return; }
   const tp = e.target.closest('[data-ctpl]'); if (tp) { const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); ta.focus(); } return; }
-  const b = e.target.closest('[data-cx]'); if (!b || !S.chat) return;
+  const b = e.target.closest('[data-cx]'); if (!b) return;
+  if (b.dataset.cx === 'newtext') { S.newText = true; render(); const i = $('ntnum'); if (i) i.focus(); return; }
+  if (b.dataset.cx === 'newcancel') { S.newText = false; render(); return; }
+  if (b.dataset.cx === 'newsend') {   // text anyone (remind_send_v1)
+    const num = ($('ntnum').value || '').replace(/[^0-9]/g, ''), txt = $('nttext').value.trim();
+    if (!/^(63|0)?9[0-9]{9}$/.test(num)) { toast('Type a mobile number like 09XXXXXXXXX'); return; }
+    if (!txt) { toast('Type the message first'); return; }
+    b.disabled = true;
+    try { await rpc('remind_send_v1', { p_pin:S.pin, p_address:num, p_text:txt }); S.newText = false; toast('Sent — goes out within a minute'); await reload(); }
+    catch (x) { toast(/function|404/i.test(x.message) ? 'Text anyone is not switched on yet' : x.message, 4000); b.disabled = false; }
+    return;
+  }
+  if (!S.chat) return;
   const a = b.dataset.cx, ch = S.chat, mid = ch.lastIn, box = b.closest('.compose');
   if (a === 'back') { S.chat = null; render(); return; }
   if (a === 'f') { S.cform = S.cform === b.dataset.f ? null : b.dataset.f; render(); const i = $('list').querySelector('.pform input'); if (i) i.focus(); return; }
@@ -521,15 +540,16 @@ $('list').addEventListener('click', async e => {
     try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); S.lres = j.rows || []; if (!S.lres.length) toast('No subscriber found'); render(); const i = $('list').querySelector('.pform input'); if (i) i.value = q; }
     catch (x) { toast(x.message, 4000); } return;
   }
-  if (!mid && a !== 'block') { toast('They have not texted yet — nothing to act on'); return; }
+  if (!mid && a !== 'block' && a !== 'send') { toast('They have not texted yet — nothing to act on'); return; }
   let text = '';
   if (a === 'send') { text = box.querySelector('textarea').value.trim(); if (!text) { toast('Type a reply first'); return; } }
   if (a === 'block' && !confirm(b.dataset.why === 'stop' ? 'Stop texting this number?' : 'Mark as wrong number? It is never texted again.')) return;
   b.disabled = true;
   try {
     if (a === 'send') {
-      // reply = answers their latest text; it marks that text handled — reopen it if others are still waiting so the badge stays honest
-      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:mid, p_action:'reply', p_text:text });
+      // with a text from them: reply answers their latest text (marks it handled); without: text anyone (remind_send_v1)
+      if (mid) await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:mid, p_action:'reply', p_text:text });
+      else await rpc('remind_send_v1', { p_pin:S.pin, p_address:ch.address, p_text:text }).catch(x => { throw new Error(/function|404/i.test(x.message) ? 'Text anyone is not switched on yet' : x.message); });
       toast('Sent — goes out within a minute');
     } else if (a === 'handled') {
       for (const id of ch.rows.filter(r => r.dir === 'in' && r.status === 'received').map(r => r.id)) await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'handled' });
@@ -543,8 +563,8 @@ $('list').addEventListener('click', async e => {
     } else if (a === 'lpick') {
       await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'link', p_msg_id:mid, p_sub:+b.dataset.sub }); toast('Linked — number saved to that subscriber');
     } else if (a === 'job') {
-      const j = await rpc('remind_job_create_v1', { p_pin:S.pin, p_msg_id:mid });
-      toast(j && j.id ? (j.existing ? 'Already in Spawn Jobs' : 'Job order made in Spawn Jobs') : 'Spawn Jobs link is off', 3500);
+      const j = await rpc('remind_job_create_v2', { p_pin:S.pin, p_msg_id:mid }).catch(() => rpc('remind_job_create_v1', { p_pin:S.pin, p_msg_id:mid }));
+      toast(j && j.id ? (j.existing ? 'Already in Spawn Jobs' : (j.type === 'vendo_repair' ? 'Vendo job order' : 'Job order') + ' made in Spawn Jobs') : 'Spawn Jobs link is off', 3500);
     } else if (a === 'block') {
       await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'block', p_msg_id:mid, p_sub:ch.sub, p_text:b.dataset.why }); toast('Number blocked');
     }
@@ -552,7 +572,11 @@ $('list').addEventListener('click', async e => {
   } catch (x) { toast(x.message, 4000); b.disabled = false; }
 });
 $('list').addEventListener('input', e => { if (e.target.id === 'cq') { S.cq = e.target.value; const pos = e.target.selectionStart; render(); const i = $('cq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } } });
-$('list').addEventListener('keydown', e => { if (e.target.matches('.chat textarea') && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { const s = $('list').querySelector('[data-cx="send"]'); if (s) s.click(); } });
+// laptop: Enter sends, Shift+Enter = new line; phone: the Send button (Enter makes a new line)
+$('list').addEventListener('keydown', e => {
+  if (!e.target.matches('.chat textarea') || e.key !== 'Enter' || e.shiftKey) return;
+  if (e.ctrlKey || e.metaKey || matchMedia('(pointer:fine)').matches) { e.preventDefault(); const s = $('list').querySelector('[data-cx="send"]'); if (s) s.click(); }
+});
 window.addEventListener('resize', () => { if (S.tab === 'chats') render(); });
 
 /* 🔔 New-text alerts: while Spawn Text is open (any tab, laptop or phone) — pop-up, ringtone, count in the title.
@@ -729,8 +753,8 @@ function jobCards(){
   const by = new Map();
   for (const r of (S.repairs ? S.repairs.rows : [])) {
     const k = (r.from || 'id' + r.id) + '|' + phDay(r.at);
-    if (!by.has(k)) by.set(k, { day:phDay(r.at), from:r.from, sub:r.sub, name:r.name, area:r.area, plan:r.plan, msgs:[] });
-    by.get(k).msgs.push(r);
+    if (!by.has(k)) by.set(k, { day:phDay(r.at), from:r.from, sub:r.sub, name:r.name, area:r.area, plan:r.plan, kind:r.kind, msgs:[] });
+    by.get(k).msgs.push(r); if (r.kind === 'vendo') by.get(k).kind = 'vendo';
   }
   return [...by.values()].map(c => {
     c.msgs.sort((a, b) => String(a.at).localeCompare(String(b.at)));
@@ -766,7 +790,7 @@ function jobsHtml(){
   for (const c of shown) {
     if (c.day !== day) { day = c.day; h += `<div class="sec"><b>${esc(dLabel(day))}</b></div>`; }
     const id = c.last.id, replies = c.msgs.flatMap(m => m.replies || []);
-    h += `<article class="item" data-jid="${id}" data-jopen="${c.openIds.join(',')}"><div class="ih"><div class="nm"><b>${esc(c.name || c.from || 'Unknown')}</b>
+    h += `<article class="item" data-jid="${id}" data-jopen="${c.openIds.join(',')}"><div class="ih"><div class="nm"><b>${c.kind === 'vendo' ? '🏪 ' : ''}${esc(c.name || c.from || 'Unknown')}${c.kind === 'vendo' ? ' <small>(vendo)</small>' : ''}</b>
         <small>${c.name ? esc(c.area || '') + (c.plan ? ' · ₱' + Number(c.plan).toLocaleString('en-PH') : '') : 'not linked to a subscriber'}${c.from ? ' · ' + esc(c.from) : ''}</small></div>
         <span class="st ${c.open ? 'failed' : 'delivered'}">${c.open ? 'Open' : 'Done'}</span></div>
       ${c.msgs.map(m => `<div class="bubble in">${esc(m.body || '')}<small class="bt">${tLabel(m.at)}</small></div>`).join('')}
@@ -798,7 +822,7 @@ $('list').addEventListener('click', async e => {
     try {
       // SMS only when the lineman has a number; the job order in Spawn Jobs always (switch remind_job_to_jobs)
       if (lm.sms) await rpc('remind_job_send_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_name:name, p_text:jobText(lc) });
-      const j = await rpc('remind_job_create_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_lineman:name });
+      const j = await rpc('remind_job_create_v2', { p_pin:S.pin, p_msg_id:lc.last.id, p_lineman:name }).catch(() => rpc('remind_job_create_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_lineman:name }));
       const made = j && j.id ? (j.existing ? 'already in Spawn Jobs' : 'job order made in Spawn Jobs') : 'Spawn Jobs link is off';
       S.lmOpen = null; toast(`${name}: ${made}${lm.sms ? ' · SMS sent' : ''}`, 3500); await reload();
     }
@@ -847,10 +871,11 @@ function render(){
   $('dsub').textContent = d === t ? dLabel(d) : d > t ? 'Preview — not yet due' : 'Past day';
   $('prev').disabled = d <= addDays(t, -14);
   $('next').disabled = d >= addDays(t, 7);
-  const T = [['send', "Today's list", L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]];
+  const T = [];
+  if (S.chats) T.push(['chats', '💬 Chats', S.chats.reduce((n, c) => n + (c.unread || 0), 0)]);   // first: the office lives here
+  T.push(['send', "Today's list", L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]);
   if (S.imp) T.push(['import', 'Contacts', S.imp.rows.filter(r => r.bucket !== 'none').length]);
-  if (S.chats) T.push(['chats', '💬 Chats', S.chats.reduce((n, c) => n + (c.unread || 0), 0)]);
-  else if (S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
+  if (!S.chats && S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
   if (S.repairs) T.push(['jobs', '🔧 Job orders', jobCards().filter(c => c.open).length]);
   if (S.ops) T.push(['checks', 'To check', S.ops.to_check.length + S.ops.failed.length]);
   if (S.auto) T.push(['auto', 'Sent & coming', autoRows().length]);
@@ -912,7 +937,7 @@ function render(){
   box.innerHTML = h;
 }
 
-$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; S.tab = b.dataset.tab; S.open = null; render(); window.scrollTo({ top:0 }); });
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; S.tab = b.dataset.tab; S.tabPicked = true; S.open = null; render(); window.scrollTo({ top:0 }); });
 $('list').addEventListener('click', e => { if (e.target.closest('#tests')) { S.showTests = !S.showTests; render(); } });
 $('prev').onclick = () => { S.date = addDays(S.date, -1); S.open = null; reload(); };
 $('next').onclick = () => { S.date = addDays(S.date, 1); S.open = null; reload(); };
