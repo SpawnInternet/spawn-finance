@@ -508,8 +508,8 @@ function chatHtml(ch){
         <button type="button" class="tpl" data-cx="f" data-f="more">⋯</button></div>
       ${f === 'check' ? `<div class="pform"><input type="text" inputmode="numeric" value="${esc(ref)}" placeholder="GCash ref no." aria-label="GCash reference number"><button type="button" class="btn" data-cx="csave">Pause 3 days</button></div>` : ''}
       ${f === 'promise' ? `<div class="pform"><input type="date" min="${S.today}" value="${gd}" aria-label="Promised pay date"><button type="button" class="btn" data-cx="psave">Save date</button></div>` : ''}
-      ${f === 'link' ? `<div class="pform"><input type="search" placeholder="Type the subscriber's name" aria-label="Find subscriber"><button type="button" class="btn" data-cx="lsearch">Find</button></div>
-        <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('')}</div>` : ''}
+      ${f === 'link' ? `<div class="pform"><input type="search" id="lq" placeholder="Search subscriber name…" aria-label="Find subscriber" value="${esc(S.lq || '')}" autocomplete="off"></div>
+        <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || (S.lnone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>` : ''}
       ${f === 'more' ? `<div class="acts" style="margin:4px 0 8px"><button type="button" class="btn" data-cx="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-cx="block" data-why="stop">Stop texting them</button></div>` : ''}
       ${lastIn ? `<div class="cchips">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-ctpl="${k}">${TPLN[k]}</button>`).join('')}</div>` : ''}
       <div class="row"><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
@@ -554,7 +554,7 @@ $('list').addEventListener('click', async e => {
   if (!S.chat) return;
   const a = b.dataset.cx, ch = S.chat, mid = ch.lastIn, box = b.closest('.compose');
   if (a === 'back') { S.chat = null; render(); return; }
-  if (a === 'f') { S.cform = S.cform === b.dataset.f ? null : b.dataset.f; render(); const i = $('list').querySelector('.pform input'); if (i) i.focus(); return; }
+  if (a === 'f') { S.cform = S.cform === b.dataset.f ? null : b.dataset.f; S.lq = ''; S.lres = []; S.lnone = false; render(); const i = $('list').querySelector('.pform input'); if (i) i.focus(); return; }
   if (a === 'lsearch') {
     const q = box.querySelector('.pform input').value.trim(); if (q.length < 2) { toast('Type at least 2 letters'); return; }
     b.disabled = true;
@@ -592,6 +592,10 @@ $('list').addEventListener('click', async e => {
     S.cform = null; S.lres = []; await reload(); scrollChatEnd();
   } catch (x) { toast(x.message, 4000); b.disabled = false; }
 });
+let lqT = null;
+async function linkSearch(q){ try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); if ((S.lq || '').trim() !== q) return; S.lres = j.rows || []; S.lnone = !S.lres.length; render(); const i = $('lq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } catch (x) { toast(x.message, 4000); } }
+$('list').addEventListener('input', e => { if (e.target.id === 'lq') { S.lq = e.target.value; clearTimeout(lqT); const q = S.lq.trim(); if (q.length < 2) { S.lres = []; S.lnone = false; return; } lqT = setTimeout(() => linkSearch(q), 350); } });
+$('list').addEventListener('keydown', e => { if (e.target.id === 'lq' && e.key === 'Enter') { e.preventDefault(); clearTimeout(lqT); const q = (S.lq || '').trim(); if (q.length >= 2) linkSearch(q); } });
 $('list').addEventListener('input', e => { if (e.target.id === 'cq') { S.cq = e.target.value; const pos = e.target.selectionStart; render(); const i = $('cq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } } });
 // laptop: Enter sends, Shift+Enter = new line; phone: the Send button (Enter makes a new line)
 $('list').addEventListener('keydown', e => {
