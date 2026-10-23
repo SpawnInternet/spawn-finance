@@ -295,7 +295,7 @@ function head(r){
 }
 /* Auto texts tab: what the automatic sender will send / has sent for this day */
 const ST = { queued:'Waiting', sent:'Sent', delivered:'Delivered', failed:'Failed', handled:'Skipped' };
-const WHY = { due_soon:'Due soon', late:'Late', utang:'Utang', reply:'Reply' };
+const WHY = { due_soon:'Due soon', due_today:'Due today', late:'Late', utang:'Utang', reply:'Reply', note:'Note' };
 const SKIP = { stale_not_sent:'too late in the day — never sent late', off_list_before_send:'paid or off the list before sending',
   off_list_paid_or_promised_before_send:'paid or promised before sending', not_in_canary:'not on the trial list' };
 // test-mode texts (sent to the test number) are hidden unless "Show test texts" is on
