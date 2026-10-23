@@ -185,7 +185,7 @@ main{padding:4px 0 28px}
         <li><b>Messages</b> — mga reply sa subscribers. <b>Reply</b> (naay ready answers: GCash number, Who is this…), <b>Promised</b> (petsa), <b>To check</b> (GCash ref), <b>Handled</b> kung human na. Wala pa nakilala ang number? → <b>Link to subscriber</b>.</li>
         <li><b>To check</b> — GCash ref nga i-verify. Kung makita na ang bayad sa libro, <b>Confirmed</b> (o automatic). Number nga dili mo-work → <b>Block number</b>.</li>
         <li><b>Sent &amp; coming</b> — kinsa na ang na-text, ug kinsa ang sunod (pindota ▶ para ugma).</li>
-        <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet. <b>📞 Call</b>, <b>📋 Copy</b> (para sa lineman o Spawn Jobs), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
+        <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>📲 Lineman</b> (i-text ang job order sa lineman), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
         <li><b>No number</b> — i-save ang number aron ma-text sila.</li>
       </ol>
       <p><b>Pahinumdom:</b> i-reply gikan sa <b>Messages</b> (dili sa phone) aron ma-record. Ang spare phone (SMS sender) ayaw hilabti.</p>
@@ -214,13 +214,14 @@ const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', { wee
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' }) : '';
 const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null };
+const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null, linemen:[], lmOpen:null };
 
 function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
 const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 10 minutes.', not_on_list:'This person is no longer on the list — refresh.',
   no_phone:'No number for this person yet.', bad_phone:'That is not a mobile number. Use 09XXXXXXXXX.', bad_date:'Pick a date from today on.',
   sending_off:'Automatic texting is OFF — turn it on to send replies.', empty_text:'Type a reply first.', not_found:'This text is gone — refresh.',
-  no_subscriber:'This number is not matched to a subscriber — save their number first.' };
+  no_subscriber:'This number is not matched to a subscriber — save their number first.',
+  no_lineman:'That lineman is not on the list any more — refresh.' };
 async function rpc(fn, args){
   let res; try { res = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' }, body:JSON.stringify(args) }); }
   catch (e) { throw new Error('No signal — try again.'); }
@@ -259,11 +260,13 @@ async function load(pin, date){
   const r = await rpc('remind_board', { p_pin:pin, p_date:date });   // checks the PIN first
   // Auto texts breakdown: asked only after the PIN passed (a wrong PIN must count once), and optional —
   // if its database function is not there yet, the tab just stays hidden
-  const [a, ib, rp] = await Promise.all([
+  const [a, ib, rp, lm] = await Promise.all([
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null),
     rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Replies tab: hidden if missing
     rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Job orders tab: hidden if missing
+    rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null),   // "Send to lineman": hidden if missing or no names set
   ]);
+  S.linemen = (lm && lm.names) || [];
   S.ops = await rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null);   // Checks tab: hidden if missing
   if (!S.ops && S.tab === 'checks') S.tab = 'send';
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
@@ -497,9 +500,23 @@ const jobText = c => ['JOB ORDER (text) — ' + dLabel(c.day),
   c.area ? 'Area: ' + c.area : '', c.plan ? 'Plan: ₱' + Number(c.plan).toLocaleString('en-PH') : '',
   c.from ? 'Contact: ' + c.from : '',
   'Reklamo: ' + c.msgs.map(m => `${(m.body || '').trim()} (${tLabel(m.at)})`).join(' / ')].filter(Boolean).join('\n');
+// Spawn Notes is a Messenger GC (bots cannot post there): on a phone open the share menu (Messenger → Spawn Notes),
+// on a PC copy. "Posted" marks are remembered on this phone only.
+const POSTED = 'spawn-jobs-posted';
+const posted = () => { try { return JSON.parse(localStorage.getItem(POSTED) || '[]'); } catch (x) { return []; } };
+function markPosted(ids){ try { localStorage.setItem(POSTED, JSON.stringify([...new Set([...posted(), ...ids])].slice(-300))); } catch (x) {} }
+async function shareJob(t, ids){
+  if (navigator.share && matchMedia('(pointer:coarse)').matches) {
+    try { await navigator.share({ text:t }); markPosted(ids); render(); } catch (x) { if (x.name !== 'AbortError') toast(x.message, 4000); }
+    return;
+  }
+  try { await navigator.clipboard.writeText(t); markPosted(ids); render(); toast('Copied — paste it in Spawn Notes'); }
+  catch (x) { window.prompt('Copy this job order:', t); }
+}
 function jobsHtml(){
-  const C = jobCards(), nOpen = C.filter(c => c.open).length, shown = C.filter(c => S.rpView === 'all' || c.open);
-  let h = `<div class="note"><button type="button" class="linkbtn" data-ja="view">${S.rpView === 'all' ? `Show open only (${nOpen})` : `Show all (${C.length})`}</button></div>`;
+  const C = jobCards(), nOpen = C.filter(c => c.open).length, shown = C.filter(c => S.rpView === 'all' || c.open), P = posted();
+  let h = `<div class="note"><button type="button" class="linkbtn" data-ja="view">${S.rpView === 'all' ? `Show open only (${nOpen})` : `Show all (${C.length})`}</button>
+    ${nOpen ? ` · <button type="button" class="linkbtn" data-ja="shareall">📤 Post all open (${nOpen}) to Spawn Notes</button>` : ''}</div>`;
   if (!shown.length) return h + `<div class="empty"><b>${S.rpView === 'all' ? 'Walay reklamo' : 'Walay bukas nga reklamo 🎉'}</b>Ang mga text nga "guba / walay internet" mogawas diri.</div>`;
   let day = '';
   for (const c of shown) {
@@ -509,12 +526,16 @@ function jobsHtml(){
         <small>${c.name ? esc(c.area || '') + (c.plan ? ' · ₱' + Number(c.plan).toLocaleString('en-PH') : '') : 'not linked to a subscriber'}${c.from ? ' · ' + esc(c.from) : ''}</small></div>
         <span class="st ${c.open ? 'failed' : 'delivered'}">${c.open ? 'Open' : 'Done'}</span></div>
       ${c.msgs.map(m => `<div class="bubble in">${esc(m.body || '')}<small class="bt">${tLabel(m.at)}</small></div>`).join('')}
-      ${replies.map(x => `<div class="sent">💬 Gi-reply${x.by ? ' (' + esc(x.by) + ')' : ''}: “${esc(x.body)}”</div>`).join('')}
-      ${!c.open ? `<div class="sent">✅ ${esc(c.last.done || 'Done')}${c.last.done_by ? ' · ' + esc(c.last.done_by) : ''}</div><div class="acts"><button type="button" class="btn" data-ja="copy">📋 Copy</button><button type="button" class="btn" data-ja="reopen">Reopen</button></div>`
+      ${replies.map(x => /→/.test(x.by || '') ? `<div class="sent">📲 Gi-send sa lineman (${esc(x.by)})${x.status ? ' · ' + esc(x.status) : ''}</div>`
+        : `<div class="sent">💬 Gi-reply${x.by ? ' (' + esc(x.by) + ')' : ''}: “${esc(x.body)}”</div>`).join('')}
+      ${c.msgs.some(m => P.includes(m.id)) ? `<div class="sent">📤 Posted to Spawn Notes</div>` : ''}
+      ${!c.open ? `<div class="sent">✅ ${esc(c.last.done || 'Done')}${c.last.done_by ? ' · ' + esc(c.last.done_by) : ''}</div><div class="acts"><button type="button" class="btn" data-ja="share">📤 Spawn Notes</button><button type="button" class="btn" data-ja="reopen">Reopen</button></div>`
         : `<div class="acts">${c.from ? `<a class="btn" style="display:inline-grid;place-items:center;text-decoration:none" href="tel:${esc(c.from)}">📞 Call</a>` : ''}
-            <button type="button" class="btn" data-ja="copy">📋 Copy</button>
+            <button type="button" class="btn" data-ja="share">📤 Spawn Notes</button>
+            ${S.linemen.length ? `<button type="button" class="btn" data-ja="lm">📲 Lineman</button>` : ''}
             <button type="button" class="btn" data-ja="reply">💬 Reply</button>
             <button type="button" class="btn" data-ja="done">✅ Done — naayo na</button></div>
+          ${S.lmOpen === id && S.linemen.length ? `<div class="rform"><div class="sent">I-text ang job order ngadto kang:</div><div class="tpls">${S.linemen.map((n, i) => `<button type="button" class="tpl" data-jl="${i}">📲 ${esc(n)}</button>`).join('')}</div></div>` : ''}
           ${S.rpOpen === id ? `<div class="rform"><div class="tpls">${JOBQ.map(([l], i) => `<button type="button" class="tpl" data-jq="${i}">${esc(l)}</button>`).join('')}</div>
             <textarea rows="4" maxlength="480" aria-label="Reply text" placeholder="I-type ang reply, o pilia ang ready answer sa ibabaw"></textarea>
             <button type="button" class="btn send" data-ja="send">Send reply</button></div>` : ''}`}
@@ -525,18 +546,28 @@ function jobsHtml(){
 $('list').addEventListener('click', async e => {
   const q = e.target.closest('[data-jq]');
   if (q) { const ta = q.closest('[data-jid]').querySelector('textarea'); ta.value = JOBQ[+q.dataset.jq][1]; ta.focus(); return; }
+  const l = e.target.closest('[data-jl]');
+  if (l) {
+    const lc = jobCards().find(x => x.last.id === +l.closest('[data-jid]').dataset.jid), name = S.linemen[+l.dataset.jl];
+    if (!lc || !name || !confirm(`I-text ang job order ni ${lc.name || lc.from || 'unknown'} ngadto kang ${name}?`)) return;
+    l.disabled = true;
+    try { await rpc('remind_job_send_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_name:name, p_text:jobText(lc) }); S.lmOpen = null; toast(`Sent to ${name} — goes out within a minute`); await reload(); }
+    catch (x) { toast(x.message, 4000); l.disabled = false; }
+    return;
+  }
   const b = e.target.closest('[data-ja]'); if (!b || !S.repairs) return;
   if (b.dataset.ja === 'view') { S.rpView = S.rpView === 'all' ? 'open' : 'all'; render(); return; }
+  if (b.dataset.ja === 'shareall') {
+    const open = jobCards().filter(x => x.open);
+    shareJob(open.map(jobText).join('\n\n'), open.flatMap(x => x.msgs.map(m => m.id)));
+    return;
+  }
   const card = b.closest('[data-jid]'); if (!card) return;
   const id = +card.dataset.jid, open = card.dataset.jopen ? card.dataset.jopen.split(',').map(Number) : [];
   const c = jobCards().find(x => x.last.id === id); if (!c) return;
-  if (b.dataset.ja === 'copy') {
-    const t = jobText(c);
-    try { await navigator.clipboard.writeText(t); toast('Copied — paste it to the lineman or Spawn Jobs'); }
-    catch (x) { window.prompt('Copy this job order:', t); }
-    return;
-  }
-  if (b.dataset.ja === 'reply') { S.rpOpen = S.rpOpen === id ? null : id; render(); const ta = $('list').querySelector(`[data-jid="${id}"] textarea`); if (ta) ta.focus(); return; }
+  if (b.dataset.ja === 'share') { shareJob(jobText(c), c.msgs.map(m => m.id)); return; }
+  if (b.dataset.ja === 'lm') { S.lmOpen = S.lmOpen === id ? null : id; S.rpOpen = null; render(); return; }
+  if (b.dataset.ja === 'reply') { S.rpOpen = S.rpOpen === id ? null : id; S.lmOpen = null; render(); const ta = $('list').querySelector(`[data-jid="${id}"] textarea`); if (ta) ta.focus(); return; }
   let text = '';
   if (b.dataset.ja === 'send') { text = card.querySelector('textarea').value.trim(); if (!text) { toast('I-type ang reply o pilia ang ready answer'); return; } }
   b.disabled = true;
@@ -582,7 +613,7 @@ function render(){
     done: 'Na-text na, bayad na, naay saad, o <b>To check</b>. <b>Undo</b> kung nasayop.',
     auto: 'Kinsa na ang na-text karon (Delivered / Failed), ug kinsa ang sunod — pindota ▶ para ugma.',
     replies: 'Mga text gikan sa subscribers. <b>Reply</b> (naay ready answers), <b>Promised</b>, <b>To check</b> (GCash ref), <b>Handled</b> kung human na.',
-    jobs: '🔧 Mga reklamo nga guba / walay internet = posible nga job order. <b>📞 Call</b>, <b>📋 Copy</b> (para sa lineman o Spawn Jobs), <b>💬 Reply</b>, dayon <b>✅ Done</b> kung naayo na.',
+    jobs: '🔧 Mga reklamo nga guba / walay internet = posible nga job order. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>📲 Lineman</b> (i-text ang job order sa lineman), <b>💬 Reply</b>, dayon <b>✅ Done</b> kung naayo na.',
     checks: '💳 GCash ref nga i-verify: makita na sa libro? → <b>Confirmed</b> (o automatic). 📵 Number nga dili mo-work → <b>Block number</b>.',
   };
   let h = HOW[S.tab] ? `<div class="how">${HOW[S.tab]}</div>` : '';
