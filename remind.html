@@ -43,6 +43,7 @@ input{font:inherit;color:inherit}
 :focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:8px}
 .hide{display:none!important}
 .wrap{max-width:560px;margin:0 auto;padding:0 16px}
+@media (min-width:900px){body.chats main.wrap{max-width:1040px}}   /* Chats: list + conversation side by side on a laptop */
 
 /* ── PIN ── */
 #lock{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px;gap:22px}
@@ -102,6 +103,32 @@ main{padding:4px 0 28px}
 .th .day{align-self:center;font-size:11.5px;color:var(--muted);margin:8px 0 2px}
 .q{width:100%;height:42px;padding:0 14px;border-radius:12px;font-size:15px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset;margin-bottom:10px}
 #bell{min-width:42px;height:42px;border-radius:12px;font-size:18px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset}
+/* 💬 Chats: list like a phone's messaging app; the open conversation beside it on a wide screen */
+.cfil{display:flex;gap:6px;overflow-x:auto;padding:0 0 8px}
+.crow{display:flex;gap:12px;align-items:center;width:100%;padding:11px 6px;border-bottom:1px solid var(--line);background:none;text-align:left;color:var(--ink)}
+.crow .av{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:18px;color:#fff;flex:none}
+.crow .cm{flex:1;min-width:0}.crow .cm b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow .cm small{display:block;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.crow.unread .cm small{color:var(--ink);font-weight:600}
+.crow .ct{flex:none;text-align:right;font-size:12px;color:var(--muted);display:grid;justify-items:end;gap:4px}
+.crow .ub{min-width:20px;height:20px;border-radius:10px;background:var(--blue);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;padding:0 6px}
+.crow.on{background:var(--blue-l);border-radius:12px}
+.chat{display:flex;flex-direction:column;min-height:50vh}
+.chat .chh{display:flex;align-items:center;gap:10px;padding:4px 0 10px;border-bottom:1px solid var(--line)}
+.chat .chh .back{width:42px;height:42px;border-radius:12px;font-size:20px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset;flex:none}
+.chat .chh .nm{flex:1;min-width:0}.chat .chh .nm b{display:block;font-size:16px}.chat .chh .nm small{color:var(--muted);font-size:12.5px}
+.chat .chh a.btn{display:inline-grid;place-items:center;text-decoration:none;flex:none}
+.chat .cbody{flex:1;padding:6px 0}
+.chat .compose{position:sticky;bottom:0;background:var(--paper);padding:8px 0 6px;border-top:1px solid var(--line)}
+.chat .compose .row{display:flex;gap:8px;align-items:flex-end}
+.chat .compose textarea{flex:1;box-sizing:border-box;min-height:44px;max-height:140px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px;resize:vertical}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:6px 0 2px}.chips .tpl{white-space:nowrap}
+.cempty{display:grid;place-items:center;min-height:40vh;color:var(--muted);text-align:center}
+@media (min-width:900px){
+  .chatwrap{display:grid;grid-template-columns:360px minmax(0,1fr);gap:18px;align-items:start}
+  .chatwrap .clist{max-height:78vh;overflow:auto;padding-right:4px}
+  .chat .chh .back{display:none}
+}
 #bell.off{opacity:.45}
 .acts{display:flex;flex-wrap:wrap;gap:8px}
 .btn{height:42px;padding:0 14px;border-radius:12px;font-weight:700;font-size:14px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset}
@@ -225,7 +252,7 @@ const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', { wee
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' }) : '';
 const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null, linemen:[], lmOpen:null, q:'', thread:null };
+const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null, linemen:[], lmOpen:null, q:'', thread:null, chats:null, chat:null, cq:'', cf:'all', cform:null };
 
 function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
 const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 10 minutes.', not_on_list:'This person is no longer on the list — refresh.',
@@ -271,14 +298,17 @@ async function load(pin, date){
   const r = await rpc('remind_board', { p_pin:pin, p_date:date });   // checks the PIN first
   // Auto texts breakdown: asked only after the PIN passed (a wrong PIN must count once), and optional —
   // if its database function is not there yet, the tab just stays hidden
-  const [a, ib, rp, lm] = await Promise.all([
+  const [a, ib, rp, lm, ch] = await Promise.all([
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null),
     // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
     rpc('remind_inbox_v2', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null)),
     rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Job orders tab: hidden if missing
     // Lineman list: v2 = names with optional number (sms flag); v1 = names with numbers only. Hidden if none set.
     rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
+    rpc('remind_chats_v1', { p_pin:pin, p_days:60 }).catch(() => null),   // 💬 Chats tab: the old Messages tab shows if missing
   ]);
+  S.chats = ch ? (ch.rows || []) : null; if (!S.chats && S.tab === 'chats') S.tab = 'send';
+  if (S.chat) await refreshChat();   // keep the open conversation fresh
   S.linemen = lm ? (lm.linemen || (lm.names || []).map(name => ({ name, sms:true }))) : [];
   S.ops = await rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null);   // Checks tab: hidden if missing
   if (!S.ops && S.tab === 'checks') S.tab = 'send';
@@ -410,6 +440,120 @@ function threadHtml(th){
   }
   return h + '</div>';
 }
+
+/* 💬 Chats tab — list (remind_chats_v1) + conversation (remind_thread_v1), like the phone's messaging app */
+const AV = ['#025AC6', '#0F8A6B', '#C77700', '#C8283C', '#6A4FC9', '#0E7C9A', '#B5541C'];
+const avColor = s => AV[[...String(s || '')].reduce((n, c) => n + c.charCodeAt(0), 0) % AV.length];
+const whenLabel = ts => { const d = String(ts).slice(0, 10); return d === S.today ? tLabel(ts) : dLabel(d); };
+const chatRows = () => {
+  const q = (S.cq || '').trim().toLowerCase();
+  return S.chats.filter(c => S.cf === 'all' || (S.cf === 'unread' && c.unread) || (S.cf === 'repair' && c.repair) || (S.cf === 'check' && c.to_check))
+    .filter(c => !q || [c.name, c.address, c.area, c.last_body].join(' ').toLowerCase().includes(q));
+};
+function chatsHtml(){
+  const C = chatRows(), open = S.chat;
+  const list = `<div class="clist">
+    <input class="q" id="cq" type="search" placeholder="Search name or number" aria-label="Search chats" value="${esc(S.cq || '')}">
+    <div class="cfil">${[['all', 'All'], ['unread', 'Unread'], ['repair', '🔧 Repairs'], ['check', '💳 To check']].map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}</div>
+    ${C.length ? C.map(c => `<button type="button" class="crow${c.unread ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
+        <span class="av" style="background:${avColor(c.name || c.address)}">${esc((c.name || '#').trim()[0].toUpperCase())}</span>
+        <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''}${c.repair ? ' 🔧' : ''}${c.to_check ? ' 💳' : ''}</b><small>${c.last_dir === 'out' ? 'You: ' : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
+        <span class="ct">${esc(whenLabel(c.last_at))}${c.unread ? `<span class="ub">${c.unread}</span>` : ''}</span></button>`).join('')
+      : `<div class="empty"><b>${S.cq ? 'Nothing matches' : 'No conversations yet'}</b></div>`}
+  </div>`;
+  const wide = matchMedia('(min-width:900px)').matches;
+  if (!open) return wide ? `<div class="chatwrap">${list}<div class="cempty">Pick a conversation</div></div>` : list;
+  return wide ? `<div class="chatwrap">${list}${chatHtml(open)}</div>` : chatHtml(open);
+}
+function chatHtml(ch){
+  const rows = ch.rows || [], lastIn = ch.lastIn, openIds = rows.filter(r => r.dir === 'in' && r.status === 'received').map(r => r.id);
+  const text = rows.filter(r => r.dir === 'in').map(r => r.body || '').join(' \n '), gd = guessDate(text), ref = refOf(text);
+  const f = S.cform;
+  return `<div class="chat" data-chat="${esc(ch.address)}">
+    <div class="chh"><button type="button" class="back" data-cx="back" aria-label="Back to chats">‹</button>
+      <div class="nm"><b>${esc(ch.name || ch.address)}</b><small>${ch.name ? esc(ch.area || '') + ' · ' + esc(ch.address) : 'not linked to a subscriber'}${ch.blocked ? ' · ⛔ blocked' : ''}</small></div>
+      <a class="btn" href="tel:${esc(ch.address)}">📞</a></div>
+    <div class="cbody">${ch.loading ? '<div class="sent">Loading…</div>' : threadHtml({ rows })}</div>
+    <div class="compose">
+      ${ch.sub && ch.address ? '' : ''}<div class="chips">
+        ${openIds.length ? `<button type="button" class="tpl" data-cx="handled">✅ Handled${openIds.length > 1 ? ' (' + openIds.length + ')' : ''}</button>` : ''}
+        ${ch.sub ? `<button type="button" class="tpl" data-cx="f" data-f="check">💳 To check</button><button type="button" class="tpl" data-cx="f" data-f="promise">📅 Promised</button>` : `<button type="button" class="tpl" data-cx="f" data-f="link">🔗 Link to subscriber</button>`}
+        ${S.repairs ? `<button type="button" class="tpl" data-cx="job">🔧 Job order</button>` : ''}
+        ${ch.sub && ch.address ? `<a class="tpl" style="text-decoration:none" download="${esc((ch.name || 'Spawn subscriber').replace(/[^\w .-]/g, ''))}.vcf" href="${vcfHref([{ name:ch.name, area:ch.area, phone:ch.address }])}">📇 Save contact</a>` : ''}
+        <button type="button" class="tpl" data-cx="f" data-f="more">⋯</button></div>
+      ${f === 'check' ? `<div class="pform"><input type="text" inputmode="numeric" value="${esc(ref)}" placeholder="GCash ref no." aria-label="GCash reference number"><button type="button" class="btn" data-cx="csave">Pause 3 days</button></div>` : ''}
+      ${f === 'promise' ? `<div class="pform"><input type="date" min="${S.today}" value="${gd}" aria-label="Promised pay date"><button type="button" class="btn" data-cx="psave">Save date</button></div>` : ''}
+      ${f === 'link' ? `<div class="pform"><input type="search" placeholder="Type the subscriber's name" aria-label="Find subscriber"><button type="button" class="btn" data-cx="lsearch">Find</button></div>
+        <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('')}</div>` : ''}
+      ${f === 'more' ? `<div class="acts" style="margin:4px 0 8px"><button type="button" class="btn" data-cx="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-cx="block" data-why="stop">Stop texting them</button></div>` : ''}
+      ${lastIn ? `<div class="chips">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-ctpl="${k}">${TPLN[k]}</button>`).join('')}</div>
+        <div class="row"><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>`
+        : `<div class="sent">They have not texted the office number yet — the reply box opens once they do.</div>`}
+    </div></div>`;
+}
+async function openChat(address){
+  const c = S.chats.find(x => x.address === address); if (!c) return;
+  S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, rows:[], lastIn:c.last_in_id, loading:true }; S.cform = null; S.lres = []; render();
+  await refreshChat(); render();
+  if (!matchMedia('(min-width:900px)').matches) window.scrollTo({ top:0 });
+}
+async function refreshChat(){
+  if (!S.chat) return;
+  try {
+    const j = await rpc('remind_thread_v1', { p_pin:S.pin, p_address:S.chat.address, p_sub:S.chat.sub || null, p_limit:200 });
+    const rows = j.rows || [], ins = rows.filter(r => r.dir === 'in');
+    S.chat.rows = rows; S.chat.lastIn = ins.length ? ins[ins.length - 1].id : S.chat.lastIn; S.chat.loading = false;
+    const c = S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; }
+  } catch (x) { S.chat.loading = false; toast(x.message, 4000); }
+}
+$('list').addEventListener('click', async e => {
+  if (S.tab !== 'chats' || !S.chats) return;
+  const row = e.target.closest('[data-ch]'); if (row) { openChat(row.dataset.ch); return; }
+  const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; render(); return; }
+  const tp = e.target.closest('[data-ctpl]'); if (tp) { const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); ta.focus(); } return; }
+  const b = e.target.closest('[data-cx]'); if (!b || !S.chat) return;
+  const a = b.dataset.cx, ch = S.chat, mid = ch.lastIn, box = b.closest('.compose');
+  if (a === 'back') { S.chat = null; render(); return; }
+  if (a === 'f') { S.cform = S.cform === b.dataset.f ? null : b.dataset.f; render(); const i = $('list').querySelector('.pform input'); if (i) i.focus(); return; }
+  if (a === 'lsearch') {
+    const q = box.querySelector('.pform input').value.trim(); if (q.length < 2) { toast('Type at least 2 letters'); return; }
+    b.disabled = true;
+    try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); S.lres = j.rows || []; if (!S.lres.length) toast('No subscriber found'); render(); const i = $('list').querySelector('.pform input'); if (i) i.value = q; }
+    catch (x) { toast(x.message, 4000); } return;
+  }
+  if (!mid && a !== 'block') { toast('They have not texted yet — nothing to act on'); return; }
+  let text = '';
+  if (a === 'send') { text = box.querySelector('textarea').value.trim(); if (!text) { toast('Type a reply first'); return; } }
+  if (a === 'block' && !confirm(b.dataset.why === 'stop' ? 'Stop texting this number?' : 'Mark as wrong number? It is never texted again.')) return;
+  b.disabled = true;
+  try {
+    if (a === 'send') {
+      // reply = answers their latest text; it marks that text handled — reopen it if others are still waiting so the badge stays honest
+      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:mid, p_action:'reply', p_text:text });
+      toast('Sent — goes out within a minute');
+    } else if (a === 'handled') {
+      for (const id of ch.rows.filter(r => r.dir === 'in' && r.status === 'received').map(r => r.id)) await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'handled' });
+      toast('Handled');
+    } else if (a === 'csave') {
+      const ref = box.querySelector('.pform input').value.trim();
+      await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'to_check', p_msg_id:mid, p_sub:ch.sub, p_text:ref }); toast('On To check — reminders paused 3 days');
+    } else if (a === 'psave') {
+      const d = box.querySelector('.pform input').value; if (!d) { toast('Pick a date'); b.disabled = false; return; }
+      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:mid, p_action:'promise', p_date:d }); toast('Promise saved — quiet until ' + dLabel(d));
+    } else if (a === 'lpick') {
+      await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'link', p_msg_id:mid, p_sub:+b.dataset.sub }); toast('Linked — number saved to that subscriber');
+    } else if (a === 'job') {
+      const j = await rpc('remind_job_create_v1', { p_pin:S.pin, p_msg_id:mid });
+      toast(j && j.id ? (j.existing ? 'Already in Spawn Jobs' : 'Job order made in Spawn Jobs') : 'Spawn Jobs link is off', 3500);
+    } else if (a === 'block') {
+      await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'block', p_msg_id:mid, p_sub:ch.sub, p_text:b.dataset.why }); toast('Number blocked');
+    }
+    S.cform = null; S.lres = []; await reload();
+  } catch (x) { toast(x.message, 4000); b.disabled = false; }
+});
+$('list').addEventListener('input', e => { if (e.target.id === 'cq') { S.cq = e.target.value; const pos = e.target.selectionStart; render(); const i = $('cq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } } });
+$('list').addEventListener('keydown', e => { if (e.target.matches('.chat textarea') && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { const s = $('list').querySelector('[data-cx="send"]'); if (s) s.click(); } });
+window.addEventListener('resize', () => { if (S.tab === 'chats') render(); });
 
 /* 🔔 New-text alerts: while Spawn Text is open (any tab, laptop or phone) — pop-up, ringtone, count in the title.
    Checks every 20 s. Mute is per device (localStorage). */
@@ -696,7 +840,7 @@ $('list').addEventListener('click', async e => {
 function smsHref(r){ return `sms:${r.phone}${IOS ? '&' : '?'}body=${encodeURIComponent(r.body)}`; }
 
 function render(){
-  titleCount();
+  titleCount(); document.body.classList.toggle('chats', S.tab === 'chats');
   const L = lists(), d = S.date, t = S.today;
   $('uname').textContent = S.user || '';
   $('dlabel').textContent = d === t ? 'Today' : dLabel(d);
@@ -705,7 +849,8 @@ function render(){
   $('next').disabled = d >= addDays(t, 7);
   const T = [['send', "Today's list", L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]];
   if (S.imp) T.push(['import', 'Contacts', S.imp.rows.filter(r => r.bucket !== 'none').length]);
-  if (S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
+  if (S.chats) T.push(['chats', '💬 Chats', S.chats.reduce((n, c) => n + (c.unread || 0), 0)]);
+  else if (S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
   if (S.repairs) T.push(['jobs', '🔧 Job orders', jobCards().filter(c => c.open).length]);
   if (S.ops) T.push(['checks', 'To check', S.ops.to_check.length + S.ops.failed.length]);
   if (S.auto) T.push(['auto', 'Sent & coming', autoRows().length]);
@@ -719,6 +864,7 @@ function render(){
     nonum: 'Wala pay number — dili ma-text. I-type ang number ug <b>Save number</b>, o <b>Find numbers in contacts</b>.',
     done: 'Na-text na, bayad na, naay saad, o <b>To check</b>. <b>Undo</b> kung nasayop.',
     auto: 'Kinsa na ang na-text karon (Delivered / Failed), ug kinsa ang sunod — pindota ▶ para ugma.',
+    chats: '💬 Sama sa Messages sa phone: pindota ang tawo → makita ang tanan nga text (ila ug ato), reply sa ubos. Mga chip sa ibabaw sa reply: <b>Handled</b>, <b>To check</b>, <b>Promised</b>, <b>Link</b>, <b>Job order</b>.',
     replies: 'Mga text gikan sa subscribers. <b>Reply</b> (naay ready answers), <b>Promised</b>, <b>To check</b> (GCash ref), <b>Handled</b> kung human na.',
     jobs: '🔧 Mga reklamo nga guba / walay internet = posible nga job order. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b>, dayon <b>✅ Done</b> kung naayo na.',
     checks: '💳 GCash ref nga i-verify: makita na sa libro? → <b>Confirmed</b> (o automatic). 📵 Number nga dili mo-work → <b>Block number</b>.',
@@ -751,6 +897,7 @@ function render(){
   if (S.tab === 'import' && S.imp) h += impHtml();
   if (S.tab === 'auto' && S.auto) h += autoHtml(L, d, t);
   if (S.tab === 'replies' && S.inbox) h += repliesHtml();
+  if (S.tab === 'chats' && S.chats) h += chatsHtml();
   if (S.tab === 'checks' && S.ops) h += checksHtml();
   if (S.tab === 'jobs' && S.repairs) h += jobsHtml();
   if (S.tab === 'done') {
