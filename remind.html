@@ -104,7 +104,7 @@ main{padding:4px 0 28px}
 .q{width:100%;height:42px;padding:0 14px;border-radius:12px;font-size:15px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset;margin-bottom:10px}
 #bell{min-width:42px;height:42px;border-radius:12px;font-size:18px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset}
 /* 💬 Chats: list like a phone's messaging app; the open conversation beside it on a wide screen */
-.cfil{display:flex;gap:6px;overflow-x:auto;padding:0 0 8px}
+.cfil{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 8px}
 .crow{display:flex;gap:12px;align-items:center;width:100%;padding:11px 6px;border-bottom:1px solid var(--line);background:none;text-align:left;color:var(--ink)}
 .crow .av{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:18px;color:#fff;flex:none}
 .crow .cm{flex:1;min-width:0}.crow .cm b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -120,9 +120,11 @@ main{padding:4px 0 28px}
 .chat .chh a.btn{display:inline-grid;place-items:center;text-decoration:none;flex:none}
 .chat .cbody{flex:1;padding:6px 0}
 .chat .compose{position:sticky;bottom:0;background:var(--paper);padding:8px 0 6px;border-top:1px solid var(--line)}
-.chat .compose .row{display:flex;gap:8px;align-items:flex-end}
-.chat .compose textarea{flex:1;box-sizing:border-box;min-height:44px;max-height:140px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px;resize:vertical}
-.chips{display:flex;gap:6px;overflow-x:auto;padding:6px 0 2px}.chips .tpl{white-space:nowrap}
+.chat .compose .row{display:flex;gap:8px;align-items:flex-end;margin-top:6px}
+.chat .compose .row textarea{flex:1 1 auto;width:auto;min-width:0;box-sizing:border-box;min-height:46px;max-height:140px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:12px 14px;font:inherit;font-size:15px;resize:none;line-height:1.35}
+.chat .compose .row .btn.send{flex:0 0 auto;width:auto;min-width:88px;height:46px;padding:0 20px;border-radius:14px}
+.chat .compose .cchips{padding:4px 0}
+.cchips{display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 2px}.cchips .tpl{white-space:nowrap}
 .cempty{display:grid;place-items:center;min-height:40vh;color:var(--muted);text-align:center}
 @media (min-width:900px){
   .chatwrap{display:grid;grid-template-columns:360px minmax(0,1fr);gap:18px;align-items:start}
@@ -482,7 +484,7 @@ function chatHtml(ch){
       <a class="btn" href="tel:${esc(ch.address)}">📞</a></div>
     <div class="cbody">${ch.loading ? '<div class="sent">Loading…</div>' : threadHtml({ rows })}</div>
     <div class="compose">
-      ${ch.sub && ch.address ? '' : ''}<div class="chips">
+      <div class="cchips">
         ${openIds.length ? `<button type="button" class="tpl" data-cx="handled">✅ Handled${openIds.length > 1 ? ' (' + openIds.length + ')' : ''}</button>` : ''}
         ${ch.sub ? `<button type="button" class="tpl" data-cx="f" data-f="check">💳 To check</button><button type="button" class="tpl" data-cx="f" data-f="promise">📅 Promised</button>` : `<button type="button" class="tpl" data-cx="f" data-f="link">🔗 Link to subscriber</button>`}
         ${S.repairs ? `<button type="button" class="tpl" data-cx="job">🔧 Job order</button>` : ''}
@@ -493,7 +495,7 @@ function chatHtml(ch){
       ${f === 'link' ? `<div class="pform"><input type="search" placeholder="Type the subscriber's name" aria-label="Find subscriber"><button type="button" class="btn" data-cx="lsearch">Find</button></div>
         <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('')}</div>` : ''}
       ${f === 'more' ? `<div class="acts" style="margin:4px 0 8px"><button type="button" class="btn" data-cx="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-cx="block" data-why="stop">Stop texting them</button></div>` : ''}
-      ${lastIn ? `<div class="chips">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-ctpl="${k}">${TPLN[k]}</button>`).join('')}</div>` : ''}
+      ${lastIn ? `<div class="cchips">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-ctpl="${k}">${TPLN[k]}</button>`).join('')}</div>` : ''}
       <div class="row"><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
     </div></div>`;
 }
