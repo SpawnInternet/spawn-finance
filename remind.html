@@ -337,7 +337,7 @@ async function load(pin, date){
   if (S.thread && !(ib && ib.rows.some(r => (r.from || 'id' + r.id) === S.thread.key))) S.thread = null;
   S.repairs = rp; if (!rp && S.tab === 'jobs') S.tab = 'send';
 }
-function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); bell(); startPoll(); }
+function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); bell(); startPoll(); pushEnsure(); }
 async function reload(){ try { await load(S.pin, S.date); render(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
 
 /* ── lists ── */
@@ -631,13 +631,43 @@ async function poll(){
   } catch (x) { if (/PIN/.test(x.message)) lock(x.message); }
 }
 function startPoll(){ clearInterval(pollT); pollT = setInterval(poll, 20000); }
+/* Push (browser closed): after 🔔 is allowed, this device registers with the service worker (remind-sw.js) and the
+   database (remind_push_subscribe_v1); the server pushes every new text to it. Mute = unregister this device. */
+const b64ToU8 = s => { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+async function pushOn(){
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'This browser cannot do push';
+  const cfg = await rpc('remind_push_config_v1', { p_pin:S.pin }).catch(() => null);
+  if (!cfg || !cfg.on || !cfg.key) return 'Push is not switched on yet';
+  const reg = await navigator.serviceWorker.register('./remind-sw.js');
+  await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:b64ToU8(cfg.key) });
+  const j = sub.toJSON();
+  const r = await rpc('remind_push_subscribe_v1', { p_pin:S.pin, p_endpoint:sub.endpoint, p_keys:j.keys, p_ua:navigator.userAgent.slice(0, 160) });
+  return r && r.ok ? `Registered — pop-ups even when closed (${r.devices} device${r.devices === 1 ? '' : 's'})` : 'Could not register this device';
+}
+async function pushOff(){
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('./remind-sw.js'); const sub = reg && await reg.pushManager.getSubscription();
+    if (sub) { await rpc('remind_push_unsubscribe_v1', { p_pin:S.pin, p_endpoint:sub.endpoint }).catch(() => null); await sub.unsubscribe(); }
+  } catch (x) {}
+}
 $('bell').addEventListener('click', async () => {
   if (!('Notification' in window)) { toast('This browser cannot show pop-ups — the ringtone still plays'); return; }
-  if (Notification.permission === 'default') { const p = await Notification.requestPermission(); if (p === 'granted') { try { localStorage.setItem(MUTE, '0'); } catch (x) {} ring(); toast('Alerts on: pop-up + ringtone for new texts'); } }
+  if (Notification.permission === 'default') {
+    const p = await Notification.requestPermission();
+    if (p === 'granted') { try { localStorage.setItem(MUTE, '0'); } catch (x) {} ring(); toast(await pushOn().catch(x => 'Alerts on here; push failed: ' + x.message), 4500); }
+  }
   else if (Notification.permission === 'denied') toast('Pop-ups are blocked for this site in the browser settings', 4000);
-  else { const m = !muted(); try { localStorage.setItem(MUTE, m ? '1' : '0'); } catch (x) {} if (!m) ring(); toast(m ? 'Alerts muted on this device' : 'Alerts on'); }
+  else {
+    const m = !muted(); try { localStorage.setItem(MUTE, m ? '1' : '0'); } catch (x) {}
+    if (m) { await pushOff(); toast('Alerts muted on this device'); }
+    else { ring(); toast(await pushOn().catch(x => 'Alerts on here; push failed: ' + x.message), 4500); }
+  }
   bell();
 });
+// already allowed on this device → make sure it is registered (e.g. after a reinstall), quietly
+async function pushEnsure(){ if ('Notification' in window && Notification.permission === 'granted' && !muted() && S.pin) { try { await pushOn(); } catch (x) {} } }
 // phone contacts: a .vcf the office phone opens as "Add contact" (one person) or imports (everyone)
 const vcfHref = rows => 'data:text/vcard;charset=utf-8,' + encodeURIComponent(rows.map(r =>
   `BEGIN:VCARD\nVERSION:3.0\nFN:${String(r.name || '').replace(/[\n;]/g, ' ')} (Spawn)\nTEL;TYPE=CELL:${r.phone}\n${r.area ? 'NOTE:' + String(r.area).replace(/[\n;]/g, ' ') + '\n' : ''}END:VCARD`).join('\n'));
