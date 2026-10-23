@@ -98,6 +98,9 @@ main{padding:4px 0 28px}
 .th .tb{max-width:86%;padding:9px 13px;border-radius:16px;font-size:14px;line-height:1.4;position:relative}
 .th .tb.in{align-self:flex-start;background:var(--bubble);color:var(--bubble-ink);border-bottom-left-radius:4px}
 .th .tb.out{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
+.th .tb.out.auto{background:var(--blue-l);color:var(--ink);border:1px solid var(--line)}
+.th .tb.out.rem{background:var(--blue-d)}
+.th .tb.out.note{background:var(--card);color:var(--ink-2);border:1px dashed var(--line)}
 .th .tb small{display:block;font-size:11px;opacity:.75;margin-top:3px}
 .th .tb.out.failed{background:var(--late, #c0392b)}
 .th .day{align-self:center;font-size:11.5px;color:var(--muted);margin:8px 0 2px}
@@ -127,9 +130,19 @@ main{padding:4px 0 28px}
 .cchips{display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 2px}.cchips .tpl{white-space:nowrap}
 .cempty{display:grid;place-items:center;min-height:40vh;color:var(--muted);text-align:center}
 @media (min-width:900px){
+  /* laptop: list and conversation side by side, each scrolling on its own; reply box always visible at the bottom */
   .chatwrap{display:grid;grid-template-columns:360px minmax(0,1fr);gap:18px;align-items:start}
-  .chatwrap .clist{max-height:78vh;overflow:auto;padding-right:4px}
+  .chatwrap .clist{height:78vh;overflow:auto;padding-right:4px}
+  .chatwrap .chat{height:78vh;min-height:0}
+  .chatwrap .chat .cbody{flex:1 1 auto;min-height:0;overflow:auto;padding-right:4px}
+  .chatwrap .chat .compose{position:static}
   .chat .chh .back{display:none}
+  .cempty{height:78vh}
+}
+@media (max-width:899px){
+  /* phone: one screen at a time; header stays on top, reply box stays at the bottom */
+  .chat .chh{position:sticky;top:0;z-index:5;background:var(--paper)}
+  .chat .cbody{min-height:40vh}
 }
 #bell.off{opacity:.45}
 .acts{display:flex;flex-wrap:wrap;gap:8px}
@@ -441,7 +454,10 @@ function threadHtml(th){
   for (const r of th.rows) {
     const d = String(r.at).slice(0, 10); if (d !== day) { day = d; h += `<div class="day">${esc(dLabel(d))}</div>`; }
     const out = r.dir === 'out';
-    h += `<div class="tb ${out ? 'out' : 'in'}${r.status === 'failed' ? ' failed' : ''}">${esc(r.body || '')}<small>${tLabel(r.at)}${out ? ' · ' + esc(KIND[r.kind] || r.kind || '') + (r.by && r.by !== 'auto' && r.by !== 'summary' ? ' · ' + esc(r.by) : '') + ' · ' + esc(ST[r.status] || r.status) + (r.error ? ' — ' + esc(r.error) : '') : ''}</small></div>`;
+    // ours: 👤 human reply (blue) · 🤖 automatic (light) · 📅 reminder (dark) · 📣 alert/summary to the office
+    const who = !out ? '' : /^(job_alert|pay_alert|summary|job_send)$/.test(r.kind || '') ? 'note' : /^(due_soon|due_today|late|utang|manual)$/.test(r.kind || '') ? 'rem' : r.by === 'auto' ? 'auto' : 'human';
+    const tag = { auto:'🤖 automatic', rem:'📅 reminder', note:'📣 to office', human:'👤 ' + esc(r.by || 'office') }[who] || '';
+    h += `<div class="tb ${out ? 'out ' + who : 'in'}${r.status === 'failed' ? ' failed' : ''}">${esc(r.body || '')}<small>${out ? tag + (KIND[r.kind] && who !== 'human' ? ' · ' + esc(KIND[r.kind].replace(/^(auto-reply|reminder|alert to office) · /, '')) : '') + ' · ' : ''}${tLabel(r.at)}${out ? ' · ' + esc(ST[r.status] || r.status) + (r.error ? ' — ' + esc(r.error) : '') : ''}</small></div>`;
   }
   return h + '</div>';
 }
@@ -502,9 +518,12 @@ function chatHtml(ch){
 async function openChat(address){
   const c = S.chats.find(x => x.address === address); if (!c) return;
   S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, rows:[], lastIn:c.last_in_id, loading:true }; S.cform = null; S.lres = []; render();
-  await refreshChat(); render();
-  const end = $('list').querySelector('.chat .compose');   // open at the newest message, like a phone
-  if (end) end.scrollIntoView({ block:'end' });
+  await refreshChat(); render(); scrollChatEnd();
+}
+function scrollChatEnd(){   // newest message in view: laptop scrolls the conversation pane, phone scrolls the page to the reply box
+  const body = $('list').querySelector('.chat .cbody'), end = $('list').querySelector('.chat .compose');
+  if (matchMedia('(min-width:900px)').matches) { if (body) body.scrollTop = body.scrollHeight; }
+  else if (end) end.scrollIntoView({ block:'end' });
 }
 async function refreshChat(){
   if (!S.chat) return;
@@ -570,7 +589,7 @@ $('list').addEventListener('click', async e => {
     } else if (a === 'block') {
       await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'block', p_msg_id:mid, p_sub:ch.sub, p_text:b.dataset.why }); toast('Number blocked');
     }
-    S.cform = null; S.lres = []; await reload();
+    S.cform = null; S.lres = []; await reload(); scrollChatEnd();
   } catch (x) { toast(x.message, 4000); b.disabled = false; }
 });
 $('list').addEventListener('input', e => { if (e.target.id === 'cq') { S.cq = e.target.value; const pos = e.target.selectionStart; render(); const i = $('cq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } } });
