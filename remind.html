@@ -551,7 +551,12 @@ $('list').addEventListener('click', async e => {
     const lc = jobCards().find(x => x.last.id === +l.closest('[data-jid]').dataset.jid), name = S.linemen[+l.dataset.jl];
     if (!lc || !name || !confirm(`I-text ang job order ni ${lc.name || lc.from || 'unknown'} ngadto kang ${name}?`)) return;
     l.disabled = true;
-    try { await rpc('remind_job_send_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_name:name, p_text:jobText(lc) }); S.lmOpen = null; toast(`Sent to ${name} — goes out within a minute`); await reload(); }
+    try {
+      await rpc('remind_job_send_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_name:name, p_text:jobText(lc) });
+      // also a job order in Spawn Jobs (switch remind_job_to_jobs; function may not exist yet → just the SMS)
+      const j = await rpc('remind_job_create_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_lineman:name }).catch(() => null);
+      S.lmOpen = null; toast(`Sent to ${name}` + (j && j.id ? (j.existing ? ' · already in Spawn Jobs' : ' · job order made in Spawn Jobs') : ' — goes out within a minute'), 3500); await reload();
+    }
     catch (x) { toast(x.message, 4000); l.disabled = false; }
     return;
   }
