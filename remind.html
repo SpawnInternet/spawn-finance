@@ -185,7 +185,7 @@ main{padding:4px 0 28px}
         <li><b>Messages</b> — mga reply sa subscribers. <b>Reply</b> (naay ready answers: GCash number, Who is this…), <b>Promised</b> (petsa), <b>To check</b> (GCash ref), <b>Handled</b> kung human na. Wala pa nakilala ang number? → <b>Link to subscriber</b>.</li>
         <li><b>To check</b> — GCash ref nga i-verify. Kung makita na ang bayad sa libro, <b>Confirmed</b> (o automatic). Number nga dili mo-work → <b>Block number</b>.</li>
         <li><b>Sent &amp; coming</b> — kinsa na ang na-text, ug kinsa ang sunod (pindota ▶ para ugma).</li>
-        <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>📲 Lineman</b> (i-text ang job order sa lineman), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
+        <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
         <li><b>No number</b> — i-save ang number aron ma-text sila.</li>
       </ol>
       <p><b>Pahinumdom:</b> i-reply gikan sa <b>Messages</b> (dili sa phone) aron ma-record. Ang spare phone (SMS sender) ayaw hilabti.</p>
@@ -264,9 +264,10 @@ async function load(pin, date){
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null),
     rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Replies tab: hidden if missing
     rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null),   // Job orders tab: hidden if missing
-    rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null),   // "Send to lineman": hidden if missing or no names set
+    // Lineman list: v2 = names with optional number (sms flag); v1 = names with numbers only. Hidden if none set.
+    rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
   ]);
-  S.linemen = (lm && lm.names) || [];
+  S.linemen = lm ? (lm.linemen || (lm.names || []).map(name => ({ name, sms:true }))) : [];
   S.ops = await rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null);   // Checks tab: hidden if missing
   if (!S.ops && S.tab === 'checks') S.tab = 'send';
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
@@ -532,10 +533,10 @@ function jobsHtml(){
       ${!c.open ? `<div class="sent">✅ ${esc(c.last.done || 'Done')}${c.last.done_by ? ' · ' + esc(c.last.done_by) : ''}</div><div class="acts"><button type="button" class="btn" data-ja="share">📤 Spawn Notes</button><button type="button" class="btn" data-ja="reopen">Reopen</button></div>`
         : `<div class="acts">${c.from ? `<a class="btn" style="display:inline-grid;place-items:center;text-decoration:none" href="tel:${esc(c.from)}">📞 Call</a>` : ''}
             <button type="button" class="btn" data-ja="share">📤 Spawn Notes</button>
-            ${S.linemen.length ? `<button type="button" class="btn" data-ja="lm">📲 Lineman</button>` : ''}
+            ${S.linemen.length ? `<button type="button" class="btn" data-ja="lm">🔧 Lineman</button>` : ''}
             <button type="button" class="btn" data-ja="reply">💬 Reply</button>
             <button type="button" class="btn" data-ja="done">✅ Done — naayo na</button></div>
-          ${S.lmOpen === id && S.linemen.length ? `<div class="rform"><div class="sent">I-text ang job order ngadto kang:</div><div class="tpls">${S.linemen.map((n, i) => `<button type="button" class="tpl" data-jl="${i}">📲 ${esc(n)}</button>`).join('')}</div></div>` : ''}
+          ${S.lmOpen === id && S.linemen.length ? `<div class="rform"><div class="sent">Job order para kang (mogawas sa Spawn Jobs):</div><div class="tpls">${S.linemen.map((l, i) => `<button type="button" class="tpl" data-jl="${i}">${l.sms ? '📲' : '🔧'} ${esc(l.name)}</button>`).join('')}</div></div>` : ''}
           ${S.rpOpen === id ? `<div class="rform"><div class="tpls">${JOBQ.map(([l], i) => `<button type="button" class="tpl" data-jq="${i}">${esc(l)}</button>`).join('')}</div>
             <textarea rows="4" maxlength="480" aria-label="Reply text" placeholder="I-type ang reply, o pilia ang ready answer sa ibabaw"></textarea>
             <button type="button" class="btn send" data-ja="send">Send reply</button></div>` : ''}`}
@@ -548,14 +549,15 @@ $('list').addEventListener('click', async e => {
   if (q) { const ta = q.closest('[data-jid]').querySelector('textarea'); ta.value = JOBQ[+q.dataset.jq][1]; ta.focus(); return; }
   const l = e.target.closest('[data-jl]');
   if (l) {
-    const lc = jobCards().find(x => x.last.id === +l.closest('[data-jid]').dataset.jid), name = S.linemen[+l.dataset.jl];
-    if (!lc || !name || !confirm(`I-text ang job order ni ${lc.name || lc.from || 'unknown'} ngadto kang ${name}?`)) return;
+    const lc = jobCards().find(x => x.last.id === +l.closest('[data-jid]').dataset.jid), lm = S.linemen[+l.dataset.jl], name = lm && lm.name;
+    if (!lc || !name || !confirm(`Job order ni ${lc.name || lc.from || 'unknown'} → ${name}?`)) return;
     l.disabled = true;
     try {
-      await rpc('remind_job_send_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_name:name, p_text:jobText(lc) });
-      // also a job order in Spawn Jobs (switch remind_job_to_jobs; function may not exist yet → just the SMS)
-      const j = await rpc('remind_job_create_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_lineman:name }).catch(() => null);
-      S.lmOpen = null; toast(`Sent to ${name}` + (j && j.id ? (j.existing ? ' · already in Spawn Jobs' : ' · job order made in Spawn Jobs') : ' — goes out within a minute'), 3500); await reload();
+      // SMS only when the lineman has a number; the job order in Spawn Jobs always (switch remind_job_to_jobs)
+      if (lm.sms) await rpc('remind_job_send_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_name:name, p_text:jobText(lc) });
+      const j = await rpc('remind_job_create_v1', { p_pin:S.pin, p_msg_id:lc.last.id, p_lineman:name });
+      const made = j && j.id ? (j.existing ? 'already in Spawn Jobs' : 'job order made in Spawn Jobs') : 'Spawn Jobs link is off';
+      S.lmOpen = null; toast(`${name}: ${made}${lm.sms ? ' · SMS sent' : ''}`, 3500); await reload();
     }
     catch (x) { toast(x.message, 4000); l.disabled = false; }
     return;
@@ -618,7 +620,7 @@ function render(){
     done: 'Na-text na, bayad na, naay saad, o <b>To check</b>. <b>Undo</b> kung nasayop.',
     auto: 'Kinsa na ang na-text karon (Delivered / Failed), ug kinsa ang sunod — pindota ▶ para ugma.',
     replies: 'Mga text gikan sa subscribers. <b>Reply</b> (naay ready answers), <b>Promised</b>, <b>To check</b> (GCash ref), <b>Handled</b> kung human na.',
-    jobs: '🔧 Mga reklamo nga guba / walay internet = posible nga job order. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>📲 Lineman</b> (i-text ang job order sa lineman), <b>💬 Reply</b>, dayon <b>✅ Done</b> kung naayo na.',
+    jobs: '🔧 Mga reklamo nga guba / walay internet = posible nga job order. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b>, dayon <b>✅ Done</b> kung naayo na.',
     checks: '💳 GCash ref nga i-verify: makita na sa libro? → <b>Confirmed</b> (o automatic). 📵 Number nga dili mo-work → <b>Block number</b>.',
   };
   let h = HOW[S.tab] ? `<div class="how">${HOW[S.tab]}</div>` : '';
