@@ -126,6 +126,11 @@ main{padding:4px 0 28px}
 .chat .compose .row{display:flex;gap:8px;align-items:flex-end;margin-top:6px}
 .chat .compose .row textarea{flex:1 1 auto;width:auto;min-width:0;box-sizing:border-box;min-height:46px;max-height:140px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:12px 14px;font:inherit;font-size:15px;resize:none;line-height:1.35}
 .chat .compose .row .btn.send{flex:0 0 auto;width:auto;min-width:88px;height:46px;padding:0 20px;border-radius:14px}
+.chat .compose .row .btn.plus{flex:0 0 auto;width:46px;height:46px;padding:0;border-radius:50%;font-size:22px;position:relative;background:var(--blue-l);color:var(--blue);box-shadow:none}
+.chat .compose .row .btn.plus.on{background:var(--blue);color:#fff}
+.chat .compose .row .btn.plus i{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;background:var(--utang);color:#fff;font:700 11px/18px Figtree,sans-serif;padding:0 5px}
+.cmenu{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px 12px 6px;margin-bottom:8px}
+.cmenu .sent{margin:2px 0 4px;font-weight:700}
 .chat .compose .cchips{padding:4px 0}
 .cchips{display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 2px}.cchips .tpl{white-space:nowrap}
 .cempty{display:grid;place-items:center;min-height:40vh;color:var(--muted);text-align:center}
@@ -500,24 +505,26 @@ function chatHtml(ch){
       <a class="btn" href="tel:${esc(ch.address)}">📞</a></div>
     <div class="cbody">${ch.loading ? '<div class="sent">Loading…</div>' : threadHtml({ rows })}</div>
     <div class="compose">
-      <div class="cchips">
+      ${S.cmenu ? `<div class="cmenu">
+        <div class="sent">Actions</div><div class="cchips">
         ${openIds.length ? `<button type="button" class="tpl" data-cx="handled">✅ Handled${openIds.length > 1 ? ' (' + openIds.length + ')' : ''}</button>` : ''}
         ${ch.sub ? `<button type="button" class="tpl" data-cx="f" data-f="check">💳 To check</button><button type="button" class="tpl" data-cx="f" data-f="promise">📅 Promised</button>` : `<button type="button" class="tpl" data-cx="f" data-f="link">🔗 Link to subscriber</button>`}
         ${S.repairs ? `<button type="button" class="tpl" data-cx="job">🔧 Job order</button>` : ''}
         ${ch.sub && ch.address ? `<a class="tpl" style="text-decoration:none" download="${esc((ch.name || 'Spawn subscriber').replace(/[^\w .-]/g, ''))}.vcf" href="${vcfHref([{ name:ch.name, area:ch.area, phone:ch.address }])}">📇 Save contact</a>` : ''}
-        <button type="button" class="tpl" data-cx="f" data-f="more">⋯</button></div>
+        <button type="button" class="tpl" data-cx="f" data-f="more">🚫 Wrong number / stop</button></div>
+        ${lastIn ? `<div class="sent">Ready answers</div><div class="cchips">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-ctpl="${k}">${TPLN[k]}</button>`).join('')}</div>` : ''}
+      </div>` : ''}
       ${f === 'check' ? `<div class="pform"><input type="text" inputmode="numeric" value="${esc(ref)}" placeholder="GCash ref no." aria-label="GCash reference number"><button type="button" class="btn" data-cx="csave">Pause 3 days</button></div>` : ''}
       ${f === 'promise' ? `<div class="pform"><input type="date" min="${S.today}" value="${gd}" aria-label="Promised pay date"><button type="button" class="btn" data-cx="psave">Save date</button></div>` : ''}
       ${f === 'link' ? `<div class="pform"><input type="search" id="lq" placeholder="Search subscriber name…" aria-label="Find subscriber" value="${esc(S.lq || '')}" autocomplete="off"></div>
         <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || (S.lnone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>` : ''}
       ${f === 'more' ? `<div class="acts" style="margin:4px 0 8px"><button type="button" class="btn" data-cx="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-cx="block" data-why="stop">Stop texting them</button></div>` : ''}
-      ${lastIn ? `<div class="cchips">${Object.keys(TPL).filter(k => k !== 'promise' || gd).map(k => `<button type="button" class="tpl" data-ctpl="${k}">${TPLN[k]}</button>`).join('')}</div>` : ''}
-      <div class="row"><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
+      <div class="row"><button type="button" class="btn plus${S.cmenu ? ' on' : ''}" data-cx="menu" aria-label="Actions and ready answers" aria-expanded="${!!S.cmenu}">${S.cmenu ? '×' : '＋'}${openIds.length && !S.cmenu ? `<i>${openIds.length}</i>` : ''}</button><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
     </div></div>`;
 }
 async function openChat(address){
   const c = S.chats.find(x => x.address === address); if (!c) return;
-  S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, rows:[], lastIn:c.last_in_id, loading:true }; S.cform = null; S.lres = []; render();
+  S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, rows:[], lastIn:c.last_in_id, loading:true }; S.cform = null; S.cmenu = false; S.lres = []; render();
   await refreshChat(); render(); scrollChatEnd();
 }
 function scrollChatEnd(){   // newest message in view: laptop scrolls the conversation pane, phone scrolls the page to the reply box
@@ -538,7 +545,7 @@ $('list').addEventListener('click', async e => {
   if (S.tab !== 'chats' || !S.chats) return;
   const row = e.target.closest('[data-ch]'); if (row) { openChat(row.dataset.ch); return; }
   const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; render(); return; }
-  const tp = e.target.closest('[data-ctpl]'); if (tp) { const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); ta.focus(); } return; }
+  const tp = e.target.closest('[data-ctpl]'); if (tp) { const txt = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = txt; ta.focus(); } return; }
   const b = e.target.closest('[data-cx]'); if (!b) return;
   if (b.dataset.cx === 'newtext') { S.newText = true; render(); const i = $('ntnum'); if (i) i.focus(); return; }
   if (b.dataset.cx === 'newcancel') { S.newText = false; render(); return; }
@@ -553,8 +560,9 @@ $('list').addEventListener('click', async e => {
   }
   if (!S.chat) return;
   const a = b.dataset.cx, ch = S.chat, mid = ch.lastIn, box = b.closest('.compose');
-  if (a === 'back') { S.chat = null; render(); return; }
-  if (a === 'f') { S.cform = S.cform === b.dataset.f ? null : b.dataset.f; S.lq = ''; S.lres = []; S.lnone = false; render(); const i = $('list').querySelector('.pform input'); if (i) i.focus(); return; }
+  if (a === 'menu') { S.cmenu = !S.cmenu; if (!S.cmenu) S.cform = null; render(); return; }
+  if (a === 'back') { S.chat = null; S.cmenu = false; render(); return; }
+  if (a === 'f') { S.cform = S.cform === b.dataset.f ? null : b.dataset.f; S.cmenu = false; S.lq = ''; S.lres = []; S.lnone = false; render(); const i = $('list').querySelector('.pform input'); if (i) i.focus(); return; }
   if (a === 'lsearch') {
     const q = box.querySelector('.pform input').value.trim(); if (q.length < 2) { toast('Type at least 2 letters'); return; }
     b.disabled = true;
@@ -589,7 +597,7 @@ $('list').addEventListener('click', async e => {
     } else if (a === 'block') {
       await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'block', p_msg_id:mid, p_sub:ch.sub, p_text:b.dataset.why }); toast('Number blocked');
     }
-    S.cform = null; S.lres = []; await reload(); scrollChatEnd();
+    S.cform = null; S.lres = []; S.cmenu = false; await reload(); scrollChatEnd();
   } catch (x) { toast(x.message, 4000); b.disabled = false; }
 });
 let lqT = null;
@@ -987,7 +995,7 @@ function render(){
       : `<div class="empty"><b>Nothing done yet</b>Texts you send, people marked paid, and promises to pay show here.</div>`;
   }
   const sent = Number(S.stats.sent_14d || 0), paid = Number(S.stats.paid_14d || 0), all = sent + paid;
-  if (S.tab !== 'import' && S.tab !== 'jobs') h += `<div class="meter"><b>Last 14 days:</b> ${sent} texted · ${paid} were already paid${all ? ` (${Math.round(paid / all * 100)}%)` : ''}.<br>
+  if (S.tab !== 'import' && S.tab !== 'jobs' && S.tab !== 'chats') h += `<div class="meter"><b>Last 14 days:</b> ${sent} texted · ${paid} were already paid${all ? ` (${Math.round(paid / all * 100)}%)` : ''}.<br>
     When “already paid” stays rare, the list is accurate enough to send by itself.${all ? `<div class="bar"><i style="width:${Math.round(sent / all * 100)}%"></i></div>` : ''}</div>`;
   box.innerHTML = h;
 }
