@@ -92,6 +92,17 @@ main{padding:4px 0 28px}
 .bubble{position:relative;margin:12px 0 4px 26px;padding:11px 14px;border-radius:18px 18px 4px 18px;
   background:var(--bubble);color:var(--bubble-ink);font-size:14.5px;line-height:1.45}
 .to{display:flex;justify-content:flex-end;font-size:12px;color:var(--muted);margin-bottom:10px}
+/* full conversation (📜 History): theirs left, ours right, like a phone's text app */
+.th{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.th .tb{max-width:86%;padding:9px 13px;border-radius:16px;font-size:14px;line-height:1.4;position:relative}
+.th .tb.in{align-self:flex-start;background:var(--bubble);color:var(--bubble-ink);border-bottom-left-radius:4px}
+.th .tb.out{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
+.th .tb small{display:block;font-size:11px;opacity:.75;margin-top:3px}
+.th .tb.out.failed{background:var(--late, #c0392b)}
+.th .day{align-self:center;font-size:11.5px;color:var(--muted);margin:8px 0 2px}
+.q{width:100%;height:42px;padding:0 14px;border-radius:12px;font-size:15px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset;margin-bottom:10px}
+#bell{min-width:42px;height:42px;border-radius:12px;font-size:18px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset}
+#bell.off{opacity:.45}
 .acts{display:flex;flex-wrap:wrap;gap:8px}
 .btn{height:42px;padding:0 14px;border-radius:12px;font-weight:700;font-size:14px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset}
 .btn.send{flex:1 1 100%;height:48px;background:var(--blue);color:#fff;box-shadow:none;font-size:15.5px}
@@ -177,7 +188,7 @@ main{padding:4px 0 28px}
 
 <div id="app" class="hide">
   <header><div class="wrap">
-    <div class="top"><div class="brand"><b>Spawn</b><span>Text</span></div><div class="who"><span id="uname"></span><button type="button" id="helpbtn" aria-label="How to use" title="How to use">?</button><button type="button" id="out">Lock</button></div></div>
+    <div class="top"><div class="brand"><b>Spawn</b><span>Text</span></div><div class="who"><span id="uname"></span><button type="button" id="bell" aria-label="New-text alerts" title="New-text alerts: pop-up + ringtone">🔔</button><button type="button" id="helpbtn" aria-label="How to use" title="How to use">?</button><button type="button" id="out">Lock</button></div></div>
     <div id="helpbox" class="help hide" role="dialog" aria-label="How to use Spawn Text">
       <b>Unsaon paggamit ang Spawn Text</b>
       <ol>
@@ -214,7 +225,7 @@ const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', { wee
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' }) : '';
 const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null, linemen:[], lmOpen:null };
+const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null, linemen:[], lmOpen:null, q:'', thread:null };
 
 function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
 const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 10 minutes.', not_on_list:'This person is no longer on the list — refresh.',
@@ -251,7 +262,7 @@ async function key(k){
 }
 pad.addEventListener('click', e => { const b = e.target.closest('button'); if (b) key(b.dataset.k); });
 document.addEventListener('keydown', e => { if (!$('lock').classList.contains('hide')) { if (/^\d$/.test(e.key)) key(e.key); else if (e.key === 'Backspace') key('b'); } });
-function lock(msg){ S.pin = ''; typed = ''; dots(); try { sessionStorage.removeItem(SESS); } catch (x) {} $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
+function lock(msg){ S.pin = ''; typed = ''; clearInterval(pollT); document.title = 'Spawn Text'; dots(); try { sessionStorage.removeItem(SESS); } catch (x) {} $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
 $('out').onclick = () => lock();
 $('helpbtn').onclick = () => $('helpbox').classList.toggle('hide');
 $('helpclose').onclick = () => $('helpbox').classList.add('hide');
@@ -274,9 +285,11 @@ async function load(pin, date){
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
   S.auto = a; if (!a && S.tab === 'auto') S.tab = 'send';
   S.inbox = ib; if (!ib && S.tab === 'replies') S.tab = 'send';
+  if (ib) lastInId = Math.max(lastInId, ...(ib.rows || []).map(r => r.id), 0);   // alerts only for texts newer than this load
+  if (S.thread && !(ib && ib.rows.some(r => (r.from || 'id' + r.id) === S.thread.key))) S.thread = null;
   S.repairs = rp; if (!rp && S.tab === 'jobs') S.tab = 'send';
 }
-function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); }
+function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); bell(); startPoll(); }
 async function reload(){ try { await load(S.pin, S.date); render(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
 
 /* ── lists ── */
@@ -383,6 +396,59 @@ function threads(){
   }).sort((a, b) => (b.open - a.open) || String(b.last.at).localeCompare(String(a.last.at)));
 }
 const refOf = text => (String(text || '').replace(/[\s-]/g, '').match(/\d{13}/) || [])[0] || '';
+// 📜 History: every text both ways for this person (remind_thread_v1), oldest first, day headers
+const KIND = { due_soon:'reminder · due soon', due_today:'reminder · due today', late:'reminder · late', utang:'reminder · utang', reply:'reply',
+  auto_gcash:'auto-reply · GCash number', auto_repair:'auto-reply · restart steps', auto_noted:'auto-reply · noted', auto_linked:'auto-reply · number saved',
+  job_alert:'alert to office', pay_alert:'alert to office', summary:'summary', job_send:'job order to lineman', manual:'reminder' };
+function threadHtml(th){
+  if (!th.rows.length) return `<div class="sent">No texts yet.</div>`;
+  let h = '<div class="th">', day = '';
+  for (const r of th.rows) {
+    const d = String(r.at).slice(0, 10); if (d !== day) { day = d; h += `<div class="day">${esc(dLabel(d))}</div>`; }
+    const out = r.dir === 'out';
+    h += `<div class="tb ${out ? 'out' : 'in'}${r.status === 'failed' ? ' failed' : ''}">${esc(r.body || '')}<small>${tLabel(r.at)}${out ? ' · ' + esc(KIND[r.kind] || r.kind || '') + (r.by && r.by !== 'auto' && r.by !== 'summary' ? ' · ' + esc(r.by) : '') + ' · ' + esc(ST[r.status] || r.status) + (r.error ? ' — ' + esc(r.error) : '') : ''}</small></div>`;
+  }
+  return h + '</div>';
+}
+
+/* 🔔 New-text alerts: while Spawn Text is open (any tab, laptop or phone) — pop-up, ringtone, count in the title.
+   Checks every 20 s. Mute is per device (localStorage). */
+const MUTE = 'spawn-text-mute';
+const muted = () => { try { return localStorage.getItem(MUTE) === '1'; } catch (x) { return false; } };
+function bell(){ const b = $('bell'); if (!b) return; const off = muted() || !('Notification' in window) || Notification.permission === 'denied'; b.textContent = off ? '🔕' : '🔔'; b.classList.toggle('off', off); b.title = off ? 'Alerts are off — tap to turn on' : 'Alerts on — tap to mute on this device'; }
+function ring(){   // short two-tone ringtone, no sound file needed
+  try { const ac = new (window.AudioContext || window.webkitAudioContext)(); const t = ac.currentTime;
+    [[880, 0], [1175, .18], [880, .36], [1175, .54]].forEach(([f, dt]) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(.0001, t + dt); g.gain.exponentialRampToValueAtTime(.3, t + dt + .02); g.gain.exponentialRampToValueAtTime(.0001, t + dt + .17); o.connect(g).connect(ac.destination); o.start(t + dt); o.stop(t + dt + .18); });
+  } catch (x) {}
+}
+function notify(rows){
+  if (muted()) return;
+  ring();
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const r = rows[0], who = r.name || r.from || 'Unknown number';
+    const n = new Notification(rows.length > 1 ? `${rows.length} new texts — Spawn Text` : `${who} — Spawn Text`, { body: rows.length > 1 ? rows.map(x => (x.name || x.from) + ': ' + (x.body || '')).join('\n').slice(0, 200) : (r.body || ''), tag:'spawn-text', renotify:true });
+    n.onclick = () => { window.focus(); S.tab = 'replies'; S.q = ''; render(); n.close(); };
+  }
+}
+let lastInId = 0, pollT = null;
+function titleCount(){ const n = S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; }
+async function poll(){
+  if (!S.pin || S.tab === 'import') return;
+  try {
+    const j = await rpc('remind_inbox_v2', { p_pin:S.pin, p_days:1 }).catch(() => rpc('remind_inbox_v1', { p_pin:S.pin, p_days:1 }));
+    const fresh = (j.rows || []).filter(r => r.id > lastInId && r.status === 'received');
+    if (fresh.length && lastInId) { notify(fresh); await reload(); }
+    lastInId = Math.max(lastInId, ...(j.rows || []).map(r => r.id));
+  } catch (x) { if (/PIN/.test(x.message)) lock(x.message); }
+}
+function startPoll(){ clearInterval(pollT); pollT = setInterval(poll, 20000); }
+$('bell').addEventListener('click', async () => {
+  if (!('Notification' in window)) { toast('This browser cannot show pop-ups — the ringtone still plays'); return; }
+  if (Notification.permission === 'default') { const p = await Notification.requestPermission(); if (p === 'granted') { try { localStorage.setItem(MUTE, '0'); } catch (x) {} ring(); toast('Alerts on: pop-up + ringtone for new texts'); } }
+  else if (Notification.permission === 'denied') toast('Pop-ups are blocked for this site in the browser settings', 4000);
+  else { const m = !muted(); try { localStorage.setItem(MUTE, m ? '1' : '0'); } catch (x) {} if (!m) ring(); toast(m ? 'Alerts muted on this device' : 'Alerts on'); }
+  bell();
+});
 // phone contacts: a .vcf the office phone opens as "Add contact" (one person) or imports (everyone)
 const vcfHref = rows => 'data:text/vcard;charset=utf-8,' + encodeURIComponent(rows.map(r =>
   `BEGIN:VCARD\nVERSION:3.0\nFN:${String(r.name || '').replace(/[\n;]/g, ' ')} (Spawn)\nTEL;TYPE=CELL:${r.phone}\n${r.area ? 'NOTE:' + String(r.area).replace(/[\n;]/g, ' ') + '\n' : ''}END:VCARD`).join('\n'));
@@ -390,15 +456,20 @@ function repliesHtml(){
   const I = S.inbox, T = threads(), shown = T.filter(t => S.showHandled || t.open), nDone = T.filter(t => !t.open).length;
   let h = `<div class="note">Texts to the office number (last 14 days), one card per person. ${I.mode === 'off' ? '<b>Automatic texting is OFF — replies cannot be sent from here until it is on.</b>' : 'Replies go out from the office number within a minute (08:00–18:00).'}</div>`;
   h += `<div class="note">${nDone ? `<button type="button" class="linkbtn" data-ract="toggle">${S.showHandled ? 'Hide' : 'Show'} handled (${nDone})</button> · ` : ''}<button type="button" class="linkbtn" data-ract="export">📇 Export all numbers to the phone</button></div>`;
-  if (!shown.length) return h + `<div class="empty"><b>No new replies</b>New texts to the office number show here.</div>`;
-  return h + shown.map(t => {
+  h += `<input class="q" id="mq" type="search" placeholder="Search name, number or words" aria-label="Search messages" value="${esc(S.q || '')}">`;
+  const q = (S.q || '').trim().toLowerCase();
+  const list = q ? shown.filter(t => [t.name, t.from, t.area, t.text].join(' ').toLowerCase().includes(q)) : shown;
+  if (!list.length) return h + `<div class="empty"><b>${q ? 'Nothing matches' : 'No new replies'}</b>${q ? 'Try another name or number.' : 'New texts to the office number show here.'}</div>`;
+  return h + list.map(t => {
     const tg = tagsOf(t.text), gd = guessDate(t.text), ro = S.ropen, id = t.last.id, ref = refOf(t.text);
     const sent = t.msgs.flatMap(m => m.replies || []);
+    const th = S.thread && S.thread.key === t.key ? S.thread : null;   // full history loaded for this person?
     return `<article class="item" data-mid="${id}" data-open="${t.openIds.join(',')}"><div class="ih"><div class="nm"><b>${esc(t.name || t.from || 'Unknown')}</b><small>${t.name ? esc(t.area || '') + (t.from ? ' · ' + esc(t.from) : '') : (t.from ? esc(t.from) + ' · ' : '') + 'not linked to a subscriber'} · ${esc(dLabel(String(t.last.at).slice(0, 10)))} ${tLabel(t.last.at)}</small></div>
         <span class="st ${t.open ? 'queued' : 'delivered'}">${t.open ? (t.openIds.length > 1 ? t.openIds.length + ' new' : 'New') : 'Handled'}</span></div>
-      ${t.msgs.map(m => `<div class="bubble in">${esc(m.body || '')}<small class="bt">${tLabel(m.at)}</small></div>`).join('')}
+      ${th ? threadHtml(th) : t.msgs.map(m => `<div class="bubble in">${esc(m.body || '')}<small class="bt">${tLabel(m.at)}</small></div>`).join('')}
       ${tg.length ? `<div class="tags">${tg.map(([k, l]) => `<span class="tg ${k}">${esc(l)}</span>`).join('')}</div>` : ''}
-      ${sent.map(x => `<div class="sent">${x.by === 'auto' ? 'Auto-reply' : 'You replied' + (x.by ? ' (' + esc(x.by) + ')' : '')}: “${esc(x.body)}” · ${esc(ST[x.status] || x.status)}</div>`).join('')}
+      ${th ? '' : sent.map(x => `<div class="sent">${x.by === 'auto' ? 'Auto-reply' : 'You replied' + (x.by ? ' (' + esc(x.by) + ')' : '')}: “${esc(x.body)}” · ${esc(ST[x.status] || x.status)}</div>`).join('')}
+      <div class="sent"><button type="button" class="linkbtn" data-ract="history">${th ? 'Hide history' : '📜 Full history — everything sent and received'}</button></div>
       ${t.autoLinked ? `<div class="sent">🔗 Auto-linked to ${esc(t.autoLinked)} from the name they texted</div>` : ''}
       ${t.vendo && !t.sub ? `<div class="sent">🏪 Says <b>vendo</b> — a vendo owner, not a subscriber (do not link)</div>` : ''}
       ${!t.sub && t.suggest && t.open ? `<div class="sent">Maybe this subscriber? Tap to link:</div><div class="tpls">${t.suggest.map(s => `<button type="button" class="tpl" data-ract="lpick" data-sub="${s.sub}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''} · ${Math.round(s.score * 100)}%${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('')}</div>` : ''}
@@ -454,6 +525,14 @@ $('list').addEventListener('click', async e => {
 $('list').addEventListener('click', async e => {
   const b = e.target.closest('[data-ract],[data-tpl]'); if (!b || !S.inbox) return;
   if (b.dataset.ract === 'toggle') { S.showHandled = !S.showHandled; render(); return; }
+  if (b.dataset.ract === 'history') {
+    const card0 = b.closest('[data-mid]'), t0 = card0 && threads().find(x => x.last.id === +card0.dataset.mid); if (!t0) return;
+    if (S.thread && S.thread.key === t0.key) { S.thread = null; render(); return; }
+    b.disabled = true;
+    try { const j = await rpc('remind_thread_v1', { p_pin:S.pin, p_address:t0.from || null, p_sub:t0.sub || null, p_limit:200 }); S.thread = { key:t0.key, rows:j.rows || [] }; render(); }
+    catch (x) { toast(/function/i.test(x.message) ? 'Full history is not switched on yet' : x.message, 4000); b.disabled = false; }
+    return;
+  }
   if (b.dataset.ract === 'export') {   // one .vcf with every subscriber that has a number → import once on the office phone
     b.disabled = true;
     try {
@@ -617,6 +696,7 @@ $('list').addEventListener('click', async e => {
 function smsHref(r){ return `sms:${r.phone}${IOS ? '&' : '?'}body=${encodeURIComponent(r.body)}`; }
 
 function render(){
+  titleCount();
   const L = lists(), d = S.date, t = S.today;
   $('uname').textContent = S.user || '';
   $('dlabel').textContent = d === t ? 'Today' : dLabel(d);
@@ -833,6 +913,7 @@ $('list').addEventListener('click', async e => {
   }
 })();
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.pin) reload(); });
+$('list').addEventListener('input', e => { if (e.target.id === 'mq') { S.q = e.target.value; const pos = e.target.selectionStart; render(); const i = $('mq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } } });
 </script>
 </body>
 </html>
