@@ -1203,6 +1203,7 @@ function openSheet(kind, preset){
 }
 function closeSheet(){
   $('scrim').classList.remove('on'); $('sheet').classList.remove('on'); S.form = null;
+  if (NB.sheetTab) { NB.sheetTab = null; if (typeof nbTabs === 'function' && $('nb-tabs')) nbTabs(); }   // pop-up tab closed → highlight back on the page tab
   const o = S.opener; S.opener = null;
   if (o && document.contains(o) && o.offsetParent && !$('sheet').contains(o)) o.focus({preventScroll:true});
 }
@@ -2913,7 +2914,7 @@ function nbTabs(){
   const pend = nbPending().length;
   $('nb-tabs').innerHTML = NB_TABS.map(([k, ic, l, col]) => {
     const n = k === 'col' ? pend : 0;
-    return `<button type="button" data-tab="${k}" class="${NB.tab === k ? 'on' : ''}" style="--c:${col}"><i>${ic}</i><span>${l}</span>${n ? `<b class="n">${n}</b>` : ''}</button>`;
+    return `<button type="button" data-tab="${k}" class="${(NB.sheetTab || NB.tab) === k ? 'on' : ''}" style="--c:${col}"><i>${ic}</i><span>${l}</span>${n ? `<b class="n">${n}</b>` : ''}</button>`;
   }).join('');
 }
 $('nb-tabs').addEventListener('click', e => {
@@ -2922,6 +2923,8 @@ $('nb-tabs').addEventListener('click', e => {
   const k = b.dataset.tab;
   if (k === 'book' || k === 'col' || k === 'more') { NB.tab = k; renderNote(); return; }
   if (k === 'g') { show('gcheck'); loadGcheck(); return; }
+  // Deposit / Parts / Approve open as a pop-up: highlight that tab while it is open (closeSheet puts the highlight back)
+  if (k === 'dep' || k === 'parts' || k === 'appr') { NB.sheetTab = k; nbTabs(); }
   if (k === 'dep') { openSheet('deposit'); return; }
   if (k === 'parts') { openSheet('parts'); loadParts(); return; }
   if (k === 'appr') { openSheet('appr'); loadAppr(); return; }
