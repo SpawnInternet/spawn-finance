@@ -3399,7 +3399,8 @@ function nbChoose(){
     const k = b.dataset.kind;
     if (k === 'short' || k === 'over') return nbShortForm(k);
     $('nb-choose').classList.remove('on');
-    if (k === 'exp' || k === 'oth') openSheet('expense');
+    if (k === 'exp') openSheet('expense');
+    else if (k === 'oth') openSheet('expense', { cat:OTH, catManual:true });   // category preset to "↪ Other cash out" (Change still works)
     else if (k === 'co') openSheet('advance', { mode:'co' });
     else if (k === 'ca') openSheet('advance', { mode:'advance' });
     else if (k === 'repay') openSheet('advance', { mode:'repay' });
