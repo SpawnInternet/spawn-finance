@@ -3351,7 +3351,7 @@ function nbRenderMore(){
     <div class="nb-card" style="margin-top:12px"><h4>Still owed to the drawer</h4>${owed.length ? owed.map(o => `<div class="nb-item"><div class="t"><b>${esc(o.party)}</b><small>taken ${peso(o.taken)} · repaid ${peso(o.repaid)}</small></div><div class="a"><b>${peso(o.outstanding)}</b></div></div>`).join('') : '<div style="color:#94a3b8;font-size:13px">Nobody owes cash right now.</div>'}</div>`;
   $('nb-wrap').querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
     const m = b.dataset.m;
-    if (m === 'exp') { show('exp'); if (typeof drawSaved === 'function') drawSaved(); return; }
+    if (m === 'exp') { openGrid(); return; }   // openGrid sets the date, rows, Quick add and the "copy a day" list (show('exp') alone left them empty)
     if (m === 'match') { show('match'); loadMatch(); return; }
     if (m === 'bookv') { show('book'); renderBook(); return; }
     if (m === 'shorts') { NB.tab = 'shorts'; renderNote(); return; }
