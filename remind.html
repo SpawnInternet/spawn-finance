@@ -19,7 +19,7 @@
   --paper:#F3F6FB; --card:#FFFFFF; --line:#E1E7F0;
   --late:#C77700; --late-l:#FFF2DC; --utang:#C8283C; --utang-l:#FDE7EA;
   --done:#0F8A6B; --done-l:#E2F5EF;
-  --bubble:#025AC6; --bubble-ink:#FFFFFF; --them:#E9EDF3;
+  --bubble:#025AC6; --bubble-ink:#FFFFFF; --them:#E9EDF3; --mine:#025AC6; --rem:#1E2B45; --fail:#B5482E;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
@@ -29,7 +29,7 @@
     --paper:#0E1522; --card:#162033; --line:#24304A;
     --late:#F2A93B; --late-l:#2E2210; --utang:#F07385; --utang-l:#331820;
     --done:#38C79C; --done-l:#10291F;
-    --bubble:#2F7BE0; --bubble-ink:#FFFFFF; --them:#26314A;
+    --bubble:#2F7BE0; --bubble-ink:#FFFFFF; --them:#26314A; --mine:#1F5FC4; --rem:#3A4A6B; --fail:#A33A22;
     color-scheme:dark;
   }
 }
@@ -99,12 +99,13 @@ main{padding:4px 0 28px}
 .th .tb.in{align-self:flex-start;background:var(--them);color:var(--ink);border-bottom-left-radius:4px}
 /* Messenger-style runs: back-to-back bubbles from the same side sit close, time only under the last one */
 .th .tb.cont{margin-top:-4px}.th .tb.in.cont{border-top-left-radius:6px}.th .tb.out.cont{border-top-right-radius:6px}
-.th .tb.out{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
-.th .tb.out.auto{background:var(--blue-l);color:var(--ink);border:1px solid var(--line)}
-.th .tb.out.rem{background:var(--blue-d)}
-.th .tb.out.note{background:var(--card);color:var(--ink-2);border:1px dashed var(--line)}
+.th .tb.out{align-self:flex-end;background:var(--mine);color:#fff;border-bottom-right-radius:4px}
+.th .tb.out.auto{background:var(--blue-l);color:var(--ink);border:1.5px solid var(--blue)}   /* 🤖 automatic: outlined blue */
+.th .tb.out.rem{background:var(--rem);color:#fff}                                                /* 📅 reminder: dark navy */
+.th .tb.out.note{background:var(--card);color:var(--ink-2);border:1.5px dashed var(--muted)}     /* 📣 to office */
+.th .tb.out.test{background:var(--card);color:var(--muted);border:1.5px dashed var(--late)}      /* 🧪 dry-run copy */
 .th .tb small{display:block;font-size:11px;opacity:.75;margin-top:3px}
-.th .tb.out.failed{background:var(--late, #c0392b)}
+.th .tb.out.failed{background:var(--fail);color:#fff}
 .th .day{align-self:center;font-size:11.5px;color:var(--muted);margin:8px 0 2px}
 .q{width:100%;height:42px;padding:0 14px;border-radius:12px;font-size:15px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset;margin-bottom:10px}
 #bell{min-width:42px;height:42px;border-radius:12px;font-size:18px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset}
@@ -229,6 +230,9 @@ body.chats header .day{display:none}   /* the day arrows are for the reminder li
 .lres{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .rform{margin-top:10px}.tpls{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .tpl{padding:6px 11px;border-radius:999px;font-size:13px;font-weight:700;background:var(--blue-l);color:var(--blue)}
+.tpl.on{background:var(--blue);color:#fff}   /* the chosen Chats filter */
+header .help{max-height:calc(100vh - 130px);overflow-y:auto;overscroll-behavior:contain}   /* ? and 🤖 panels scroll on a phone */
+@media (min-width:900px){.tabs{flex-wrap:wrap;overflow:visible}}   /* laptop: every tab visible */
 .rform textarea{width:100%;box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--paper);padding:10px 12px;font:inherit;font-size:15px;margin-bottom:8px;resize:vertical}
 .savebar{position:sticky;bottom:0;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--paper) 70%,transparent)}
 .savebar .btn{width:100%;height:50px;background:var(--blue);color:#fff;box-shadow:none;font-size:16px}
@@ -371,7 +375,7 @@ async function load(pin, date){
     rpc('remind_repairs_v3', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_repairs_v2', { p_pin:pin, p_days:14 })).catch(() => rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null)),   // v3 = + extra repair words
     // Lineman list: v2 = names with optional number (sms flag); v1 = names with numbers only. Hidden if none set.
     rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
-    rpc('remind_chats_v1', { p_pin:pin, p_days:60 }).catch(() => null),   // 💬 Chats tab: the old Messages tab shows if missing
+    rpc('remind_chats_v2', { p_pin:pin, p_days:60 }).catch(() => rpc('remind_chats_v1', { p_pin:pin, p_days:60 })).catch(() => null),   // v2 = office number labelled   // 💬 Chats tab: the old Messages tab shows if missing
   ]);
   S.chats = ch ? (ch.rows || []) : null; if (!S.chats && S.tab === 'chats') S.tab = 'send';
   if (S.chats && !S.tabPicked && S.tab === 'send') S.tab = 'chats';   // Chats opens first (unless a tab or #jobs was chosen)
@@ -502,7 +506,7 @@ const KIND = { due_soon:'reminder · due soon', due_today:'reminder · due today
 function threadHtml(th){
   if (!th.rows.length) return `<div class="sent">No texts yet.</div>`;
   // ours: 👤 human reply (blue) · 🤖 automatic (light) · 📅 reminder (dark) · 📣 alert/summary to the office
-  const whoOf = r => r.dir !== 'out' ? 'in' : /^(job_alert|pay_alert|summary|job_send)$/.test(r.kind || '') ? 'note' : /^(due_soon|due_today|late|utang|manual)$/.test(r.kind || '') ? 'rem' : r.by === 'auto' ? 'auto' : 'human:' + (r.by || '');
+  const whoOf = r => r.dir !== 'out' ? 'in' : /^\[TEST →/.test(r.body || '') ? 'test' : /^(job_alert|pay_alert|summary|job_send)$/.test(r.kind || '') ? 'note' : /^(due_soon|due_today|late|utang|manual)$/.test(r.kind || '') ? 'rem' : r.by === 'auto' ? 'auto' : 'human:' + (r.by || '');
   // same side + same kind of sender + same PH day + within 10 minutes → one Messenger-style run
   const same = (a, b) => a && b && whoOf(a) === whoOf(b) && phDay(a.at) === phDay(b.at) && Math.abs(new Date(b.at) - new Date(a.at)) < 600e3;
   let h = '<div class="th">', day = '';
@@ -510,7 +514,7 @@ function threadHtml(th){
     const d = phDay(r.at); if (d !== day) { day = d; h += `<div class="day">${esc(dLabel(d))}</div>`; }
     const out = r.dir === 'out', who = whoOf(r).split(':')[0], cont = same(th.rows[i - 1], r) && th.rows[i - 1].status !== 'failed';
     const showSmall = !same(r, th.rows[i + 1]) || r.status === 'failed';
-    const tag = { auto:'🤖 automatic', rem:'📅 reminder', note:'📣 to office', human:'👤 ' + esc(r.by || 'office') }[who] || '';
+    const tag = { auto:'🤖 automatic', rem:'📅 reminder', note:'📣 to office', test:'🧪 test copy — went to the office test number only', human:'👤 ' + esc(r.by || 'office') }[who] || '';
     h += `<div class="tb ${out ? 'out ' + who : 'in'}${cont ? ' cont' : ''}${r.status === 'failed' ? ' failed' : ''}">${esc(r.body || '')}${showSmall ? `<small>${out ? tag + (KIND[r.kind] && who !== 'human' ? ' · ' + esc(KIND[r.kind].replace(/^(auto-reply|reminder|alert to office) · /, '')) : '') + ' · ' : ''}${tLabel(r.at)}${out ? ' · ' + esc(ST[r.status] || r.status) + (r.error ? ' — ' + esc(r.error) : '') : ''}</small>` : ''}</div>`;
   });
   return h + '</div>';
@@ -535,7 +539,7 @@ function chatsHtml(){
     <input class="q" id="cq" type="search" placeholder="Search name or number" aria-label="Search chats" value="${esc(S.cq || '')}">
     <div class="cfil">${[['all', 'All'], ['unread', 'Unread'], ['repair', '🔧 Repairs'], ['check', '💳 To check']].map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}</div>
     ${C.length ? C.map(c => `<button type="button" class="crow${c.unread ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
-        <span class="av" style="background:${avColor(c.name || c.address)}">${esc((c.name || '#').trim()[0].toUpperCase())}</span>
+        <span class="av" style="background:${c.office ? 'var(--ink-2)' : avColor(c.name || c.address)}">${c.office ? '📣' : esc((c.name || '#').trim()[0].toUpperCase())}</span>
         <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''}${c.repair ? ' 🔧' : ''}${c.to_check ? ' 💳' : ''}</b><small>${c.last_dir === 'out' ? 'You: ' : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
         <span class="ct">${esc(whenLabel(c.last_at))}${c.unread ? `<span class="ub">${c.unread}</span>` : ''}</span></button>`).join('')
       : `<div class="empty"><b>${S.cq ? 'Nothing matches' : 'No conversations yet'}</b></div>`}
@@ -574,13 +578,14 @@ function chatHtml(ch){
 }
 async function openChat(address){
   const c = S.chats.find(x => x.address === address); if (!c) return;
+  S.listY = window.scrollY;   // phone: ‹ back returns to the same spot in the list
   S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, rows:[], lastIn:c.last_in_id, loading:true }; S.cform = null; S.cmenu = false; S.lres = []; render();
   await refreshChat(); render(); scrollChatEnd();
 }
 function scrollChatEnd(){   // newest message in view: laptop scrolls the conversation pane, phone scrolls the page to the reply box
   const body = $('list').querySelector('.chat .cbody'), end = $('list').querySelector('.chat .compose');
   if (matchMedia('(min-width:900px)').matches) { if (body) body.scrollTop = body.scrollHeight; }
-  else if (end) end.scrollIntoView({ block:'end' });
+  else if (end) window.scrollTo(0, document.documentElement.scrollHeight);   // the reply box is sticky, so scroll the page itself to the bottom
 }
 async function refreshChat(){
   if (!S.chat) return;
@@ -611,7 +616,7 @@ $('list').addEventListener('click', async e => {
   if (!S.chat) return;
   const a = b.dataset.cx, ch = S.chat, mid = ch.lastIn, box = b.closest('.compose');
   if (a === 'menu') { S.cmenu = !S.cmenu; if (!S.cmenu) S.cform = null; render(); return; }
-  if (a === 'back') { S.chat = null; S.cmenu = false; render(); return; }
+  if (a === 'back') { S.chat = null; S.cmenu = false; render(); window.scrollTo(0, S.listY || 0); return; }
   if (a === 'f') { S.cform = S.cform === b.dataset.f ? null : b.dataset.f; S.cmenu = false; S.lq = ''; S.lres = []; S.lnone = false; render(); const i = $('list').querySelector('.pform input'); if (i) i.focus(); return; }
   if (a === 'lsearch') {
     const q = box.querySelector('.pform input').value.trim(); if (q.length < 2) { toast('Type at least 2 letters'); return; }
@@ -997,6 +1002,7 @@ function render(){
   if (S.ops) T.push(['checks', 'To check', S.ops.to_check.length + S.ops.failed.length]);
   if (S.auto) T.push(['auto', 'Sent & coming', autoRows().length]);
   $('tabs').innerHTML = T.map(([k, l, n]) => `<button type="button" class="${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-pressed="${S.tab === k}">${l}<em>${n}</em></button>`).join('');
+  { const on = $('tabs').querySelector('.on'); if (on) $('tabs').scrollLeft = Math.max(0, on.offsetLeft - 16); }   // phone: the chosen tab stays in view
   const box = $('list'), past = d < t, future = d > t;
   const auto = !!(S.auto && (S.auto.mode === 'live' || S.auto.mode === 'dry_run')), live = !!(S.auto && S.auto.mode === 'live');
   // one plain instruction per tab (Bisaya-English) — the "?" button has the full guide
