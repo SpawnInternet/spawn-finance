@@ -181,6 +181,7 @@ button{cursor:pointer;border:0;background:none}
 .f input:focus,.f select:focus,.f textarea:focus{border-color:var(--ink);outline:none}
 .f input.money{font-size:22px;font-weight:800}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two>.f{min-width:0}.f input[type=date]{min-width:0;max-width:100%}   /* two date boxes side by side fit a phone (Deposit "Covers to" stuck out) */
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chips button{padding:8px 12px;border-radius:999px;border:1.5px solid var(--line);font-size:13px;font-weight:700;background:#fff}
 .chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
