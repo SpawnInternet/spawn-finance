@@ -526,7 +526,7 @@ const avColor = s => AV[[...String(s || '')].reduce((n, c) => n + c.charCodeAt(0
 const whenLabel = ts => { const d = String(ts).slice(0, 10); return d === S.today ? tLabel(ts) : dLabel(d); };
 const chatRows = () => {
   const q = (S.cq || '').trim().toLowerCase();
-  return S.chats.filter(c => S.cf === 'all' || (S.cf === 'unread' && c.unread) || (S.cf === 'repair' && c.repair) || (S.cf === 'check' && c.to_check))
+  return S.chats.filter(c => S.cf === 'all' || (S.cf === 'unread' && c.unread) || (S.cf === 'repair' && c.repair) || (S.cf === 'check' && c.to_check) || (S.cf === 'lead' && c.lead))
     .filter(c => !q || [c.name, c.address, c.area, c.last_body].join(' ').toLowerCase().includes(q));
 };
 function chatsHtml(){
@@ -537,10 +537,10 @@ function chatsHtml(){
       <textarea id="nttext" rows="3" maxlength="480" aria-label="Message" placeholder="Text message" enterkeyhint="send" style="box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px"></textarea>
       <div class="acts"><button type="button" class="btn send" data-cx="newsend">Send</button><button type="button" class="btn" data-cx="newcancel">Cancel</button></div></div>` : ''}
     <input class="q" id="cq" type="search" placeholder="Search name or number" aria-label="Search chats" value="${esc(S.cq || '')}">
-    <div class="cfil">${[['all', 'All'], ['unread', 'Unread'], ['repair', '🔧 Repairs'], ['check', '💳 To check']].map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}</div>
+    <div class="cfil">${[['all', 'All'], ['unread', 'Unread'], ['repair', '🔧 Repairs'], ['check', '💳 To check']].concat(S.chats.some(c => c.lead) ? [['lead', '🆕 Install']] : []).map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}</div>
     ${C.length ? C.map(c => `<button type="button" class="crow${c.unread ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
         <span class="av" style="background:${c.office ? 'var(--ink-2)' : avColor(c.name || c.address)}">${c.office ? '📣' : esc((c.name || '#').trim()[0].toUpperCase())}</span>
-        <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''}${c.repair ? ' 🔧' : ''}${c.to_check ? ' 💳' : ''}</b><small>${c.last_dir === 'out' ? 'You: ' : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
+        <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''}${c.lead ? ' 🆕' : ''}${c.repair ? ' 🔧' : ''}${c.to_check ? ' 💳' : ''}</b><small>${c.last_dir === 'out' ? 'You: ' : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
         <span class="ct">${esc(whenLabel(c.last_at))}${c.unread ? `<span class="ub">${c.unread}</span>` : ''}</span></button>`).join('')
       : `<div class="empty"><b>${S.cq ? 'Nothing matches' : 'No conversations yet'}</b></div>`}
   </div>`;
@@ -1012,7 +1012,7 @@ function render(){
     nonum: 'Wala pay number — dili ma-text. I-type ang number ug <b>Save number</b>, o <b>Find numbers in contacts</b>.',
     done: 'Na-text na, bayad na, naay saad, o <b>To check</b>. <b>Undo</b> kung nasayop.',
     auto: 'Kinsa na ang na-text karon (Delivered / Failed), ug kinsa ang sunod — pindota ▶ para ugma.',
-    chats: '💬 Sama sa Messages sa phone: pindota ang tawo → makita ang tanan nga text (ila ug ato), reply sa ubos. Mga chip sa ibabaw sa reply: <b>Handled</b>, <b>To check</b>, <b>Promised</b>, <b>Link</b>, <b>Job order</b>.',
+    chats: '💬 Sama sa Messages sa phone: pindota ang tawo → makita ang tanan nga text (ila ug ato), reply sa ubos. Mga chip sa ibabaw sa reply: <b>Handled</b>, <b>To check</b>, <b>Promised</b>, <b>Link</b>, <b>Job order</b>. 🆕 = gusto magpa-install (bag-ong customer) — tubaga una.',
     replies: 'Mga text gikan sa subscribers. <b>Reply</b> (naay ready answers), <b>Promised</b>, <b>To check</b> (GCash ref), <b>Handled</b> kung human na.',
     jobs: '🔧 Mga reklamo nga guba / walay internet = posible nga job order. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b>, dayon <b>✅ Done</b> kung naayo na.',
     checks: '💳 GCash ref nga i-verify: makita na sa libro? → <b>Confirmed</b> (o automatic). 📵 Number nga dili mo-work → <b>Block number</b>.',
