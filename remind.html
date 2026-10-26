@@ -514,7 +514,7 @@ function threadHtml(th){
     const d = phDay(r.at); if (d !== day) { day = d; h += `<div class="day">${esc(dLabel(d))}</div>`; }
     const out = r.dir === 'out', who = whoOf(r).split(':')[0], cont = same(th.rows[i - 1], r) && th.rows[i - 1].status !== 'failed';
     const showSmall = !same(r, th.rows[i + 1]) || r.status === 'failed';
-    const tag = { auto:'🤖 automatic', rem:'📅 reminder', note:'📣 to office', test:'🧪 test copy — went to the office test number only', human:'👤 ' + esc(r.by || 'office') }[who] || '';
+    const tag = { auto:'🤖 automatic', rem:'📅 reminder', note:'📣 to office', test:'🧪 test copy — went to the office test number only', human:r.by === 'phone' ? '📱 typed on the office phone' : '👤 ' + esc(r.by || 'office') }[who] || '';
     h += `<div class="tb ${out ? 'out ' + who : 'in'}${cont ? ' cont' : ''}${r.status === 'failed' ? ' failed' : ''}">${esc(r.body || '')}${showSmall ? `<small>${out ? tag + (KIND[r.kind] && who !== 'human' ? ' · ' + esc(KIND[r.kind].replace(/^(auto-reply|reminder|alert to office) · /, '')) : '') + ' · ' : ''}${tLabel(r.at)}${out ? ' · ' + esc(ST[r.status] || r.status) + (r.error ? ' — ' + esc(r.error) : '') : ''}</small>` : ''}</div>`;
   });
   return h + '</div>';
