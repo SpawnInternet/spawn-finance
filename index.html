@@ -1511,7 +1511,7 @@ function renderSheet(){
     title = 'GCash wallet';
     const G = S.gc || { rows:[], closing_balance:0 };
     const rows = G.rows.filter(r => !r.voided_at).slice().reverse();
-    const lbl = { opening:'Opening balance', payment_in:'Payment in (app)', sheet_in:'Payment in (sheet)', sukli_out:'Sukli given (GCash)', adjust_in:'Adjustment (add)', adjust_out:'Adjustment (subtract)' };
+    const lbl = { opening:'Opening balance', payment_in:'Payment in (app)', sheet_in:'Payment in (sheet)', sukli_out:'Sukli given (GCash)', gcash_cashout:'GCash → cash', adjust_in:'Adjustment (add)', adjust_out:'Adjustment (subtract)' };
     h += `<div class="calc"><div class="big" style="border:0;margin:0;padding:0"><span>GCash wallet now</span><b>${pesoN(G.closing_balance)}</b></div></div>`;
     h += `<div class="note">Payments and sukli through GCash land here automatically. The cash box and handover counts never include GCash.</div>`;
     h += rows.length ? `<div class="plist">${rows.map(r => `<${r.payment_id ? `button type="button" data-gp="${r.payment_id}"` : 'div'} class="r"><span>${esc(lbl[r.kind] || r.kind)}<small>${dLabel(r.entry_date)} · ${tLabel(r.entered_at)}${r.memo ? ' · ' + esc(r.memo) : ''}${r.gcash_ref ? ' · ref ' + esc(r.gcash_ref) : ''}</small></span>
