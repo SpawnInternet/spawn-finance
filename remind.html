@@ -19,7 +19,7 @@
   --paper:#F3F6FB; --card:#FFFFFF; --line:#E1E7F0;
   --late:#C77700; --late-l:#FFF2DC; --utang:#C8283C; --utang-l:#FDE7EA;
   --done:#0F8A6B; --done-l:#E2F5EF;
-  --bubble:#025AC6; --bubble-ink:#FFFFFF;
+  --bubble:#025AC6; --bubble-ink:#FFFFFF; --them:#E9EDF3;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
@@ -29,7 +29,7 @@
     --paper:#0E1522; --card:#162033; --line:#24304A;
     --late:#F2A93B; --late-l:#2E2210; --utang:#F07385; --utang-l:#331820;
     --done:#38C79C; --done-l:#10291F;
-    --bubble:#2F7BE0; --bubble-ink:#FFFFFF;
+    --bubble:#2F7BE0; --bubble-ink:#FFFFFF; --them:#26314A;
     color-scheme:dark;
   }
 }
@@ -96,7 +96,9 @@ main{padding:4px 0 28px}
 /* full conversation (📜 History): theirs left, ours right, like a phone's text app */
 .th{display:flex;flex-direction:column;gap:6px;margin:10px 0}
 .th .tb{max-width:86%;padding:9px 13px;border-radius:16px;font-size:14px;line-height:1.4;position:relative}
-.th .tb.in{align-self:flex-start;background:var(--bubble);color:var(--bubble-ink);border-bottom-left-radius:4px}
+.th .tb.in{align-self:flex-start;background:var(--them);color:var(--ink);border-bottom-left-radius:4px}
+/* Messenger-style runs: back-to-back bubbles from the same side sit close, time only under the last one */
+.th .tb.cont{margin-top:-4px}.th .tb.in.cont{border-top-left-radius:6px}.th .tb.out.cont{border-top-right-radius:6px}
 .th .tb.out{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
 .th .tb.out.auto{background:var(--blue-l);color:var(--ink);border:1px solid var(--line)}
 .th .tb.out.rem{background:var(--blue-d)}
@@ -119,13 +121,15 @@ main{padding:4px 0 28px}
 .chat{display:flex;flex-direction:column;min-height:50vh}
 .chat .chh{display:flex;align-items:center;gap:10px;padding:4px 0 10px;border-bottom:1px solid var(--line)}
 .chat .chh .back{width:42px;height:42px;border-radius:12px;font-size:20px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset;flex:none}
+.chat .chh .av{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:16px;color:#fff;flex:none}
+body.chats header .day{display:none}   /* the day arrows are for the reminder lists, not for Chats */
 .chat .chh .nm{flex:1;min-width:0}.chat .chh .nm b{display:block;font-size:16px}.chat .chh .nm small{color:var(--muted);font-size:12.5px}
 .chat .chh a.btn{display:inline-grid;place-items:center;text-decoration:none;flex:none}
 .chat .cbody{flex:1;padding:6px 0}
 .chat .compose{position:sticky;bottom:0;background:var(--paper);padding:8px 0 6px;border-top:1px solid var(--line)}
 .chat .compose .row{display:flex;gap:8px;align-items:flex-end;margin-top:6px}
-.chat .compose .row textarea{flex:1 1 auto;width:auto;min-width:0;box-sizing:border-box;min-height:46px;max-height:140px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:12px 14px;font:inherit;font-size:15px;resize:none;line-height:1.35}
-.chat .compose .row .btn.send{flex:0 0 auto;width:auto;min-width:88px;height:46px;padding:0 20px;border-radius:14px}
+.chat .compose .row textarea{flex:1 1 auto;width:auto;min-width:0;box-sizing:border-box;min-height:46px;max-height:140px;border-radius:23px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:12px 14px;font:inherit;font-size:15px;resize:none;line-height:1.35}
+.chat .compose .row .btn.send{flex:0 0 auto;width:auto;min-width:88px;height:46px;padding:0 20px;border-radius:23px}
 .chat .compose .row .btn.plus{flex:0 0 auto;width:46px;height:46px;padding:0;border-radius:50%;font-size:22px;position:relative;background:var(--blue-l);color:var(--blue);box-shadow:none}
 .chat .compose .row .btn.plus.on{background:var(--blue);color:#fff}
 .chat .compose .row .btn.plus i{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;background:var(--utang);color:#fff;font:700 11px/18px Figtree,sans-serif;padding:0 5px}
@@ -148,6 +152,10 @@ main{padding:4px 0 28px}
   /* phone: one screen at a time; header stays on top, reply box stays at the bottom */
   .chat .chh{position:sticky;top:0;z-index:5;background:var(--paper)}
   .chat .cbody{min-height:40vh}
+  /* an open conversation gets the whole screen, like Messenger: ‹ back returns to the list and the tabs */
+  body.inchat header{display:none}
+  body.inchat .chat .chh{padding-top:calc(10px + env(safe-area-inset-top,0px))}
+  body.inchat .chat{min-height:100vh}
 }
 #bell.off{opacity:.45}
 .acts{display:flex;flex-wrap:wrap;gap:8px}
@@ -375,6 +383,7 @@ async function load(pin, date){
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
   S.auto = a; if (!a && S.tab === 'auto') S.tab = 'send';
   S.inbox = ib; if (!ib && S.tab === 'replies') S.tab = 'send';
+  if (S.chats && S.tab === 'replies') S.tab = 'chats';   // the old Messages cards are only for when Chats is missing
   if (ib) lastInId = Math.max(lastInId, ...(ib.rows || []).map(r => r.id), 0);   // alerts only for texts newer than this load
   if (S.thread && !(ib && ib.rows.some(r => (r.from || 'id' + r.id) === S.thread.key))) S.thread = null;
   S.repairs = rp; if (!rp && S.tab === 'jobs') S.tab = 'send';
@@ -492,15 +501,18 @@ const KIND = { due_soon:'reminder · due soon', due_today:'reminder · due today
   job_alert:'alert to office', pay_alert:'alert to office', summary:'summary', job_send:'job order to lineman', manual:'reminder' };
 function threadHtml(th){
   if (!th.rows.length) return `<div class="sent">No texts yet.</div>`;
+  // ours: 👤 human reply (blue) · 🤖 automatic (light) · 📅 reminder (dark) · 📣 alert/summary to the office
+  const whoOf = r => r.dir !== 'out' ? 'in' : /^(job_alert|pay_alert|summary|job_send)$/.test(r.kind || '') ? 'note' : /^(due_soon|due_today|late|utang|manual)$/.test(r.kind || '') ? 'rem' : r.by === 'auto' ? 'auto' : 'human:' + (r.by || '');
+  // same side + same kind of sender + same PH day + within 10 minutes → one Messenger-style run
+  const same = (a, b) => a && b && whoOf(a) === whoOf(b) && phDay(a.at) === phDay(b.at) && Math.abs(new Date(b.at) - new Date(a.at)) < 600e3;
   let h = '<div class="th">', day = '';
-  for (const r of th.rows) {
-    const d = String(r.at).slice(0, 10); if (d !== day) { day = d; h += `<div class="day">${esc(dLabel(d))}</div>`; }
-    const out = r.dir === 'out';
-    // ours: 👤 human reply (blue) · 🤖 automatic (light) · 📅 reminder (dark) · 📣 alert/summary to the office
-    const who = !out ? '' : /^(job_alert|pay_alert|summary|job_send)$/.test(r.kind || '') ? 'note' : /^(due_soon|due_today|late|utang|manual)$/.test(r.kind || '') ? 'rem' : r.by === 'auto' ? 'auto' : 'human';
+  th.rows.forEach((r, i) => {
+    const d = phDay(r.at); if (d !== day) { day = d; h += `<div class="day">${esc(dLabel(d))}</div>`; }
+    const out = r.dir === 'out', who = whoOf(r).split(':')[0], cont = same(th.rows[i - 1], r) && th.rows[i - 1].status !== 'failed';
+    const showSmall = !same(r, th.rows[i + 1]) || r.status === 'failed';
     const tag = { auto:'🤖 automatic', rem:'📅 reminder', note:'📣 to office', human:'👤 ' + esc(r.by || 'office') }[who] || '';
-    h += `<div class="tb ${out ? 'out ' + who : 'in'}${r.status === 'failed' ? ' failed' : ''}">${esc(r.body || '')}<small>${out ? tag + (KIND[r.kind] && who !== 'human' ? ' · ' + esc(KIND[r.kind].replace(/^(auto-reply|reminder|alert to office) · /, '')) : '') + ' · ' : ''}${tLabel(r.at)}${out ? ' · ' + esc(ST[r.status] || r.status) + (r.error ? ' — ' + esc(r.error) : '') : ''}</small></div>`;
-  }
+    h += `<div class="tb ${out ? 'out ' + who : 'in'}${cont ? ' cont' : ''}${r.status === 'failed' ? ' failed' : ''}">${esc(r.body || '')}${showSmall ? `<small>${out ? tag + (KIND[r.kind] && who !== 'human' ? ' · ' + esc(KIND[r.kind].replace(/^(auto-reply|reminder|alert to office) · /, '')) : '') + ' · ' : ''}${tLabel(r.at)}${out ? ' · ' + esc(ST[r.status] || r.status) + (r.error ? ' — ' + esc(r.error) : '') : ''}</small>` : ''}</div>`;
+  });
   return h + '</div>';
 }
 
@@ -538,6 +550,7 @@ function chatHtml(ch){
   const f = S.cform;
   return `<div class="chat" data-chat="${esc(ch.address)}">
     <div class="chh"><button type="button" class="back" data-cx="back" aria-label="Back to chats">‹</button>
+      <span class="av" style="background:${avColor(ch.name || ch.address)}" aria-hidden="true">${esc((ch.name || '#').trim()[0].toUpperCase())}</span>
       <div class="nm"><b>${esc(ch.name || ch.address)}</b><small>${ch.name ? esc(ch.area || '') + ' · ' + esc(ch.address) : 'not linked to a subscriber'}${ch.blocked ? ' · ⛔ blocked' : ''}</small></div>
       <a class="btn" href="tel:${esc(ch.address)}">📞</a></div>
     <div class="cbody">${ch.loading ? '<div class="sent">Loading…</div>' : threadHtml({ rows })}</div>
@@ -665,7 +678,11 @@ function notify(rows){
   if ('Notification' in window && Notification.permission === 'granted') {
     const r = rows[0], who = r.name || r.from || 'Unknown number';
     const n = new Notification(rows.length > 1 ? `${rows.length} new texts — Spawn Text` : `${who} — Spawn Text`, { body: rows.length > 1 ? rows.map(x => (x.name || x.from) + ': ' + (x.body || '')).join('\n').slice(0, 200) : (r.body || ''), tag:'spawn-text', renotify:true });
-    n.onclick = () => { window.focus(); S.tab = 'replies'; S.q = ''; render(); n.close(); };
+    // open the person's conversation in 💬 Chats (the old Messages cards only when Chats is not available)
+    n.onclick = () => { window.focus(); S.q = ''; n.close();
+      if (!S.chats) { S.tab = 'replies'; render(); return; }
+      S.tab = 'chats'; const a = rows.length === 1 && r.from;
+      if (a && S.chats.some(c => c.address === a)) openChat(a); else render(); };
   }
 }
 let lastInId = 0, pollT = null;
@@ -964,7 +981,7 @@ $('list').addEventListener('click', async e => {
 function smsHref(r){ return `sms:${r.phone}${IOS ? '&' : '?'}body=${encodeURIComponent(r.body)}`; }
 
 function render(){
-  titleCount(); document.body.classList.toggle('chats', S.tab === 'chats');
+  titleCount(); document.body.classList.toggle('chats', S.tab === 'chats'); document.body.classList.toggle('inchat', S.tab === 'chats' && !!S.chat);
   const L = lists(), d = S.date, t = S.today;
   $('uname').textContent = S.user || '';
   $('dlabel').textContent = d === t ? 'Today' : dLabel(d);
@@ -994,7 +1011,7 @@ function render(){
     jobs: '🔧 Mga reklamo nga guba / walay internet = posible nga job order. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b>, dayon <b>✅ Done</b> kung naayo na.',
     checks: '💳 GCash ref nga i-verify: makita na sa libro? → <b>Confirmed</b> (o automatic). 📵 Number nga dili mo-work → <b>Block number</b>.',
   };
-  let h = HOW[S.tab] ? `<div class="how">${HOW[S.tab]}</div>` : '';
+  let h = HOW[S.tab] && !(S.tab === 'chats' && S.chat) ? `<div class="how">${HOW[S.tab]}</div>` : '';   // no tip over an open conversation
   if (S.tab === 'send') {
     h += `<div class="note">${future ? 'A look ahead — these go out on that day.' : auto ? 'Gikan sa office number, automatic.' : 'Each text goes from this phone. Nothing is sent by itself.'}</div>`;
     h += L.send.length ? L.send.map(r => `<article class="item" data-key="${esc(r.key)}">${head(r)}
