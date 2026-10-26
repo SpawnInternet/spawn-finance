@@ -1515,7 +1515,7 @@ function renderSheet(){
     h += `<div class="calc"><div class="big" style="border:0;margin:0;padding:0"><span>GCash wallet now</span><b>${pesoN(G.closing_balance)}</b></div></div>`;
     h += `<div class="note">Payments and sukli through GCash land here automatically. The cash box and handover counts never include GCash.</div>`;
     h += rows.length ? `<div class="plist">${rows.map(r => `<${r.payment_id ? `button type="button" data-gp="${r.payment_id}"` : 'div'} class="r"><span>${esc(lbl[r.kind] || r.kind)}<small>${dLabel(r.entry_date)} · ${tLabel(r.entered_at)}${r.memo ? ' · ' + esc(r.memo) : ''}${r.gcash_ref ? ' · ref ' + esc(r.gcash_ref) : ''}</small></span>
-      <span style="text-align:right"><b style="color:${Number(r.signed_amount) >= 0 ? '#1d7a70' : '#b02a2a'}">${pesoS(Number(r.signed_amount))}</b><small>${pesoN(r.running_balance)}</small></span></${r.payment_id ? 'button' : 'div'}>`).join('')}</div>`
+      <span style="text-align:right;white-space:nowrap"><b style="color:${Number(r.signed_amount) >= 0 ? '#1d7a70' : '#b02a2a'}">${pesoS(Number(r.signed_amount))}</b><small>${pesoN(r.running_balance)}</small></span></${r.payment_id ? 'button' : 'div'}>`).join('')}</div>`
       : '<div class="empty">No GCash lines in the last 31 days.</div>';
   }
   else if (F.kind === 'detail') {
