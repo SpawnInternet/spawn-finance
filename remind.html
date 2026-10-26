@@ -256,7 +256,7 @@ body.chats header .day{display:none}   /* the day arrows are for the reminder li
       <b>Unsaon paggamit ang Spawn Text</b>
       <ol>
         <li><b>Today's list</b> — kinsa ang ma-remind karon. <b>Automatic na ang text</b> (8:05 AM), ayaw na i-text sa phone. Bayad na? → <b>Already paid</b>. Mosaad og petsa? → <b>Promised</b>.</li>
-        <li><b>💬 Chats</b> — sama sa Messages sa phone. Pindota ang tawo → makita ang tanan nga text (ila ug ato), reply sa ubos (laptop: Enter = send). Mga chip: <b>Handled</b>, <b>To check</b> (GCash ref), <b>Promised</b> (petsa), <b>Link</b> (wala pa nakilala ang number), <b>Job order</b>. <b>✏️ New text</b> = text kang bisan kinsa. Bag-ong text → 🔔 pop-up ug ringtone.</li>
+        <li><b>💬 Chats</b> — sama sa Messages sa phone. Pindota ang tawo → makita ang tanan nga text (ila ug ato), reply sa ubos (Enter = send, Shift+Enter = bag-ong linya). Mga chip: <b>Handled</b>, <b>To check</b> (GCash ref), <b>Promised</b> (petsa), <b>Link</b> (wala pa nakilala ang number), <b>Job order</b>. <b>✏️ New text</b> = text kang bisan kinsa. Bag-ong text → 🔔 pop-up ug ringtone.</li>
         <li><b>To check</b> — GCash ref nga i-verify. Kung makita na ang bayad sa libro, <b>Confirmed</b> (o automatic). Number nga dili mo-work → <b>Block number</b>.</li>
         <li><b>Sent &amp; coming</b> — kinsa na ang na-text, ug kinsa ang sunod (pindota ▶ para ugma).</li>
         <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet; 🏪 = vendo (di mahulugan, validity). <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
@@ -530,7 +530,7 @@ function chatsHtml(){
   const list = `<div class="clist">
     <div class="acts" style="margin-bottom:10px"><button type="button" class="btn" data-cx="newtext">✏️ New text</button></div>
     ${S.newText ? `<div class="pform" style="display:grid;gap:8px;margin-bottom:12px"><input type="tel" inputmode="numeric" id="ntnum" placeholder="09XXXXXXXXX" aria-label="Mobile number" maxlength="13">
-      <textarea id="nttext" rows="3" maxlength="480" aria-label="Message" placeholder="Text message" style="box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px"></textarea>
+      <textarea id="nttext" rows="3" maxlength="480" aria-label="Message" placeholder="Text message" enterkeyhint="send" style="box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px"></textarea>
       <div class="acts"><button type="button" class="btn send" data-cx="newsend">Send</button><button type="button" class="btn" data-cx="newcancel">Cancel</button></div></div>` : ''}
     <input class="q" id="cq" type="search" placeholder="Search name or number" aria-label="Search chats" value="${esc(S.cq || '')}">
     <div class="cfil">${[['all', 'All'], ['unread', 'Unread'], ['repair', '🔧 Repairs'], ['check', '💳 To check']].map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}</div>
@@ -569,7 +569,7 @@ function chatHtml(ch){
       ${f === 'link' ? `<div class="pform"><input type="search" id="lq" placeholder="Search subscriber name…" aria-label="Find subscriber" value="${esc(S.lq || '')}" autocomplete="off"></div>
         <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || (S.lnone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>` : ''}
       ${f === 'more' ? `<div class="acts" style="margin:4px 0 8px"><button type="button" class="btn" data-cx="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-cx="block" data-why="stop">Stop texting them</button></div>` : ''}
-      <div class="row"><button type="button" class="btn plus${S.cmenu ? ' on' : ''}" data-cx="menu" aria-label="Actions and ready answers" aria-expanded="${!!S.cmenu}">${S.cmenu ? '×' : '＋'}${openIds.length && !S.cmenu ? `<i>${openIds.length}</i>` : ''}</button><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
+      <div class="row"><button type="button" class="btn plus${S.cmenu ? ' on' : ''}" data-cx="menu" aria-label="Actions and ready answers" aria-expanded="${!!S.cmenu}">${S.cmenu ? '×' : '＋'}${openIds.length && !S.cmenu ? `<i>${openIds.length}</i>` : ''}</button><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message" enterkeyhint="send"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
     </div></div>`;
 }
 async function openChat(address){
@@ -655,10 +655,10 @@ async function linkSearch(q){ try { const j = await rpc('remind_sub_search_v1', 
 $('list').addEventListener('input', e => { if (e.target.id === 'lq') { S.lq = e.target.value; clearTimeout(lqT); const q = S.lq.trim(); if (q.length < 2) { S.lres = []; S.lnone = false; return; } lqT = setTimeout(() => linkSearch(q), 350); } });
 $('list').addEventListener('keydown', e => { if (e.target.id === 'lq' && e.key === 'Enter') { e.preventDefault(); clearTimeout(lqT); const q = (S.lq || '').trim(); if (q.length >= 2) linkSearch(q); } });
 $('list').addEventListener('input', e => { if (e.target.id === 'cq') { S.cq = e.target.value; const pos = e.target.selectionStart; render(); const i = $('cq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } } });
-// laptop: Enter sends, Shift+Enter = new line; phone: the Send button (Enter makes a new line)
+// Enter sends (laptop and phone, like Messenger); Shift+Enter = new line. (✏️ New text already sends on Enter via its form.)
 $('list').addEventListener('keydown', e => {
-  if (!e.target.matches('.chat textarea') || e.key !== 'Enter' || e.shiftKey) return;
-  if (e.ctrlKey || e.metaKey || matchMedia('(pointer:fine)').matches) { e.preventDefault(); const s = $('list').querySelector('[data-cx="send"]'); if (s) s.click(); }
+  if (!e.target.matches('.chat textarea') || e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+  e.preventDefault(); const s = $('list').querySelector('[data-cx="send"]'); if (s && !s.disabled) s.click();
 });
 window.addEventListener('resize', () => { if (S.tab === 'chats') render(); });
 
