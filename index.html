@@ -614,6 +614,16 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .nb-back{display:inline-flex;align-items:center;height:36px;padding:0 12px;margin:2px 0 10px;border:0;border-radius:10px;background:#fff;color:#0f2a5c;font:800 13px Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(17,24,39,.08);cursor:pointer}
 .nb-go{border-radius:14px}
 @media(min-width:700px){.paper{font-size:16px}.paper .ln b{min-width:110px}}
+/* phone logbook (≤719 px; laptop unchanged): headings stay on their 40 px ruled line, the last line clears the fixed bottom bar,
+   "You stopped here" wraps instead of being cut off */
+@media (max-width:719px){
+  .paper .hd{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .paper .hd small{margin-left:4px;font-size:10px;letter-spacing:0}
+  .paper .wl-h{white-space:nowrap;overflow:hidden;font-size:11px;letter-spacing:.02em;gap:6px}
+  .paper .wl-h em{overflow:hidden;text-overflow:ellipsis}
+  #v-note{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))}
+  .nb-mark{white-space:normal;text-overflow:clip;line-height:1.35;height:auto}
+}
 </style>
 </head>
 <body>
