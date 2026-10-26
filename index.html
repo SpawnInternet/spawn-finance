@@ -1548,6 +1548,16 @@ function liveCalc(){
   }
   if ((F.kind === 'count' || F.kind === 'close') && c) {
     const tot = denomTotal(), book = F.kind === 'close' ? balanceAt(F.date) : Number(S.book.balance_now), diff = tot - book;
+    // Count & hand over: nothing counted yet → no Short/Over (it showed the whole drawer as Short) and no Save
+    if (F.kind === 'count') {
+      const counted = ['f-p5', 'f-p1', 'f-bills', 'f-loose'].some(id => v(id) !== '');
+      if ($('sh-save')) $('sh-save').disabled = !counted;
+      if (!counted) {
+        c.innerHTML = `<div><span>Counted</span><b>—</b></div><div><span>Book says</span><b>${peso(book)}</b></div>
+          <div class="big"><span>Short / Over</span><b>—</b></div>`;
+        return;
+      }
+    }
     c.innerHTML = `<div><span>Counted</span><b>${peso(tot)}</b></div><div><span>Book says</span><b>${peso(book)}</b></div>
       <div class="big"><span>${diff < 0 ? 'Short' : diff > 0 ? 'Over' : 'Balanced'}</span><b class="${diff === 0 ? 'diff0' : 'diffx'}">${diff === 0 ? '✓' : peso(Math.abs(diff))}</b></div>`;
   }
