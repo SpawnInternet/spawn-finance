@@ -368,7 +368,7 @@ async function load(pin, date){
     // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
     rpc('remind_inbox_v2', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null)),
     // Job orders tab: v2 includes vendo complaints (kind); v1 until v2 exists; hidden if neither
-    rpc('remind_repairs_v2', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null)),
+    rpc('remind_repairs_v3', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_repairs_v2', { p_pin:pin, p_days:14 })).catch(() => rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null)),   // v3 = + extra repair words
     // Lineman list: v2 = names with optional number (sms flag); v1 = names with numbers only. Hidden if none set.
     rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
     rpc('remind_chats_v1', { p_pin:pin, p_days:60 }).catch(() => null),   // 💬 Chats tab: the old Messages tab shows if missing
