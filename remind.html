@@ -201,6 +201,14 @@ main{padding:4px 0 28px}
 #helpbtn{width:30px;height:30px;border-radius:50%;margin-right:8px;font-weight:800;background:var(--blue-l);color:var(--blue)}
 .help{background:var(--card);border-radius:16px;padding:14px 16px;margin:8px 0 10px;box-shadow:0 0 0 1px var(--line) inset;font-size:14px;color:var(--ink)}
 .help ol{padding-left:20px;margin:8px 0}.help li{margin-bottom:6px}.help p{margin:6px 0 10px;color:var(--ink-2)}
+#botbtn{width:30px;height:30px;border-radius:50%;margin-right:8px;background:var(--blue-l);font-size:15px}
+.bot textarea{display:block;width:100%;box-sizing:border-box;min-height:60px;margin:8px 0;border-radius:12px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px;resize:vertical}
+.bot label{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:14px;color:var(--ink-2)}
+.bot .bex{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 2px}.bot .bex button{height:30px;padding:0 10px;border-radius:999px;font-size:12.5px;background:var(--paper);color:var(--ink-2);box-shadow:0 0 0 1px var(--line) inset}
+.bot .brow{display:flex;gap:8px;margin-top:10px}.bot .brow .btn.send{flex:1}
+.bot .bres{margin-top:10px}.bot .bres ul{padding-left:18px;margin:6px 0}.bot .bres li{margin-bottom:4px}
+.bot .balert{margin:8px 0;padding:8px 10px;border-radius:10px;background:var(--late-l);color:var(--late);font-weight:700}
+.bot .brep{margin:6px 0;padding:8px 10px;border-radius:10px;background:var(--blue-l);color:var(--ink)}.bot .brep b{display:block;color:var(--blue);font-size:12.5px}
 .how{background:var(--blue-l);color:var(--ink);border-radius:12px;padding:9px 12px;margin-bottom:10px;font-size:13.5px}
 /* Replies tab */
 .bubble.in{margin:10px 26px 4px 0;border-radius:18px 18px 18px 4px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset}
@@ -235,7 +243,7 @@ main{padding:4px 0 28px}
 
 <div id="app" class="hide">
   <header><div class="wrap">
-    <div class="top"><div class="brand"><b>Spawn</b><span>Text</span></div><div class="who"><span id="uname"></span><button type="button" id="bell" aria-label="New-text alerts" title="New-text alerts: pop-up + ringtone">🔔</button><button type="button" id="helpbtn" aria-label="How to use" title="How to use">?</button><button type="button" id="out">Lock</button></div></div>
+    <div class="top"><div class="brand"><b>Spawn</b><span>Text</span></div><div class="who"><span id="uname"></span><button type="button" id="bell" aria-label="New-text alerts" title="New-text alerts: pop-up + ringtone">🔔</button><button type="button" id="botbtn" aria-label="Robot test" title="Robot test: what would the robot do with a text?">🤖</button><button type="button" id="helpbtn" aria-label="How to use" title="How to use">?</button><button type="button" id="out">Lock</button></div></div>
     <div id="helpbox" class="help hide" role="dialog" aria-label="How to use Spawn Text">
       <b>Unsaon paggamit ang Spawn Text</b>
       <ol>
@@ -245,9 +253,19 @@ main{padding:4px 0 28px}
         <li><b>Sent &amp; coming</b> — kinsa na ang na-text, ug kinsa ang sunod (pindota ▶ para ugma).</li>
         <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet; 🏪 = vendo (di mahulugan, validity). <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
         <li><b>No number</b> — i-save ang number aron ma-text sila.</li>
+        <li><b>🤖</b> — Robot test: i-type ang text sama sa customer, makita unsa ang buhaton sa robot (walay text nga ipadala).</li>
       </ol>
       <p><b>Pahinumdom:</b> i-reply gikan sa <b>Messages</b> (dili sa phone) aron ma-record. Ang spare phone (SMS sender) ayaw hilabti.</p>
       <button type="button" class="btn" id="helpclose">Sige, sabot na</button>
+    </div>
+    <div id="botbox" class="help bot hide" role="dialog" aria-label="Robot test">
+      <b>🤖 Robot test</b> — i-type ang text sama sa customer. Makita nimo unsa ang buhaton sa robot. <b>Walay text nga ipadala</b>, walay load nga kinahanglan.
+      <div class="bex" id="botex"><button type="button">walay internet</button><button type="button">wala lagi gihapon signal</button><button type="button">di mahulugan ang vendo</button><button type="button">pwede gcash?</button><button type="button">bayad na ref 1234567890123</button></div>
+      <textarea id="bott" maxlength="500" placeholder="Pananglitan: walay internet sukad ganina" aria-label="Text to test"></textarea>
+      <label><input type="checkbox" id="botknown" checked> Subscriber na ang number (kilala sa system)</label>
+      <label><input type="checkbox" id="botfollow"> Ika-2 nga text gikan sa samang number (follow-up)</label>
+      <div class="brow"><button type="button" class="btn send" id="botgo">Test</button><button type="button" class="btn" id="botclose">Close</button></div>
+      <div class="bres" id="botres" aria-live="polite"></div>
     </div>
     <div class="day">
       <button type="button" class="nv" id="prev" aria-label="Previous day">◀</button>
@@ -313,6 +331,25 @@ function lock(msg){ S.pin = ''; typed = ''; clearInterval(pollT); document.title
 $('out').onclick = () => lock();
 $('helpbtn').onclick = () => $('helpbox').classList.toggle('hide');
 $('helpclose').onclick = () => $('helpbox').classList.add('hide');
+
+/* 🤖 Robot test — remind_robot_test_v1 runs the robot's own checks on a typed text; read-only, sends nothing */
+$('botbtn').onclick = () => { $('botbox').classList.toggle('hide'); if (!$('botbox').classList.contains('hide')) $('bott').focus(); };
+$('botclose').onclick = () => $('botbox').classList.add('hide');
+$('botex').onclick = e => { const b = e.target.closest('button'); if (!b) return; $('bott').value = b.textContent; $('botgo').click(); };
+$('bott').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('botgo').click(); } };
+$('botgo').onclick = async () => {
+  const txt = $('bott').value.trim(); if (!txt) { toast('Type a text first.'); return; }
+  const b = $('botgo'); b.disabled = true; $('botres').innerHTML = '<p>Testing…</p>';
+  try {
+    const j = await rpc('remind_robot_test_v1', { p_pin:S.pin, p_text:txt, p_known:$('botknown').checked, p_followup:$('botfollow').checked });
+    $('botres').innerHTML = `<b>Nakita:</b> ${esc((j.kinds || []).join(', ') || 'walay espesyal nga pulong')}`
+      + (j.alert ? `<div class="balert">📣 ${esc(j.alert)}</div>` : '')
+      + (j.replies || []).map(r => `<div class="brep"><b>Reply sa customer · ${esc(r.label)}</b>${esc(r.text)}</div>`).join('')
+      + `<ul>${(j.steps || []).map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
+  } catch (x) {
+    $('botres').innerHTML = `<p>${esc(/robot_test_off/.test(x.message) ? 'Robot test is not switched on yet.' : /function|404|schema cache/i.test(x.message) ? 'Robot test is not installed yet.' : x.message)}</p>`;
+  } finally { b.disabled = false; }
+};
 
 async function load(pin, date){
   const r = await rpc('remind_board', { p_pin:pin, p_date:date });   // checks the PIN first
