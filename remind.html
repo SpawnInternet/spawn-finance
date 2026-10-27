@@ -481,14 +481,16 @@ function tagsOf(body){
   return T;
 }
 const TPL = {
-  gcash:'Maayong adlaw! Spawn Internet GCash: 0909 990 0556 (WE...L D.). Human mobayad, palihug i-text dinhi ang reference number. Salamat!',
-  who:'Maayong adlaw! Kini gikan sa Spawn Internet, ang inyong internet provider. Office: Lalawan, Dicayas, Dipolog. Para sa pangutana o bayad, tawag o text lang niining numeroa. Salamat!',
-  ref:'Salamat! Nadawat namo ang inyong reference. I-check namo ug i-record ang inyong bayad. — Spawn Internet',
-  paid:'Salamat! I-check namo ang inyong bayad ug i-update ang inyong account. — Spawn Internet',
-  repair:'Salamat sa pagpahibalo. Gilista na namo ang inyong koneksyon para sa among technician. — Spawn Internet',
-  promise:'Salamat! Na-record namo nga mobayad mo sa {date}. — Spawn Internet',
+  // plain characters only (no ₱ or —): one such character makes the whole SMS Unicode = 70 chars per part instead of 160
+  gcash:'Maayong adlaw po! Spawn Internet GCash: 0909 990 0556 (WE...L D.). Human mobayad, palihug i-text dinhi ang reference number ug pangalan sa account. Salamat po!',
+  who:'Maayong adlaw po! Kini gikan sa Spawn Internet, ang inyong internet provider. Office: Lalawan, Dicayas, Dipolog. Para sa pangutana o bayad, tawag o text lang niining numeroa. Salamat po!',
+  ref:'Salamat po! Nadawat namo ang inyong reference. I-check namo ug i-record ang inyong bayad. - Spawn Internet',
+  paid:'Salamat po! I-check namo ang inyong bayad ug i-update ang inyong account. - Spawn Internet',
+  repair:'Pasensya kaayo sa abala po. Gilista na namo ang inyong koneksyon para sa among technician. - Spawn Internet',
+  later:'Salamat sa pagpahibalo po! Okay ra. Kanus-a man nimo ma-expect? Para ma-note namo ug dili na mi mo-remind sa wala pa. - Spawn Internet',
+  promise:'Salamat po! Na-record namo nga mobayad mo sa {date}. Dili na mi mo-remind hangtod niana. - Spawn Internet',
 };
-const TPLN = { gcash:'GCash number', who:'Who is this', ref:'Got the ref', paid:'Will check payment', repair:'Repair noted', promise:'Promise noted' };
+const TPLN = { gcash:'GCash number', who:'Who is this', ref:'Got the ref', paid:'Will check payment', repair:'Repair noted', later:'Will pay later', promise:'Promise noted' };
 // texts from the same number form one conversation; actions apply to the newest text (and close the older open ones)
 function threads(){
   const by = new Map();
