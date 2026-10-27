@@ -107,6 +107,10 @@ main{padding:4px 0 28px}
 .th .tb small{display:block;font-size:11px;opacity:.75;margin-top:3px}
 .th .tb.out.failed{background:var(--fail);color:#fff}
 .th .day{align-self:center;font-size:11.5px;color:var(--muted);margin:8px 0 2px}
+.th .eng{align-self:flex-start;margin:0 0 4px 4px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700;background:var(--card);color:var(--ink-2);border:1px dashed var(--muted)}   /* 🤖 engine reading (practice) */
+.th .eng.urg{border-color:var(--late);color:var(--late)}.th .eng.lab{border-style:solid;border-color:var(--done);color:var(--done)}
+.th .engp{align-self:stretch;margin:0 0 8px;padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:13px}
+.th .engp ul{margin:6px 0;padding-left:18px}.th .engp li{margin-bottom:3px}
 .q{width:100%;height:42px;padding:0 14px;border-radius:12px;font-size:15px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset;margin-bottom:10px}
 #bell{min-width:42px;height:42px;border-radius:12px;font-size:18px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset}
 /* 💬 Chats: list like a phone's messaging app; the open conversation beside it on a wide screen */
@@ -358,6 +362,11 @@ $('botgo').onclick = async () => {
       + (j.alert ? `<div class="balert">📣 ${esc(j.alert)}</div>` : '')
       + (j.replies || []).map(r => `<div class="brep"><b>Reply sa customer · ${esc(r.label)}</b>${esc(r.text)}</div>`).join('')
       + `<ul>${(j.steps || []).map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
+    const e2 = await rpc('remind_engine_test_v1', { p_pin:S.pin, p_text:txt }).catch(() => null);   // 🧠 new engine, practice only
+    if (e2) $('botres').innerHTML += `<div class="brep"><b>🧠 New engine (practice) · ${esc(e2.label || e2.intent)} · ${Math.round((e2.confidence || 0) * 100)}% sure</b>`
+      + `Would: ${esc(EACT[e2.action] || e2.action)}${e2.safe_auto ? ' — by itself' : ' — waits for a person'}`
+      + (engFacts(e2.facts).length ? '<br>Facts: ' + esc(engFacts(e2.facts).join(' · ')) : '')
+      + ((e2.gates || []).length ? '<br>Careful: ' + esc(e2.gates.map(g => EGATE[g] || g).join(', ')) : '') + '</div>';
   } catch (x) {
     $('botres').innerHTML = `<p>${esc(/robot_test_off/.test(x.message) ? 'Robot test is not switched on yet.' : /function|404|schema cache/i.test(x.message) ? 'Robot test is not installed yet.' : x.message)}</p>`;
   } finally { b.disabled = false; }
@@ -516,9 +525,47 @@ function threadHtml(th){
     const showSmall = !same(r, th.rows[i + 1]) || r.status === 'failed';
     const tag = { auto:'🤖 automatic', rem:'📅 reminder', note:'📣 to office', test:'🧪 test copy — went to the office test number only', human:r.by === 'phone' ? '📱 typed on the office phone' : '👤 ' + esc(r.by || 'office') }[who] || '';
     h += `<div class="tb ${out ? 'out ' + who : 'in'}${cont ? ' cont' : ''}${r.status === 'failed' ? ' failed' : ''}">${esc(r.body || '')}${showSmall ? `<small>${out ? tag + (KIND[r.kind] && who !== 'human' ? ' · ' + esc(KIND[r.kind].replace(/^(auto-reply|reminder|alert to office) · /, '')) : '') + ' · ' : ''}${tLabel(r.at)}${out ? ' · ' + esc(ST[r.status] || r.status) + (r.error ? ' — ' + esc(r.error) : '') : ''}</small>` : ''}</div>`;
+    if (th.eng && !out && S.engR && S.engR[r.id]) h += engHtml(S.engR[r.id]);
   });
   return h + '</div>';
 }
+
+/* 🧠 Engine (practice): what the new "office person" engine understood (remind_engine_read_v1); 🏷 the office teaches it (remind_engine_label_v1).
+   Shows nothing when the engine is not installed or remind_engine_ui is off. Never sends or closes anything. */
+const EACT = { ignore:'ignore it (junk)', close:'close it, no reply', to_check:'To check + hold reminders', human:'a person answers', job_order:'job order + hold reminders',
+  pickup_alert:'tell the collector to pick up', note_promise:'note the date, no reminder before it', human_confirm:'office confirms the new number', ops:'vendo team',
+  lead:'new-customer list', auto_gcash:'send the GCash number', answer_due:'answer the due date from the book' };
+const EGATE = { low_confidence:'not sure', angry:'customer upset', sensitive:'sad news', night:'night time', human_active:'office already replying',
+  robot_replied_24h:'robot already replied today', unknown_number:'number not linked' };
+const eLabel = k => ((S.engI || []).find(i => i.intent === k) || {}).label || k;
+const engFacts = f => { f = f || {}; return [f.ref && 'ref ' + f.ref, f.ref_masked && 'ref ' + f.ref_masked, f.last4 && 'ref …' + f.last4, f.amount && peso(f.amount),
+  f.phone && 'number ' + f.phone, f.days && f.days + ' days', f.when && 'when: ' + f.when].filter(Boolean); };
+function engHtml(x){
+  const facts = engFacts(x.facts), open = S.engOpen === x.id;
+  const chip = `<button type="button" class="eng${x.urgent ? ' urg' : ''}${x.office ? ' lab' : ''}" data-eng="${x.id}" aria-expanded="${open}">🤖 ${esc(x.label || x.intent)}${x.how === 'burst' || x.how === 'follow-up' ? ' · ' + esc(x.how) : ''}${facts[0] ? ' · ' + esc(facts[0]) : ''}${x.mood >= 2 ? ' · 😠' : ''}${x.office ? ' · 🏷 ' + esc(x.office === x.intent ? 'right' : eLabel(x.office)) : ''}</button>`;
+  if (!open) return chip;
+  return chip + `<div class="engp"><b>Robot reading — practice only, sends nothing</b><ul>
+    <li>Type: ${esc(x.label || x.intent)} · ${Math.round((x.confidence || 0) * 100)}% sure${x.how === 'burst' ? ' · part of a burst' : x.how === 'follow-up' ? ' · follow-up of their last text' : ''}</li>
+    ${facts.length ? `<li>Facts: ${esc(facts.join(' · '))}</li>` : ''}${x.mood ? `<li>Mood: ${'😠'.repeat(Math.min(x.mood, 3))}</li>` : ''}
+    <li>Would: ${esc(EACT[x.action] || x.action)}${x.safe_auto ? ' — by itself' : ' — waits for a person'}</li>
+    ${(x.gates || []).length ? `<li>Careful: ${esc(x.gates.map(g => EGATE[g] || g).join(', '))}</li>` : ''}</ul>
+    <div class="sent">🏷 This text is…${x.office ? ' (saved by ' + esc(x.office_by || 'office') + ' — tap again to undo)' : ''}</div>
+    <div class="cchips"><button type="button" class="tpl${x.office === x.intent ? ' on' : ''}" data-elab="${esc(x.intent)}" data-emid="${x.id}">✓ Right</button>${(S.engI || []).filter(i => i.intent !== x.intent).map(i => `<button type="button" class="tpl${x.office === i.intent ? ' on' : ''}" data-elab="${esc(i.intent)}" data-emid="${x.id}">${esc(i.label)}</button>`).join('')}</div></div>`;
+}
+async function engLoad(rows){   // only texts not read yet; one call per new batch
+  if (S.engOff) return;
+  S.engR = S.engR || {};
+  const ids = rows.filter(r => r.dir === 'in' && !S.engR[r.id]).map(r => r.id).slice(-80);
+  if (!ids.length) return;
+  const j = await rpc('remind_engine_read_v1', { p_pin:S.pin, p_ids:ids }).catch(() => null);
+  if (!j || !j.on) { S.engOff = true; return; }
+  S.engI = j.intents || [];
+  for (const x of j.rows || []) S.engR[x.id] = x;
+}
+const keepScroll = fn => {   // re-render without jumping: same spot in the conversation and the page
+  const b = $('list').querySelector('.chat .cbody'), y = b ? b.scrollTop : 0, wy = window.scrollY;
+  fn(); const b2 = $('list').querySelector('.chat .cbody'); if (b2) b2.scrollTop = y; window.scrollTo(0, wy);
+};
 
 /* 💬 Chats tab — list (remind_chats_v1) + conversation (remind_thread_v1), like the phone's messaging app */
 const AV = ['#025AC6', '#0F8A6B', '#C77700', '#C8283C', '#6A4FC9', '#0E7C9A', '#B5541C'];
@@ -557,7 +604,7 @@ function chatHtml(ch){
       <span class="av" style="background:${avColor(ch.name || ch.address)}" aria-hidden="true">${esc((ch.name || '#').trim()[0].toUpperCase())}</span>
       <div class="nm"><b>${esc(ch.name || ch.address)}</b><small>${ch.name ? esc(ch.area || '') + ' · ' + esc(ch.address) : 'not linked to a subscriber'}${ch.blocked ? ' · ⛔ blocked' : ''}</small></div>
       <a class="btn" href="tel:${esc(ch.address)}">📞</a></div>
-    <div class="cbody">${ch.loading ? '<div class="sent">Loading…</div>' : threadHtml({ rows })}</div>
+    <div class="cbody">${ch.loading ? '<div class="sent">Loading…</div>' : threadHtml({ rows, eng:true })}</div>
     <div class="compose">
       ${S.cmenu ? `<div class="cmenu">
         <div class="sent">Actions</div><div class="cchips">
@@ -592,6 +639,7 @@ async function refreshChat(){
   try {
     const j = await rpc('remind_thread_v1', { p_pin:S.pin, p_address:S.chat.address, p_sub:S.chat.sub || null, p_limit:200 });
     const rows = j.rows || [], ins = rows.filter(r => r.dir === 'in');
+    await engLoad(rows);
     S.chat.rows = rows; S.chat.lastIn = ins.length ? ins[ins.length - 1].id : S.chat.lastIn; S.chat.loading = false;
     const c = S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; }
   } catch (x) { S.chat.loading = false; toast(x.message, 4000); }
@@ -601,6 +649,18 @@ $('list').addEventListener('click', async e => {
   const row = e.target.closest('[data-ch]'); if (row) { openChat(row.dataset.ch); return; }
   const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; render(); return; }
   const tp = e.target.closest('[data-ctpl]'); if (tp) { const txt = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = txt; ta.focus(); } return; }
+  const eb = e.target.closest('[data-eng]'); if (eb) { S.engOpen = S.engOpen === +eb.dataset.eng ? null : +eb.dataset.eng; keepScroll(render); return; }
+  const lb = e.target.closest('[data-elab]'); if (lb) {   // 🏷 teach the engine; tapping the saved one again removes it
+    const id = +lb.dataset.emid, x = S.engR && S.engR[id]; if (!x) return;
+    const intent = x.office === lb.dataset.elab ? 'clear' : lb.dataset.elab;
+    lb.disabled = true;
+    try {
+      await rpc('remind_engine_label_v1', { p_pin:S.pin, p_msg_id:id, p_intent:intent, p_note:null });
+      x.office = intent === 'clear' ? null : intent; x.office_by = S.user;
+      toast(intent === 'clear' ? 'Label removed' : 'Saved — the robot learns from this'); keepScroll(render);
+    } catch (x2) { toast(/engine_ui_off/.test(x2.message) ? 'Robot reading is switched off' : x2.message, 4000); lb.disabled = false; }
+    return;
+  }
   const b = e.target.closest('[data-cx]'); if (!b) return;
   if (b.dataset.cx === 'newtext') { S.newText = true; render(); const i = $('ntnum'); if (i) i.focus(); return; }
   if (b.dataset.cx === 'newcancel') { S.newText = false; render(); return; }
