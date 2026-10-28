@@ -111,6 +111,10 @@ main{padding:4px 0 28px}
 .th .eng.urg{border-color:var(--late);color:var(--late)}.th .eng.lab{border-style:solid;border-color:var(--done);color:var(--done)}
 .th .engp{align-self:stretch;margin:0 0 8px;padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:13px}
 .th .engp ul{margin:6px 0;padding-left:18px}.th .engp li{margin-bottom:3px}
+.th .sugc{align-self:flex-start;max-width:88%;margin:0 0 8px 4px;padding:8px 10px;border-radius:12px;background:var(--card);border:1px dashed var(--muted);font-size:13px}   /* 💡 suggestion: a person decides */
+.th .sugc .sgl{font-size:11.5px;font-weight:700;color:var(--ink-2);margin-bottom:3px}.th .sugc .sgt{margin-bottom:6px}
+.th .sugc input{display:block;width:100%;box-sizing:border-box;margin:0 0 6px;padding:7px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);font:inherit;font-size:14px}
+.th .sugc .err{color:var(--late);font-size:12px;margin:-2px 0 6px}
 .q{width:100%;height:42px;padding:0 14px;border-radius:12px;font-size:15px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset;margin-bottom:10px}
 #bell{min-width:42px;height:42px;border-radius:12px;font-size:18px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset}
 /* 💬 Chats: list like a phone's messaging app; the open conversation beside it on a wide screen */
@@ -528,6 +532,7 @@ function threadHtml(th){
     const tag = { auto:'🤖 automatic', rem:'📅 reminder', note:'📣 to office', test:'🧪 test copy — went to the office test number only', human:r.by === 'phone' ? '📱 typed on the office phone' : '👤 ' + esc(r.by || 'office') }[who] || '';
     h += `<div class="tb ${out ? 'out ' + who : 'in'}${cont ? ' cont' : ''}${r.status === 'failed' ? ' failed' : ''}">${esc(r.body || '')}${showSmall ? `<small>${out ? tag + (KIND[r.kind] && who !== 'human' ? ' · ' + esc(KIND[r.kind].replace(/^(auto-reply|reminder|alert to office) · /, '')) : '') + ' · ' : ''}${tLabel(r.at)}${out ? ' · ' + esc(ST[r.status] || r.status) + (r.error ? ' — ' + esc(r.error) : '') : ''}</small>` : ''}</div>`;
     if (th.eng && !out && S.engR && S.engR[r.id]) h += engHtml(S.engR[r.id]);
+    if (th.eng && !out && r.status === 'received' && S.sugR && S.sugR[r.id] && !(S.sugNo || {})[r.id]) h += sugHtml(S.sugR[r.id]);
   });
   return h + '</div>';
 }
@@ -563,6 +568,31 @@ async function engLoad(rows){   // only texts not read yet; one call per new bat
   if (!j || !j.on) { S.engOff = true; return; }
   S.engI = j.intents || [];
   for (const x of j.rows || []) S.engR[x.id] = x;
+}
+/* 💡 Suggestion box (remind_suggest_v1): under an open customer text, a suggested reply or "maybe a name". A person decides —
+   Use only fills the reply box (edit, then Send = a human reply); Save to person card first shows editable name + place.
+   Shows nothing when remind_suggest is off or the action is not installed. Never sends or saves by itself. */
+function sugHtml(x){
+  if (x.kind === 'name') {
+    if (x.saved) return `<div class="sugc"><div class="sgl">👤 Saved to person card</div><div class="sgt">${esc(x.saved)}</div></div>`;
+    if (S.sugName === x.id) return `<div class="sugc"><div class="sgl">👤 Check the name before saving</div>
+      <input id="sgn" maxlength="120" value="${esc(x.name)}" aria-label="Name to save"><input id="sgp" maxlength="200" placeholder="Place (purok, barangay)" aria-label="Place">
+      <div class="err" id="sgerr" role="alert"></div>
+      <div class="cchips"><button type="button" class="tpl" data-ssave="${x.id}">Save</button><button type="button" class="tpl" data-scancel="${x.id}">Cancel</button></div></div>`;
+    return `<div class="sugc"><div class="sgl">👤 Maybe a name</div><div class="sgt">${esc(x.name)}</div>
+      <div class="cchips"><button type="button" class="tpl" data-sname="${x.id}">Save to person card</button><button type="button" class="tpl" data-sno="${x.id}">Not right</button></div></div>`;
+  }
+  return `<div class="sugc"><div class="sgl">💡 Suggested reply · ${esc(x.label || '')}</div><div class="sgt">${esc(x.text)}</div>
+    <div class="cchips"><button type="button" class="tpl" data-suse="${x.id}">Use</button><button type="button" class="tpl" data-sno="${x.id}">Not right</button></div></div>`;
+}
+async function sugLoad(rows){   // open customer texts only; asked again on every refresh because texts get handled
+  if (S.sugOff) return;
+  const ids = rows.filter(r => r.dir === 'in' && r.status === 'received').map(r => r.id).slice(-40);
+  if (!ids.length) return;
+  const j = await rpc('remind_suggest_v1', { p_pin:S.pin, p_ids:ids }).catch(() => null);
+  if (!j || !j.on) { S.sugOff = true; return; }
+  S.sugR = S.sugR || {};
+  for (const x of j.rows || []) if (!(S.sugR[x.id] && S.sugR[x.id].saved)) S.sugR[x.id] = x;
 }
 const keepScroll = fn => {   // re-render without jumping: same spot in the conversation and the page
   const b = $('list').querySelector('.chat .cbody'), y = b ? b.scrollTop : 0, wy = window.scrollY;
@@ -642,6 +672,7 @@ async function refreshChat(){
     const j = await rpc('remind_thread_v1', { p_pin:S.pin, p_address:S.chat.address, p_sub:S.chat.sub || null, p_limit:200 });
     const rows = j.rows || [], ins = rows.filter(r => r.dir === 'in');
     await engLoad(rows);
+    await sugLoad(rows);
     S.chat.rows = rows; S.chat.lastIn = ins.length ? ins[ins.length - 1].id : S.chat.lastIn; S.chat.loading = false;
     const c = S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; }
   } catch (x) { S.chat.loading = false; toast(x.message, 4000); }
@@ -661,6 +692,25 @@ $('list').addEventListener('click', async e => {
       x.office = intent === 'clear' ? null : intent; x.office_by = S.user;
       toast(intent === 'clear' ? 'Label removed' : 'Saved — the robot learns from this'); keepScroll(render);
     } catch (x2) { toast(/engine_ui_off/.test(x2.message) ? 'Robot reading is switched off' : x2.message, 4000); lb.disabled = false; }
+    return;
+  }
+  const su = e.target.closest('[data-suse]'); if (su) {   // 💡 Use: only fills the reply box — the person edits, then Send
+    const x = S.sugR && S.sugR[+su.dataset.suse]; if (!x) return;
+    S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea');
+    if (ta) { ta.value = x.text; ta.focus(); } toast('In the reply box — edit it, then Send'); return;
+  }
+  const sn = e.target.closest('[data-sno]'); if (sn) { (S.sugNo = S.sugNo || {})[+sn.dataset.sno] = true; keepScroll(render); return; }
+  const sv = e.target.closest('[data-sname]'); if (sv) { S.sugName = +sv.dataset.sname; keepScroll(render); const i = $('sgn'); if (i) i.focus(); return; }
+  const sc = e.target.closest('[data-scancel]'); if (sc) { S.sugName = null; keepScroll(render); return; }
+  const ss = e.target.closest('[data-ssave]'); if (ss) {   // 👤 save the checked name (remind_person_save_v1)
+    const x = S.sugR && S.sugR[+ss.dataset.ssave]; if (!x || !S.chat) return;
+    const nm = ($('sgn').value || '').trim().replace(/\s+/g, ' '), pl = ($('sgp').value || '').trim();
+    if (nm.split(' ').filter(w => w.length > 1).length < 2) { $('sgerr').textContent = 'Type the first and last name'; $('sgn').focus(); return; }
+    ss.disabled = true;
+    try {
+      await rpc('remind_person_save_v1', { p_pin:S.pin, p_address:S.chat.address, p_name:nm, p_place:pl || null, p_kind:'unknown' });
+      x.saved = nm; S.sugName = null; toast('Saved to the person card — job alerts will show this name'); keepScroll(render);
+    } catch (x2) { toast(x2.message, 4000); ss.disabled = false; }
     return;
   }
   const b = e.target.closest('[data-cx]'); if (!b) return;
