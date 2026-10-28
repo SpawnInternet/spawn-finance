@@ -689,7 +689,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
         <div><b>Approvals</b><br><span>Deductions, plan changes, balances</span></div></button>
       <button class="tile t-gcheck small" data-go="gcheck" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M9 12.5l2 2 4-4.5"/></svg>
-        <div><b>GCash check</b><br><span>Confirm GCash against the account</span></div></button>
+        <div><b>GCash &amp; bank check</b><br><span>Confirm GCash and bank transfers</span></div></button>
       <button class="tile t-match small" data-go="match" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="3.5"/><path d="M2.5 19c0-3 2.5-5.5 5.5-5.5"/><path d="M13 12h8M17 8l4 4-4 4"/></svg>
         <div><b>Match names</b><br><span>Attach payments to subscribers</span></div></button>
@@ -719,7 +719,8 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 <!-- BOOK -->
 <section id="v-gcheck" class="hide">
   <div class="wrap mwrap">
-    <div class="note" style="margin-bottom:12px">Compare each day's total with the <b>money received</b> in the GCash history from the account owner. If the day's total matches, confirm the whole day. If not, open the day and tick each payment you can find.</div>
+    <div class="seg" id="gc-seg"><button type="button" data-gm="gcash" class="on">📱 GCash</button><button type="button" data-gm="bank">🏦 Bank</button></div>
+    <div class="note" id="gc-note" style="margin-bottom:12px">Compare each day's total with the <b>money received</b> in the GCash history from the account owner. If the day's total matches, confirm the whole day. If not, open the day and tick each payment you can find.</div>
     <div id="gc-days"><div class="empty"><span class="spin"></span></div></div>
   </div>
 </section>
@@ -880,7 +881,7 @@ function show(v){
   $('btn-home').classList.toggle('hide', !['book','exp','match','gcheck'].includes(v) && !(v === 'home' && NB.layout === 'note') && !(v === 'note' && NB.layout === 'tiles'));
   $('btn-user').classList.toggle('hide', v === 'pin');
   $('laysw').classList.toggle('hide', v === 'pin');
-  $('bar-sub').textContent = v === 'book' ? 'Book' : v === 'exp' ? 'Expenses' : v === 'match' ? 'Match names' : v === 'gcheck' ? 'GCash check' : v === 'note' ? (S.user ? S.user.name + ' · logbook' + (S.loginAt ? ' · until ' + signedUntil() : '') : 'Logbook') : 'Cash book';
+  $('bar-sub').textContent = v === 'book' ? 'Book' : v === 'exp' ? 'Expenses' : v === 'match' ? 'Match names' : v === 'gcheck' ? 'GCash & bank check' : v === 'note' ? (S.user ? S.user.name + ' · logbook' + (S.loginAt ? ' · until ' + signedUntil() : '') : 'Logbook') : 'Cash book';
   window.scrollTo(0, 0);
 }
 
@@ -2302,27 +2303,40 @@ async function decidePlan(id, ok){
 }
 
 /* ---------- GCash check by day ---------- */
-const G = { data:null, open:null, busy:false };
+const G = { data:null, open:null, busy:false, mode:'gcash' };
+/* Bank check (Oct 2026): same list, same buttons — bank transfers recorded in Spawn Collect, checked by their bank ref no. */
+const GW = {
+  gcash:{ app:'GCash', hist:'GCash history', total:'total expected in GCash', none:'No GCash payments in the last 14 days.', days:'fin_gcash_days', mark:'fin_gcash_mark',
+          note:"Compare each day's total with the <b>money received</b> in the GCash history from the account owner. If the day's total matches, confirm the whole day. If not, open the day and tick each payment you can find." },
+  bank:{ app:'bank', hist:'The bank app', total:'total expected in the bank', none:'No bank transfers in the last 14 days.', days:'fin_bank_days', mark:'fin_bank_mark',
+          note:"Compare each day's total with the <b>money received</b> in the bank app or statement. If the day's total matches, confirm the whole day. If not, open the day and tick each transfer — match it by its <b>ref no.</b>" } };
 async function loadGcheck(){
-  try { G.data = await rpc('fin_gcash_days', { p_pin:S.pin }); } catch (e) { toast(e.message, 4000); }
-  drawGcheck();
+  const W = GW[G.mode];
+  const sg = $('gc-seg'); if (sg) { sg.querySelectorAll('[data-gm]').forEach(b => { b.classList.toggle('on', b.dataset.gm === G.mode); b.onclick = () => { if (G.mode === b.dataset.gm) return; G.mode = b.dataset.gm; G.open = null; G.data = null; $('gc-days').innerHTML = '<div class="empty"><span class="spin"></span></div>'; loadGcheck(); }; }); }
+  const nt = $('gc-note'); if (nt) nt.innerHTML = W.note;
+  const want = G.mode;
+  let d = null;
+  try { d = await rpc(W.days, { p_pin:S.pin }); } catch (e) { toast(e.message, 4000); }
+  if (want !== G.mode) return;          // switched while loading
+  G.data = d; drawGcheck();
 }
 function gBadge(st){ return st === 'confirmed' ? '<span class="gb ok">✓ Confirmed</span>' : st === 'not_found' ? '<span class="gb no">Not found</span>' : '<span class="gb">Recorded</span>'; }
 function drawGcheck(){
   const el = $('gc-days'), D = G.data;
   if (!D) { el.innerHTML = '<div class="empty">Could not load.</div>'; return; }
-  if (!D.days.length) { el.innerHTML = '<div class="empty">No GCash payments in the last 14 days.</div>'; return; }
+  const W = GW[G.mode];
+  if (!D.days.length) { el.innerHTML = `<div class="empty">${W.none}</div>`; return; }
   el.innerHTML = D.days.map(d => {
     const open = G.open === d.date, left = d.count - d.confirmed;
     const done = d.confirmed === d.count;
     return `<div class="gday ${done ? 'done' : ''}">
       <button type="button" class="gd-hd" data-gday="${d.date}">
         <span class="gd-l"><b>${dLabel(d.date)}</b><span class="gd-pills"><i>${d.count} payment${d.count > 1 ? 's' : ''}</i><i class="${done ? 'ok' : ''}">${d.confirmed} confirmed</i>${d.not_found ? `<i class="no">${d.not_found} not found</i>` : ''}${left && !done ? `<i class="todo">${left} to check</i>` : ''}</span></span>
-        <span class="gd-r"><b>${peso(d.total)}</b><small>${done ? 'all confirmed ✓' : 'total expected in GCash'}</small><em>${open ? '▲' : '▼'}</em></span></button>
-      ${left ? `<button type="button" class="go alt gd-all" data-gall="${d.date}">GCash history shows <b>${peso(d.total)}</b> received on ${dLabel(d.date)}? → Confirm all ${left}</button>` : ''}
+        <span class="gd-r"><b>${peso(d.total)}</b><small>${done ? 'all confirmed ✓' : W.total}</small><em>${open ? '▲' : '▼'}</em></span></button>
+      ${left ? `<button type="button" class="go alt gd-all" data-gall="${d.date}">${W.hist} shows <b>${peso(d.total)}</b> received on ${dLabel(d.date)}? → Confirm all ${left}</button>` : ''}
       ${open ? `<div class="plist">${d.items.map(i => `<div class="gi ${i.status}">
         <div class="gi-top"><span class="gi-name"><b>${esc(i.name)}</b><small>${esc(i.source)}${i.app ? ' · ' + esc(i.app) : ''}${i.sent_at ? ' · sent ' + esc(i.sent_at) : ''}${i.checked_by ? ' · checked by ' + esc(i.checked_by) : ''}</small>${i.ref ? `<code>ref ${esc(i.ref)}</code>` : '<small>no ref no.</small>'}</span><span class="gi-amt">${peso(i.amount)}${gBadge(i.status)}</span></div>
-        <div class="gi-b">${i.proof ? `<button type="button" data-gview="${i.key}" data-gname="${esc(i.name)}">🖼 Screenshot</button>` : ''}${i.status !== 'confirmed' ? `<button type="button" class="ok" data-gok="${i.key}">✓ Found in GCash</button>` : ''}${i.status !== 'not_found' ? `<button type="button" class="no" data-gno="${i.key}">✕ Not found</button>` : ''}${i.status !== 'recorded' ? `<button type="button" data-gundo="${i.key}">↺ Undo</button>` : ''}</div>
+        <div class="gi-b">${i.proof ? `<button type="button" data-gview="${i.key}" data-gname="${esc(i.name)}">🖼 Screenshot</button>` : ''}${i.status !== 'confirmed' ? `<button type="button" class="ok" data-gok="${i.key}">✓ Found in ${W.app}</button>` : ''}${i.status !== 'not_found' ? `<button type="button" class="no" data-gno="${i.key}">✕ Not found</button>` : ''}${i.status !== 'recorded' ? `<button type="button" data-gundo="${i.key}">↺ Undo</button>` : ''}</div>
       </div>`).join('')}</div>` : ''}
     </div>`; }).join('');
   el.querySelectorAll('[data-gday]').forEach(b => b.onclick = () => { G.open = G.open === b.dataset.gday ? null : b.dataset.gday; drawGcheck(); });
@@ -2334,7 +2348,7 @@ function drawGcheck(){
 }
 async function gMark(keys, status){
   if (G.busy || !keys.length) return; G.busy = true;
-  try { await rpc('fin_gcash_mark', { p_pin:S.pin, p_keys:keys, p_status:status }); toast(status === 'confirmed' ? `Confirmed ${keys.length}.` : status === 'not_found' ? 'Marked not found.' : 'Back to recorded.'); await loadGcheck(); }
+  try { await rpc(GW[G.mode].mark, { p_pin:S.pin, p_keys:keys, p_status:status }); toast(status === 'confirmed' ? `Confirmed ${keys.length}.` : status === 'not_found' ? 'Marked not found.' : 'Back to recorded.'); await loadGcheck(); }
   catch (e) { toast(e.message, 3500); }
   G.busy = false;
 }
