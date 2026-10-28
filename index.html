@@ -181,6 +181,7 @@ button{cursor:pointer;border:0;background:none}
 .f input:focus,.f select:focus,.f textarea:focus{border-color:var(--ink);outline:none}
 .f input.money{font-size:22px;font-weight:800}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two>.f{min-width:0}.f input[type=date]{min-width:0;max-width:100%}   /* two date boxes side by side fit a phone (Deposit "Covers to" stuck out) */
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chips button{padding:8px 12px;border-radius:999px;border:1.5px solid var(--line);font-size:13px;font-weight:700;background:#fff}
 .chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -614,6 +615,16 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .nb-back{display:inline-flex;align-items:center;height:36px;padding:0 12px;margin:2px 0 10px;border:0;border-radius:10px;background:#fff;color:#0f2a5c;font:800 13px Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(17,24,39,.08);cursor:pointer}
 .nb-go{border-radius:14px}
 @media(min-width:700px){.paper{font-size:16px}.paper .ln b{min-width:110px}}
+/* phone logbook (≤719 px; laptop unchanged): headings stay on their 40 px ruled line, the last line clears the fixed bottom bar,
+   "You stopped here" wraps instead of being cut off */
+@media (max-width:719px){
+  .paper .hd{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .paper .hd small{margin-left:4px;font-size:10px;letter-spacing:0}
+  .paper .wl-h{white-space:nowrap;overflow:hidden;font-size:11px;letter-spacing:.02em;gap:6px}
+  .paper .wl-h em{overflow:hidden;text-overflow:ellipsis}
+  #v-note{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))}
+  .nb-mark{white-space:normal;text-overflow:clip;line-height:1.35;height:auto}
+}
 </style>
 </head>
 <body>
@@ -1193,6 +1204,7 @@ function openSheet(kind, preset){
 }
 function closeSheet(){
   $('scrim').classList.remove('on'); $('sheet').classList.remove('on'); S.form = null;
+  if (NB.sheetTab) { NB.sheetTab = null; if (typeof nbTabs === 'function' && $('nb-tabs')) nbTabs(); }   // pop-up tab closed → highlight back on the page tab
   const o = S.opener; S.opener = null;
   if (o && document.contains(o) && o.offsetParent && !$('sheet').contains(o)) o.focus({preventScroll:true});
 }
@@ -1501,11 +1513,11 @@ function renderSheet(){
     title = 'GCash wallet';
     const G = S.gc || { rows:[], closing_balance:0 };
     const rows = G.rows.filter(r => !r.voided_at).slice().reverse();
-    const lbl = { opening:'Opening balance', payment_in:'Payment in (app)', sheet_in:'Payment in (sheet)', sukli_out:'Sukli given (GCash)', adjust_in:'Adjustment (add)', adjust_out:'Adjustment (subtract)' };
+    const lbl = { opening:'Opening balance', payment_in:'Payment in (app)', sheet_in:'Payment in (sheet)', sukli_out:'Sukli given (GCash)', gcash_cashout:'GCash → cash', adjust_in:'Adjustment (add)', adjust_out:'Adjustment (subtract)' };
     h += `<div class="calc"><div class="big" style="border:0;margin:0;padding:0"><span>GCash wallet now</span><b>${pesoN(G.closing_balance)}</b></div></div>`;
     h += `<div class="note">Payments and sukli through GCash land here automatically. The cash box and handover counts never include GCash.</div>`;
     h += rows.length ? `<div class="plist">${rows.map(r => `<${r.payment_id ? `button type="button" data-gp="${r.payment_id}"` : 'div'} class="r"><span>${esc(lbl[r.kind] || r.kind)}<small>${dLabel(r.entry_date)} · ${tLabel(r.entered_at)}${r.memo ? ' · ' + esc(r.memo) : ''}${r.gcash_ref ? ' · ref ' + esc(r.gcash_ref) : ''}</small></span>
-      <span style="text-align:right"><b style="color:${Number(r.signed_amount) >= 0 ? '#1d7a70' : '#b02a2a'}">${pesoS(Number(r.signed_amount))}</b><small>${pesoN(r.running_balance)}</small></span></${r.payment_id ? 'button' : 'div'}>`).join('')}</div>`
+      <span style="text-align:right;white-space:nowrap"><b style="color:${Number(r.signed_amount) >= 0 ? '#1d7a70' : '#b02a2a'}">${pesoS(Number(r.signed_amount))}</b><small>${pesoN(r.running_balance)}</small></span></${r.payment_id ? 'button' : 'div'}>`).join('')}</div>`
       : '<div class="empty">No GCash lines in the last 31 days.</div>';
   }
   else if (F.kind === 'detail') {
@@ -1549,6 +1561,16 @@ function liveCalc(){
   }
   if ((F.kind === 'count' || F.kind === 'close') && c) {
     const tot = denomTotal(), book = F.kind === 'close' ? balanceAt(F.date) : Number(S.book.balance_now), diff = tot - book;
+    // Count & hand over: nothing counted yet → no Short/Over (it showed the whole drawer as Short) and no Save
+    if (F.kind === 'count') {
+      const counted = ['f-p5', 'f-p1', 'f-bills', 'f-loose'].some(id => v(id) !== '');
+      if ($('sh-save')) $('sh-save').disabled = !counted;
+      if (!counted) {
+        c.innerHTML = `<div><span>Counted</span><b>—</b></div><div><span>Book says</span><b>${peso(book)}</b></div>
+          <div class="big"><span>Short / Over</span><b>—</b></div>`;
+        return;
+      }
+    }
     c.innerHTML = `<div><span>Counted</span><b>${peso(tot)}</b></div><div><span>Book says</span><b>${peso(book)}</b></div>
       <div class="big"><span>${diff < 0 ? 'Short' : diff > 0 ? 'Over' : 'Balanced'}</span><b class="${diff === 0 ? 'diff0' : 'diffx'}">${diff === 0 ? '✓' : peso(Math.abs(diff))}</b></div>`;
   }
@@ -2906,7 +2928,7 @@ function nbTabs(){
   const pend = nbPending().length;
   $('nb-tabs').innerHTML = NB_TABS.map(([k, ic, l, col]) => {
     const n = k === 'col' ? pend : 0;
-    return `<button type="button" data-tab="${k}" class="${NB.tab === k ? 'on' : ''}" style="--c:${col}"><i>${ic}</i><span>${l}</span>${n ? `<b class="n">${n}</b>` : ''}</button>`;
+    return `<button type="button" data-tab="${k}" class="${(NB.sheetTab || NB.tab) === k ? 'on' : ''}" style="--c:${col}"><i>${ic}</i><span>${l}</span>${n ? `<b class="n">${n}</b>` : ''}</button>`;
   }).join('');
 }
 $('nb-tabs').addEventListener('click', e => {
@@ -2915,6 +2937,8 @@ $('nb-tabs').addEventListener('click', e => {
   const k = b.dataset.tab;
   if (k === 'book' || k === 'col' || k === 'more') { NB.tab = k; renderNote(); return; }
   if (k === 'g') { show('gcheck'); loadGcheck(); return; }
+  // Deposit / Parts / Approve open as a pop-up: highlight that tab while it is open (closeSheet puts the highlight back)
+  if (k === 'dep' || k === 'parts' || k === 'appr') { NB.sheetTab = k; nbTabs(); }
   if (k === 'dep') { openSheet('deposit'); return; }
   if (k === 'parts') { openSheet('parts'); loadParts(); return; }
   if (k === 'appr') { openSheet('appr'); loadAppr(); return; }
@@ -3365,7 +3389,7 @@ function nbRenderMore(){
     <div class="nb-card" style="margin-top:12px"><h4>Still owed to the drawer</h4>${owed.length ? owed.map(o => `<div class="nb-item"><div class="t"><b>${esc(o.party)}</b><small>taken ${peso(o.taken)} · repaid ${peso(o.repaid)}</small></div><div class="a"><b>${peso(o.outstanding)}</b></div></div>`).join('') : '<div style="color:#94a3b8;font-size:13px">Nobody owes cash right now.</div>'}</div>`;
   $('nb-wrap').querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
     const m = b.dataset.m;
-    if (m === 'exp') { show('exp'); if (typeof drawSaved === 'function') drawSaved(); return; }
+    if (m === 'exp') { openGrid(); return; }   // openGrid sets the date, rows, Quick add and the "copy a day" list (show('exp') alone left them empty)
     if (m === 'match') { show('match'); loadMatch(); return; }
     if (m === 'bookv') { show('book'); renderBook(); return; }
     if (m === 'shorts') { NB.tab = 'shorts'; renderNote(); return; }
@@ -3393,7 +3417,8 @@ function nbChoose(){
     const k = b.dataset.kind;
     if (k === 'short' || k === 'over') return nbShortForm(k);
     $('nb-choose').classList.remove('on');
-    if (k === 'exp' || k === 'oth') openSheet('expense');
+    if (k === 'exp') openSheet('expense');
+    else if (k === 'oth') openSheet('expense', { cat:OTH, catManual:true });   // category preset to "↪ Other cash out" (Change still works)
     else if (k === 'co') openSheet('advance', { mode:'co' });
     else if (k === 'ca') openSheet('advance', { mode:'advance' });
     else if (k === 'repay') openSheet('advance', { mode:'repay' });
