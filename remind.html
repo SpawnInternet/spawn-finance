@@ -61,6 +61,13 @@ input{font:inherit;color:inherit}
 /* ── top ── */
 header{position:sticky;top:0;z-index:20;background:var(--paper);padding-top:env(safe-area-inset-top,0px)}
 .top{display:flex;align-items:center;gap:10px;padding:14px 0 6px}
+/* 📶 SMS phone status bar (remind_line_status_v1; hidden while the switch remind_line_bar is off) */
+.linebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;line-height:1.35;padding:7px 10px;border-radius:10px;margin:0 0 6px;border:1px solid var(--line);background:var(--card);color:var(--ink-2)}
+.linebar b{color:var(--ink)}
+.linebar.red{background:var(--utang-l);border-color:var(--utang);color:var(--ink)}
+.linebar.amber{background:var(--late-l);border-color:var(--late);color:var(--ink)}
+.linebar.green{background:var(--done-l);border-color:var(--done)}
+.linebar .lb-do{flex-basis:100%;font-size:12px;color:var(--ink-2)}
 .top .brand b,.top .brand span{font-size:21px}
 .who{margin-left:auto;font-size:13px;color:var(--muted)}
 .who button{color:var(--blue);font-weight:600;margin-left:6px}
@@ -265,6 +272,7 @@ header .help{max-height:calc(100vh - 130px);overflow-y:auto;overscroll-behavior:
 <div id="app" class="hide">
   <header><div class="wrap">
     <div class="top"><div class="brand"><b>Spawn</b><span>Text</span></div><div class="who"><span id="uname"></span><button type="button" id="bell" aria-label="New-text alerts" title="New-text alerts: pop-up + ringtone">🔔</button><button type="button" id="botbtn" aria-label="Robot test" title="Robot test: what would the robot do with a text?">🤖</button><button type="button" id="helpbtn" aria-label="How to use" title="How to use">?</button><button type="button" id="out">Lock</button></div></div>
+    <div id="linebar" class="linebar hide" role="status" aria-live="polite"></div>
     <div id="helpbox" class="help hide" role="dialog" aria-label="How to use Spawn Text">
       <b>Unsaon paggamit ang Spawn Text</b>
       <ol>
@@ -348,7 +356,7 @@ async function key(k){
 }
 pad.addEventListener('click', e => { const b = e.target.closest('button'); if (b) key(b.dataset.k); });
 document.addEventListener('keydown', e => { if (!$('lock').classList.contains('hide')) { if (/^\d$/.test(e.key)) key(e.key); else if (e.key === 'Backspace') key('b'); } });
-function lock(msg){ S.pin = ''; typed = ''; clearInterval(pollT); document.title = 'Spawn Text'; dots(); try { sessionStorage.removeItem(SESS); } catch (x) {} $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
+function lock(msg){ S.pin = ''; typed = ''; clearInterval(pollT); clearInterval(lineT); $('linebar').className = 'linebar hide'; document.title = 'Spawn Text'; dots(); try { sessionStorage.removeItem(SESS); } catch (x) {} $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
 $('out').onclick = () => lock();
 $('helpbtn').onclick = () => $('helpbox').classList.toggle('hide');
 $('helpclose').onclick = () => $('helpbox').classList.add('hide');
@@ -408,7 +416,27 @@ async function load(pin, date){
   if (S.thread && !(ib && ib.rows.some(r => (r.from || 'id' + r.id) === S.thread.key))) S.thread = null;
   S.repairs = rp; if (!rp && S.tab === 'jobs') S.tab = 'send';
 }
-function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); bell(); startPoll(); pushEnsure(); }
+function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); bell(); startPoll(); pushEnsure(); lineStart(); }
+/* 📶 SMS phone status bar: is the office SMS phone receiving and sending? Asked every minute; shows nothing if the
+   action is missing or the switch remind_line_bar is off. Red = a number that worked before just failed, or the queue is stuck. */
+let lineT = null;
+function lineStart(){ clearInterval(lineT); lineLoad(); lineT = setInterval(lineLoad, 60000); }
+const lineAgo = t => { if (!t) return 'none in 7 days'; const m = Math.max(0, Math.round((Date.now() - new Date(t)) / 60000));
+  const hm = new Date(t).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' });
+  return hm + ' (' + (m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min ago' : Math.floor(m / 1440) + ' d ago') + ')'; };
+async function lineLoad(){
+  const el = $('linebar'); if (!S.pin || !el) return;
+  const j = await rpc('remind_line_status_v1', { p_pin:S.pin }).catch(() => null);
+  if (!j || !j.on) { el.className = 'linebar hide'; return; }
+  const icon = { red:'🔴', amber:'🟠', green:'🟢', night:'🌙' }[j.level] || '⚪';
+  const head = { red:'SMS phone NOT sending', amber:'SMS phone: no customer text for 2 h', green:'SMS phone OK', night:'SMS phone (outside texting hours ' + esc(j.hours || '') + ')' }[j.level] || 'SMS phone';
+  let h = `<span>${icon} <b>${head}</b></span><span>· last text in ${lineAgo(j.last_in)}</span><span>· last delivered ${lineAgo(j.last_ok_out)}</span>`;
+  if (j.fails) h += `<span>· ${j.fails} failed since</span>`;
+  if (j.queued) h += `<span>· ${j.queued} waiting to send${j.oldest_queued_min ? ' (oldest ' + j.oldest_queued_min + ' min)' : ''}</span>`;
+  if (j.level === 'red') h += `<span class="lb-do">Check the SMS phone: SMS Gateway open, permissions (SMS, Phone) allowed, internet on. Reminders and replies are not going out.</span>`;
+  else if (j.level === 'amber') h += `<span class="lb-do">Could be a quiet time, or receiving is stuck: open SMS Gateway on the phone and check it says connected.</span>`;
+  el.innerHTML = h; el.className = 'linebar ' + (j.level || '');
+}
 async function reload(){ try { await load(S.pin, S.date); render(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
 
 /* ── lists ── */
