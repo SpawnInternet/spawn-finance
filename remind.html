@@ -126,6 +126,7 @@ main{padding:4px 0 28px}
 .crow.unread .cm small{color:var(--ink);font-weight:600}
 .crow .ct{flex:none;text-align:right;font-size:12px;color:var(--muted);display:grid;justify-items:end;gap:4px}
 .crow .ub{min-width:20px;height:20px;border-radius:10px;background:var(--blue);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;padding:0 6px}
+.crow .ct .wait{font-size:11px;color:var(--late);font-weight:700}   /* ⏳ how long the oldest unanswered text has waited */
 .crow.on{background:var(--blue-l);border-radius:12px}
 .chat{display:flex;flex-direction:column;min-height:50vh}
 .chat .chh{display:flex;align-items:center;gap:10px;padding:4px 0 10px;border-bottom:1px solid var(--line)}
@@ -388,9 +389,11 @@ async function load(pin, date){
     rpc('remind_repairs_v3', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_repairs_v2', { p_pin:pin, p_days:14 })).catch(() => rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null)),   // v3 = + extra repair words
     // Lineman list: v2 = names with optional number (sms flag); v1 = names with numbers only. Hidden if none set.
     rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
-    rpc('remind_chats_v2', { p_pin:pin, p_days:60 }).catch(() => rpc('remind_chats_v1', { p_pin:pin, p_days:60 })).catch(() => null),   // v2 = office number labelled   // 💬 Chats tab: the old Messages tab shows if missing
+    rpc('remind_chats_v3', { p_pin:pin, p_days:60 }).catch(() => rpc('remind_chats_v2', { p_pin:pin, p_days:60 })).catch(() => rpc('remind_chats_v1', { p_pin:pin, p_days:60 })).catch(() => null),   // v3 = oldest-waiting + labels; v2 = office number labelled   // 💬 Chats tab: the old Messages tab shows if missing
   ]);
   S.chats = ch ? (ch.rows || []) : null; if (!S.chats && S.tab === 'chats') S.tab = 'send';
+  S.chatsV3 = !!(ch && ch.v >= 3);
+  if (S.csort === undefined) { try { S.csort = localStorage.getItem('remind_csort') || 'newest'; } catch (x) { S.csort = 'newest'; } }
   if (S.chats && !S.tabPicked && S.tab === 'send') S.tab = 'chats';   // Chats opens first (unless a tab or #jobs was chosen)
   S.tabPicked = true;
   if (S.chat) await refreshChat();   // keep the open conversation fresh
@@ -605,9 +608,17 @@ const avColor = s => AV[[...String(s || '')].reduce((n, c) => n + c.charCodeAt(0
 const whenLabel = ts => { const d = String(ts).slice(0, 10); return d === S.today ? tLabel(ts) : dLabel(d); };
 const chatRows = () => {
   const q = (S.cq || '').trim().toLowerCase();
-  return S.chats.filter(c => S.cf === 'all' || (S.cf === 'unread' && c.unread) || (S.cf === 'repair' && c.repair) || (S.cf === 'check' && c.to_check) || (S.cf === 'lead' && c.lead))
+  const rows = S.chats.filter(c => S.cf === 'all' || (S.cf === 'unread' && c.unread) || (S.cf === 'repair' && c.repair) || (S.cf === 'check' && c.to_check) || (S.cf === 'lead' && c.lead)
+      || (S.cf === 'paid' && c.paid) || (S.cf === 'vendo' && c.vendo) || (S.cf === 'care' && (c.hardship || c.urgent)))
     .filter(c => !q || [c.name, c.address, c.area, c.last_body].join(' ').toLowerCase().includes(q));
+  // ⏳ Oldest waiting first: unanswered chats by the age of their oldest open text (needs remind_chats_v3), then the rest newest first
+  if (S.csort === 'oldest') rows.sort((a, b) => (a.oldest_open_at && b.oldest_open_at) ? String(a.oldest_open_at).localeCompare(String(b.oldest_open_at))
+    : a.oldest_open_at ? -1 : b.oldest_open_at ? 1 : String(b.last_at).localeCompare(String(a.last_at)));
+  return rows;
 };
+// small category labels on a chat row (facts from remind_chats_v3; v2 gives only 🔧 💳 🆕)
+const chatTags = c => [c.hardship && '🤍', c.urgent && '🚨', c.lead && '🆕', c.repair && '🔧', c.vendo && '🏪', c.paid && '💰', c.to_check && '💳'].filter(Boolean).join('');
+const waitAge = c => { if (!c.oldest_open_at) return ''; const h = Math.floor((Date.now() - new Date(c.oldest_open_at)) / 36e5); return h >= 48 ? Math.floor(h / 24) + 'd' : h >= 1 ? h + 'h' : '<1h'; };
 function chatsHtml(){
   const C = chatRows(), open = S.chat;
   const list = `<div class="clist">
@@ -616,11 +627,15 @@ function chatsHtml(){
       <textarea id="nttext" rows="3" maxlength="480" aria-label="Message" placeholder="Text message" enterkeyhint="send" style="box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px"></textarea>
       <div class="acts"><button type="button" class="btn send" data-cx="newsend">Send</button><button type="button" class="btn" data-cx="newcancel">Cancel</button></div></div>` : ''}
     <input class="q" id="cq" type="search" placeholder="Search name or number" aria-label="Search chats" value="${esc(S.cq || '')}">
-    <div class="cfil">${[['all', 'All'], ['unread', 'Unread'], ['repair', '🔧 Repairs'], ['check', '💳 To check']].concat(S.chats.some(c => c.lead) ? [['lead', '🆕 Install']] : []).map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}</div>
+    <div class="cfil">${[['all', 'All'], ['unread', 'Unread'], ['repair', '🔧 Repairs'], ['check', '💳 To check']]
+        .concat(S.chats.some(c => c.lead) ? [['lead', '🆕 Install']] : [])
+        .concat(S.chatsV3 ? [['paid', '💰 Paid?'], ['vendo', '🏪 Vendo'], ['care', '🤍 Care']] : [])
+        .map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}
+      ${S.chatsV3 ? `<button type="button" class="tpl${S.csort === 'oldest' ? ' on' : ''}" data-csort="${S.csort === 'oldest' ? 'newest' : 'oldest'}" aria-pressed="${S.csort === 'oldest'}" title="Unanswered chats, longest waiting first">⏳ Oldest first</button>` : ''}</div>
     ${C.length ? C.map(c => `<button type="button" class="crow${c.unread ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
         <span class="av" style="background:${c.office ? 'var(--ink-2)' : avColor(c.name || c.address)}">${c.office ? '📣' : esc((c.name || '#').trim()[0].toUpperCase())}</span>
-        <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''}${c.lead ? ' 🆕' : ''}${c.repair ? ' 🔧' : ''}${c.to_check ? ' 💳' : ''}</b><small>${c.last_dir === 'out' ? 'You: ' : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
-        <span class="ct">${esc(whenLabel(c.last_at))}${c.unread ? `<span class="ub">${c.unread}</span>` : ''}</span></button>`).join('')
+        <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''} ${chatTags(c)}</b><small>${c.last_dir === 'out' ? (c.phone_reply ? '📱 ' : 'You: ') : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
+        <span class="ct">${esc(whenLabel(c.last_at))}${c.unread ? `<span class="ub">${c.unread}</span>` : ''}${S.csort === 'oldest' && c.unread ? `<small class="wait">${waitAge(c)}</small>` : ''}</span></button>`).join('')
       : `<div class="empty"><b>${S.cq ? 'Nothing matches' : 'No conversations yet'}</b></div>`}
   </div>`;
   const wide = matchMedia('(min-width:900px)').matches;
@@ -681,6 +696,7 @@ $('list').addEventListener('click', async e => {
   if (S.tab !== 'chats' || !S.chats) return;
   const row = e.target.closest('[data-ch]'); if (row) { openChat(row.dataset.ch); return; }
   const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; render(); return; }
+  const sb = e.target.closest('[data-csort]'); if (sb) { S.csort = sb.dataset.csort; try { localStorage.setItem('remind_csort', S.csort); } catch (x) {} render(); return; }
   const tp = e.target.closest('[data-ctpl]'); if (tp) { const txt = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = txt; ta.focus(); } return; }
   const eb = e.target.closest('[data-eng]'); if (eb) { S.engOpen = S.engOpen === +eb.dataset.eng ? null : +eb.dataset.eng; keepScroll(render); return; }
   const lb = e.target.closest('[data-elab]'); if (lb) {   // 🏷 teach the engine; tapping the saved one again removes it
