@@ -277,7 +277,7 @@ header .help{max-height:calc(100vh - 130px);overflow-y:auto;overscroll-behavior:
       <b>Unsaon paggamit ang Spawn Text</b>
       <ol>
         <li><b>Today's list</b> — kinsa ang ma-remind karon. <b>Automatic na ang text</b> (8:05 AM), ayaw na i-text sa phone. Bayad na? → <b>Already paid</b>. Mosaad og petsa? → <b>Promised</b>.</li>
-        <li><b>💬 Chats</b> — sama sa Messages sa phone. Pindota ang tawo → makita ang tanan nga text (ila ug ato), reply sa ubos (Enter = send, Shift+Enter = bag-ong linya). Mga chip: <b>Handled</b>, <b>To check</b> (GCash ref), <b>Promised</b> (petsa), <b>Link</b> (wala pa nakilala ang number), <b>Job order</b>. <b>✏️ New text</b> = text kang bisan kinsa. Bag-ong text → 🔔 pop-up ug ringtone.</li>
+        <li><b>💬 Chats</b> — sama sa Messages sa phone. Pindota ang tawo → makita ang tanan nga text (ila ug ato), reply sa ubos (Enter = send, Shift+Enter = bag-ong linya). Mga chip: <b>Handled</b>, <b>To check</b> (GCash ref), <b>Promised</b> (petsa), <b>Link</b> (wala pa nakilala ang number), <b>Job order</b>. <b>✏️ New text</b> = text kang bisan kinsa. Bag-ong text → 🔔 pop-up ug ringtone. Ang asul nga numero = <b>wala pa matubag</b> (dili mawala kung ablihan ra): mawala kung mo-reply (dinhi o sa phone) o pindota <b>✓ Handled</b> sa ibabaw sa chat.</li>
         <li><b>To check</b> — GCash ref nga i-verify. Kung makita na ang bayad sa libro, <b>Confirmed</b> (o automatic). Number nga dili mo-work → <b>Block number</b>.</li>
         <li><b>Sent &amp; coming</b> — kinsa na ang na-text, ug kinsa ang sunod (pindota ▶ para ugma).</li>
         <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet; 🏪 = vendo (di mahulugan, validity). <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
@@ -663,7 +663,7 @@ function chatsHtml(){
       <textarea id="nttext" rows="3" maxlength="480" aria-label="Message" placeholder="Text message" enterkeyhint="send" style="box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px"></textarea>
       <div class="acts"><button type="button" class="btn send" data-cx="newsend">Send</button><button type="button" class="btn" data-cx="newcancel">Cancel</button></div></div>` : ''}
     <input class="q" id="cq" type="search" placeholder="Search name or number" aria-label="Search chats" value="${esc(S.cq || '')}">
-    <div class="cfil">${[['all', 'All'], ['unread', 'Unread'], ['repair', '🔧 Repairs'], ['check', '💳 To check']]
+    <div class="cfil">${[['all', 'All'], ['unread', 'Needs reply'], ['repair', '🔧 Repairs'], ['check', '💳 To check']]
         .concat(S.chats.some(c => c.lead) ? [['lead', '🆕 Install']] : [])
         .concat(S.chatsV3 ? [['paid', '💰 Paid?'], ['vendo', '🏪 Vendo'], ['care', '🤍 Care']] : [])
         .map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}
@@ -671,7 +671,7 @@ function chatsHtml(){
     ${C.length ? C.map(c => `<button type="button" class="crow${c.unread ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
         <span class="av" style="background:${c.office ? 'var(--ink-2)' : avColor(c.name || c.address)}">${c.office ? '📣' : esc((c.name || '#').trim()[0].toUpperCase())}</span>
         <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''} ${chatTags(c)}</b><small>${c.last_dir === 'out' ? (c.phone_reply ? '📱 ' : 'You: ') : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
-        <span class="ct">${esc(whenLabel(c.last_at))}${c.unread ? `<span class="ub">${c.unread}</span>` : ''}${S.csort === 'oldest' && c.unread ? `<small class="wait">${waitAge(c)}</small>` : ''}</span></button>`).join('')
+        <span class="ct">${esc(whenLabel(c.last_at))}${c.unread ? `<span class="ub" title="${c.unread} text${c.unread > 1 ? 's' : ''} not answered yet (opening the chat does not clear it: reply, or tap ✓ Handled)">${c.unread}</span>` : ''}${S.csort === 'oldest' && c.unread ? `<small class="wait">${waitAge(c)}</small>` : ''}</span></button>`).join('')
       : `<div class="empty"><b>${S.cq ? 'Nothing matches' : 'No conversations yet'}</b></div>`}
   </div>`;
   const wide = matchMedia('(min-width:900px)').matches;
@@ -686,6 +686,7 @@ function chatHtml(ch){
     <div class="chh"><button type="button" class="back" data-cx="back" aria-label="Back to chats">‹</button>
       <span class="av" style="background:${avColor(ch.name || ch.address)}" aria-hidden="true">${esc((ch.name || '#').trim()[0].toUpperCase())}</span>
       <div class="nm"><b>${esc(ch.name || ch.address)}</b><small>${ch.name ? esc(ch.area || '') + ' · ' + esc(ch.address) : 'not linked to a subscriber'}${ch.blocked ? ' · ⛔ blocked' : ''}</small></div>
+      ${openIds.length ? `<button type="button" class="btn" data-cx="handled" title="Nothing more to answer: clears 'needs reply' for this person">✓ Handled${openIds.length > 1 ? ' (' + openIds.length + ')' : ''}</button>` : ''}
       <a class="btn" href="tel:${esc(ch.address)}">📞</a></div>
     <div class="cbody">${ch.loading ? '<div class="sent">Loading…</div>' : threadHtml({ rows, eng:true })}</div>
     <div class="compose">
