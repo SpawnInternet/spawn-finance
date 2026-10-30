@@ -1200,6 +1200,14 @@ function render(){
   if (S.tab === 'nonum') {
     h += `<button type="button" class="imp" id="impbtn"><span class="ic">📇</span><span><b>Find numbers in the phone's contacts</b><small>Export Contacts as a .vcf file, then choose it here. Matching happens on this phone only.</small></span></button>`;
     h += `<div class="note">Found their number? Save it and they move to To text. The number is kept for next time.</div>`;
+    // 📞 Add a number for ANY subscriber (not only today's list) — for the numbers collectors bring back from the "Numbers to Ask" sheet.
+    // Uses the existing actions remind_sub_search_v1 (name search) and remind_set_phone (format check, saved as the main number).
+    h += `<article class="item"><b>📞 Add a number for anyone</b><small style="display:block;color:var(--muted)">From the Numbers to Ask sheet: search the name, tap the person, type the number, Save.</small>
+        <div class="nform"><input type="search" id="anq" placeholder="Search name (2+ letters)" aria-label="Search subscriber name" value="${esc(S.anq || '')}" autocomplete="off"></div>
+        ${S.anpick ? '' : `<div class="lres">${(S.anres || []).map(s => `<button type="button" class="tpl" data-anpick="${s.id}" data-anname="${esc(s.name)}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || (S.annone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>`}
+        ${S.anpick ? `<div class="sent" style="margin-top:8px">Number for <b>${esc(S.anpick.name)}</b> <button type="button" class="linkbtn" id="ancancel">change</button></div>
+        <div class="nform"><input type="tel" inputmode="tel" id="annum" placeholder="09XX XXX XXXX" aria-label="Mobile number for ${esc(S.anpick.name)}"><button type="button" class="btn" id="ansave">Save number</button></div>` : ''}
+      </article>`;
     h += L.nonum.length ? L.nonum.map(r => `<article class="item" data-key="${esc(r.key)}">${head(r)}
         <div class="nform"><input type="tel" inputmode="tel" placeholder="09XX XXX XXXX" aria-label="Mobile number for ${esc(r.name)}"><button type="button" class="btn" data-act="phone">Save number</button></div>
         ${future ? '' : `<div class="acts" style="margin-top:8px"><button type="button" class="btn" data-act="paid">Already paid</button><button type="button" class="btn" data-act="promise">Promised</button></div>`}
@@ -1258,6 +1266,31 @@ $('list').addEventListener('click', async e => {
     try { const j = await rpc('remind_set_phone', { p_pin:S.pin, p_sub:r.sub, p_phone:v }); toast(`Saved ${j.phone} · moved to To text`); await reload(); }
     catch (x) { toast(x.message, 4000); a.disabled = false; }
   }
+});
+/* 📞 Add a number for anyone (No number tab) */
+let anT = null;
+async function anSearch(q){
+  try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); if ((S.anq || '').trim() !== q) return;
+    S.anres = j.rows || []; S.annone = !S.anres.length; render(); const i = $('anq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+  catch (x) { toast(x.message, 4000); }
+}
+$('list').addEventListener('input', e => {
+  if (e.target.id !== 'anq') return;
+  S.anq = e.target.value; S.anpick = null; clearTimeout(anT); const q = S.anq.trim();
+  if (q.length < 2) { S.anres = []; S.annone = false; return; }
+  anT = setTimeout(() => anSearch(q), 350);
+});
+$('list').addEventListener('click', async e => {
+  const p = e.target.closest('[data-anpick]');
+  if (p) { S.anpick = { id:+p.dataset.anpick, name:p.dataset.anname }; render(); const i = $('annum'); if (i) i.focus(); return; }
+  if (e.target.closest('#ancancel')) { S.anpick = null; render(); return; }
+  const sv = e.target.closest('#ansave'); if (!sv || !S.anpick) return;
+  const v = ($('annum').value || '').trim(); if (!v) { toast('Type the number first'); return; }
+  sv.disabled = true;
+  try { const j = await rpc('remind_set_phone', { p_pin:S.pin, p_sub:S.anpick.id, p_phone:v });
+    toast(`Saved ${j.phone} for ${S.anpick.name} — reminders and replies can reach them now`, 4000);
+    S.anpick = null; S.anq = ''; S.anres = []; S.annone = false; await reload(); }
+  catch (x) { toast(x.message, 4000); sv.disabled = false; }
 });
 $('list').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
