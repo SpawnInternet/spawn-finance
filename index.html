@@ -1348,10 +1348,10 @@ function renderSheet(){
     title = 'Record expense';
     h += dateBar();
     if (F.saved) h += `<div class="saved">✓ Saved ${F.saved} · last: ${esc(F.lastSaved)}</div>`;
-    h += money('f-amt', 'Amount', F.amt ?? '');
     h += text('f-memo', 'Expense (what)', F.memo || '', 'list="dl-memos" enterkeyhint="next" placeholder="Gas Bao, Snack, Ice Wrapper"') + dlist('dl-memos', [...new Set(picksAll().map(p => p.d))]);
-    h += text('f-party', 'Name (who took it)', F.party || '', 'list="dl-parties" enterkeyhint="done" placeholder="Jericho"') + dlist('dl-parties', L.parties);
+    h += text('f-party', 'Name (who took it)', F.party || '', 'list="dl-parties" enterkeyhint="next" placeholder="Jericho"') + dlist('dl-parties', L.parties);
     h += `<div class="catline" id="catline"></div>`;
+    h += money('f-amt', 'Amount', F.amt ?? '');
     h += `<button class="go" type="button" id="sh-save">Save</button><div class="msg" id="sh-msg" role="alert"></div>`;
     h += `<div class="sec" id="sx-lbl">${workDate() === todayPH() ? 'Saved today' : 'Saved for ' + dLabel(workDate())}</div><div class="xsaved" id="sx-saved"></div>`;
   }
@@ -1601,9 +1601,10 @@ function wireSheet(){
     const recat = () => { if (!F.catManual) { F.cat = guessCat(v('f-memo'), v('f-party')); F.catEdit = false; } drawCat(); };
     $('f-memo').addEventListener('input', recat); $('f-party').addEventListener('input', recat);
     $('f-memo').addEventListener('change', recat);
-    $('f-amt').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('f-memo').focus(); } });
+    $('f-amt').setAttribute('enterkeyhint', 'done');
     $('f-memo').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('f-party').focus(); } });
-    $('f-party').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('sh-save').click(); } });
+    $('f-party').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('f-amt').focus(); } });
+    $('f-amt').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('sh-save').click(); } });
     drawCat(); drawTodaySaved();
   }
   if ($('sh-next')) $('sh-next').onclick = () => submit($('sh-next'), true);
@@ -1630,7 +1631,7 @@ function wireSheet(){
     $('f-date').addEventListener('change', () => setWorkDate($('f-date').value));
     $('datebar').querySelectorAll('[data-qd]').forEach(b => b.onclick = () => {
       setWorkDate(b.dataset.qd);
-      const first = $('f-amt') || $('f-cust') || $('f-part') || $('f-party'); if (first) first.focus({preventScroll:true});
+      const first = (S.form && S.form.kind === 'expense' && $('f-memo')) || $('f-amt') || $('f-cust') || $('f-part') || $('f-party'); if (first) first.focus({preventScroll:true});
     });
   }
   ['pv','cv','ga','np'].forEach(n => body.querySelectorAll(`[data-${n}]`).forEach(b => b.onclick = () => {
@@ -1829,8 +1830,8 @@ async function submit(btn, next){
       toast((F.mode === 'sukli_in' ? `Sukli saved · +${peso(num(v('f-amt')))} to the balance.` : so ? `Saved. ${so < 0 ? 'Short' : 'Over'} ${peso(Math.abs(so))}.` : 'Collection saved.') + (S.workDate ? ' (' + dLabel(S.workDate) + ')' : ''));
     }
     else if (F.kind === 'expense') {
-      if (!(num(v('f-amt')) > 0)) { $('f-amt').focus(); throw new Error('Enter the amount.'); }
       if (!v('f-memo')) { $('f-memo').focus(); throw new Error('Enter what the expense is for.'); }
+      if (!(num(v('f-amt')) > 0)) { $('f-amt').focus(); throw new Error('Enter the amount.'); }
       if (!F.cat) { F.catEdit = true; drawCat(); throw new Error('Choose the category for this new expense.'); }
       if (F.cat === ADV && !v('f-party')) { $('f-party').focus(); throw new Error('A cash advance needs the name of who took it.'); }
       const kind = F.cat === ADV ? 'advance' : F.cat === OTH ? 'other_out' : 'expense';
@@ -1841,7 +1842,7 @@ async function submit(btn, next){
       F.lastSaved = `${v('f-memo')}${v('f-party') ? ' · ' + v('f-party') : ''} ${peso(num(v('f-amt')))}`;
       Object.assign(F, { cid:uuid(), amt:'', memo:'', party:'', cat:'', catManual:false, catEdit:false });
       renderSheet(); refresh().then(drawTodaySaved);
-      const a = $('f-amt'); if (a) a.focus({preventScroll:true});
+      const a = $('f-memo'); if (a) a.focus({preventScroll:true});
       return;
     }
     else if (F.kind === 'advance') {
