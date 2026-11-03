@@ -1406,7 +1406,7 @@ function renderSheet(){
       h += money('f-ht', '<i class="dot sp" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#1d4ed8;margin-right:6px"></i>Harvest total (Spawn share)', F.ht ?? '');
       h += money('f-le', 'Less expense (collector)', F.le ?? '');
       // v2.13: coins handed over, grouped by Joi after the Spawn Count — ₱5-coin packs, ₱1-coin packs, waki, bugi, bills
-      h += `<div class="f" style="margin-bottom:6px"><label><i class="dot ho" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#ea580c;margin-right:6px"></i>Coins handed over — regrouped <small style="font-weight:600;color:var(--muted)">(how many packs)</small></label></div>`;
+      h += `<div class="f" style="margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:10px"><label style="margin:0"><i class="dot ho" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#ea580c;margin-right:6px"></i>Coins handed over — regrouped <small style="font-weight:600;color:var(--muted)">(how many packs)</small></label><b id="coins-tot" style="flex:none;padding:3px 10px;border-radius:8px;background:#ea580c;color:#fff;font-size:16px;font-weight:900">₱0</b></div>`;
       h += `<div class="two">${packField('f-c1k', '₱1,000 packs (₱5 coins)', F.c1k ?? '')}${packField('f-c300', '₱300 packs (₱1 coins)', F.c300 ?? '')}</div>`;
       h += `<div class="two">${money('f-waki', 'Waki / bungkig (₱)', F.waki ?? '')}${money('f-lb', 'Bugi — old coins (₱)', F.lb ?? '')}</div>`;
       h += money('f-cbills', 'Bills (₱)', F.cbills ?? '');
@@ -1675,6 +1675,7 @@ function liveCalc(){
     packSubs();
     const ht = num(v('f-ht')), le = num(v('f-le')), lb = num(v('f-lb'));
     const coins = coinsHanded();                         // total coins handed over incl. bugi
+    if ($('coins-tot')) $('coins-tot').textContent = peso(coins);
     const amt = coins - lb;                              // good cash that goes into the book
     if ($('f-amt')) $('f-amt').value = amt > 0 ? String(amt) : '';
     const sub = coinParts();
