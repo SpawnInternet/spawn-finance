@@ -1162,6 +1162,11 @@ function dayCard(F){
         <div class="tot"><span>Total short${ns ? ` (${ns} vendo${ns > 1 ? 's' : ''})` : ''}</span><span>${Number(x.short) ? '−' + peso(x.short) : '—'}</span></div>
         <div><span>Total surplus${np ? ` (${np} vendo${np > 1 ? 's' : ''})` : ''}</span><span>${Number(x.surplus) ? '+' + peso(x.surplus) : '—'}</span></div>
         <div><span><b>${net < 0 ? 'Net short' : net > 0 ? 'Net surplus' : 'Short and surplus'}</b></span><b>${net === 0 ? 'balanced ✓' : (net < 0 ? '−' : '+') + peso(Math.abs(net))}</b></div>
+        ${(() => { // coin check: Spawn share of counted vendos + net = counted good cash + bugi
+          const sc = vl.filter(r => r.done).reduce((a, r) => a + Number(r.spawn), 0), nc = vl.length - vl.filter(r => r.done).length;
+          const exp = Math.round((sc + net) * 100) / 100, act = Math.round((Number(x.counted) + Number(x.bugi)) * 100) / 100;
+          return `<div class="tot"><span>Spawn share${nc ? ' (counted vendos)' : ''} ${peso(sc)} ${net < 0 ? '−' : '+'} ${peso(Math.abs(net))}</span><span>= ${peso(exp)}</span></div>
+            <div><span>Counted ${peso(x.counted)}${Number(x.bugi) ? ' + bugi ' + peso(x.bugi) : ''}</span><span>= ${peso(act)} ${Math.abs(exp - act) < 0.005 ? '<em class="ok">✓ match</em>' : '<em class="sh">✗ check</em>'}</span></div>`; })()}
         ${Number(x.expenses) ? `<div><span style="opacity:.8">Collector expenses (${peso(x.expenses)}) are taken off separately below</span></div>` : ''}</details>`;
     }
     if (x.counted_vendos < x.vendos) h += `<div><span>⚠ ${x.vendos - x.counted_vendos} vendo${x.vendos - x.counted_vendos > 1 ? 's' : ''} not yet counted — type the cash yourself</span></div>`;
