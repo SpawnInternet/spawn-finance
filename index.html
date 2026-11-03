@@ -462,6 +462,12 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .paper .cnt .ok em{font-style:normal;font-weight:700}.paper .cnt .ok em.g{color:#027e60}.paper .cnt .ok em.r{color:#c2142f}
 .paper .cnt .ok span{display:inline-block;padding:0 10px;line-height:32px;border:2.5px solid #1e293b;border-radius:6px;font-size:18px;font-weight:800}
 .paper .sig{text-align:right;height:40px}.paper .sig small{color:#64748b;font-size:13px}
+.paper .cnt{width:auto;max-width:100%}
+.paper .cnt .r{flex-wrap:wrap;height:auto;min-height:40px;align-items:center;gap:6px 10px}
+.paper .cnt .r .cl{height:auto;justify-content:flex-start}
+.paper .cnt .r small.pk{color:#475569;font-size:12.5px;font-weight:600;white-space:normal;text-align:right;margin-left:auto}
+.paper .cnt .ok{flex-wrap:wrap;height:auto;min-height:40px}
+.paper .cnt .ok button.ln.sig{width:auto;height:auto;margin:0 auto 0 0;padding:0 4px;font-size:13px;color:#475569;white-space:normal}
 .paper .empty{font-family:Inter,system-ui,sans-serif;font-size:13px;color:#64748b;line-height:1.5;padding:12px 0}
 .nb-bar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;gap:8px;padding:12px 14px calc(14px + env(safe-area-inset-bottom,0px));background:rgba(255,255,255,.96);border-top:1px solid #e6e7ea}
 .nb-bar button{flex:1;height:50px;border-radius:16px;border:0;color:#fff;font:800 15px Inter,system-ui,sans-serif;cursor:pointer}
@@ -1984,8 +1990,8 @@ function countResult(r){
   const d = Number(r.difference);
   let h = `<div class="calc"><div><span>Counted</span><b>${peso(r.counted_total)}</b></div><div><span>Book said</span><b>${peso(r.book_balance)}</b></div>
     <div class="big"><span>${d < 0 ? 'Short' : d > 0 ? 'Over' : 'Balanced'}</span><b class="${d === 0 ? 'diff0' : 'diffx'}">${d === 0 ? '✓' : peso(Math.abs(d))}</b></div></div>`;
-  if (d !== 0) h += `<div class="note">The book still says ${peso(r.book_balance)}. If the count is right and the difference can't be found, add an adjustment so the book matches the cash.</div>
-    <button class="go" type="button" id="rs-adjust">Add ${peso(Math.abs(d))} adjustment ${d < 0 ? 'out' : 'in'}</button>`;
+  // v2.12: the save already wrote the "Drawer over / short" line, so the book now matches the cash — never offer a second one
+  if (d !== 0) h += `<div class="note">A <b>${d < 0 ? 'Drawer short' : 'Drawer over'} ${peso(Math.abs(d))}</b> line was added to the book, so the book now matches the cash counted. If the difference is found later, void that line.</div>`;
   h += `<button class="go ${d !== 0 ? 'alt' : ''}" type="button" id="rs-done">Done</button><div class="msg" id="sh-msg"></div>`;
   return h;
 }
@@ -3122,11 +3128,13 @@ function renderNote(){
     return `<button type="button" class="ln ${isVoid ? 'void' : ''} ${markE && e.id === markE.id && !isVoid && !e._short && !e._over ? 'mark' : ''}" ${isShort && !isVoid ? 'data-short="1"' : `data-e="${e.id}"`}><b class="${s > 0 ? 'in' : s < 0 ? 'out' : 'zero'}">${amt}</b><span>— ${title}${sub ? ' <small>' + sub + '</small>' : ''}${isVoid ? ' <small>· voided</small>' : ''}</span></button>`;
   };
   const cnt = c => {
-    const diff = Number(c.difference), rows = [[c.packs_5, `${Number(c.packs_5) / PACK_BIG} × ₱1,000 packs`], [c.packs_1, `${Number(c.packs_1) / PACK_SMALL} × ₱300 packs`], [c.loose, 'bungkig'], [c.bills, 'bills']].filter(x => Number(x[0]) > 0);
+    // v2.12: compact — one ruled line for the breakdown, one for the result and the signature
+    const diff = Number(c.difference), n = x => Number(x).toLocaleString('en-PH');
+    const parts = [Number(c.packs_5) > 0 ? `${Number(c.packs_5) / PACK_BIG}×₱1,000` : '', Number(c.packs_1) > 0 ? `${Number(c.packs_1) / PACK_SMALL}×₱300` : '',
+                   Number(c.loose) > 0 ? `bungkig ${n(c.loose)}` : '', Number(c.bills) > 0 ? `bills ${n(c.bills)}` : ''].filter(Boolean).join(' · ');
     const who = c.kind === 'handover' ? `Received by ${esc(c.handed_to)}` : c.kind === 'closing' ? `Closed by ${esc(c.counted_by)}` : `Counted by ${esc(c.counted_by)}`;
-    return `<div class="cnt"><div class="cl">🤝 ${c.kind === 'handover' ? 'HANDOVER' : c.kind === 'closing' ? 'DAY CLOSED' : 'COUNT'} · ${tLabel(c.counted_at)}</div>${rows.map(([a, l]) => `<div class="r"><b>${Number(a).toLocaleString('en-PH')}</b><span>— ${l}</span></div>`).join('')}
-      <div class="ok"><em class="${diff === 0 ? 'g' : 'r'}">${diff === 0 ? 'ok ✓' : (diff < 0 ? 'short ' : 'over ') + peso(Math.abs(diff))}</em><span>₱${Number(c.counted_total).toLocaleString('en-PH')}</span></div>
-      <div class="sig"><button type="button" class="ln" data-c="${c.id}" style="justify-content:flex-end">${who} ✍ <small>${tLabel(c.counted_at)}</small></button></div></div>`;
+    return `<div class="cnt"><div class="r"><span class="cl">🤝 ${c.kind === 'handover' ? 'HANDOVER' : c.kind === 'closing' ? 'DAY CLOSED' : 'COUNT'} · ${tLabel(c.counted_at)}</span><small class="pk">${parts}</small></div>
+      <div class="ok"><button type="button" class="ln sig" data-c="${c.id}">${who} ✍</button><em class="${diff === 0 ? 'g' : 'r'}">${diff === 0 ? 'ok ✓' : (diff < 0 ? 'short ' : 'over ') + peso(Math.abs(diff))}</em><span>₱${n(c.counted_total)}</span></div></div>`;
   };
   // the earlier pages that add up to "Carried from before": each day's lines and its ending balance
   const carryHtml = () => {
