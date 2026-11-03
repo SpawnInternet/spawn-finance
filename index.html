@@ -225,6 +225,13 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .calc div{display:flex;justify-content:space-between;font-size:14px;padding:3px 0}
 .calc div b{font-weight:800}
 .calc .big{font-size:16px;border-top:1px solid #d6dde8;margin-top:4px;padding-top:7px}
+.calc .sh{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:6px;padding:4px 0 0}
+.calc .st span{display:flex;flex-direction:column;align-items:flex-start;min-width:0}.calc .st span em{font-style:normal}.calc .st span small{font-size:12px;font-weight:500;color:var(--muted)}.calc .st span small.brk{font-weight:600}
+.calc .st.in{padding-left:10px;border-left:3px solid #e2e8f0;margin-left:2px}
+.calc .st.sum{padding-left:10px;border-left:3px solid #e2e8f0;margin-left:2px;border-top:1px dashed #d6dde8}.calc .st.sum b{font-size:15px}
+.calc .big span{display:flex;flex-direction:column}.calc .big span small{font-size:12px;font-weight:500;color:var(--muted)}
+.calc .st.drawer{background:#fff;border-radius:10px;padding:8px 10px;margin-top:8px;border:1.5px solid #cfd8ea}.calc .st.drawer b{font-size:17px;font-weight:900}
+.calc .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}.calc .dot.sp{background:#1d4ed8}.calc .dot.ho{background:#ea580c}
 .go{width:100%;padding:15px;border-radius:14px;background:var(--ink);color:#fff;font-size:16px;font-weight:800;margin-top:6px}
 .go:disabled{opacity:.5}
 .go.alt{background:#fff;color:var(--ink);border:2px solid var(--ink)}
@@ -1681,11 +1688,15 @@ function liveCalc(){
     const sub = coinParts();
     if (!v('f-ht')) { c.innerHTML = `<div><span>Coins handed over</span><b style="color:#ea580c">${peso(coins)}</b></div><div><span>Book gets (less bugi)</span><b>${peso(amt)}</b></div>`; return; }
     const so = coins - ht + le;                          // vs the harvest: coins + expenses should equal the Spawn share
-    c.innerHTML = `<div><span>Harvest total</span><b style="color:#1d4ed8">${peso(ht)}</b></div>
-      <div><span>Coins handed over${sub ? ` <small style="font-weight:600;color:var(--muted)">${sub}</small>` : ''}</span><b style="color:#ea580c">${peso(coins)}</b></div>
-      ${le ? `<div><span>+ expenses paid by collector</span><b>${peso(le)}</b></div>` : ''}
-      <div class="big"><span>${so < 0 ? 'Short' : so > 0 ? 'Over' : 'Balanced'}</span><b class="${so === 0 ? 'diff0' : 'diffx'}">${so === 0 ? '✓' : peso(Math.abs(so))}</b></div>
-      <div><span>Book gets (good cash, bugi to the bugi bag)</span><b>${peso(amt)}</b></div>`;
+    const who = esc(F.collector || 'the collector');
+    // v2.14: told as a story — what the harvest was, what the collector brought, what is missing, what goes into the drawer
+    c.innerHTML = `<div class="st"><span><em><i class="dot sp"></i>Harvest (Spawn share)</em></span><b style="color:#1d4ed8">${peso(ht)}</b></div>
+      <div class="sh">What ${who} brought</div>
+      <div class="st in"><span><em><i class="dot ho"></i>Coins</em>${lb ? ` <small>(incl. ₱${Number(lb).toLocaleString('en-PH')} bugi)</small>` : ''}${sub ? `<small class="brk">${sub}</small>` : ''}</span><b style="color:#ea580c">${peso(coins)}</b></div>
+      ${le ? `<div class="st in"><span>C.A. / expenses <small>(not cash, but counted)</small></span><b>+ ${peso(le)}</b></div>` : ''}
+      <div class="st sum"><span>Total accounted for</span><b>${peso(coins + le)}</b></div>
+      <div class="big"><span>${so < 0 ? '⚠ Short — missing' : so > 0 ? 'Over — extra' : 'Balanced'}<small>harvest ${peso(ht)} vs ${peso(coins + le)}</small></span><b class="${so === 0 ? 'diff0' : 'diffx'}" style="${so < 0 ? 'color:#b42318' : so > 0 ? 'color:#067647' : ''}">${so === 0 ? '✓' : peso(Math.abs(so))}</b></div>
+      <div class="st drawer"><span>👉 Goes into the drawer<small>good cash only · ${lb ? `₱${Number(lb).toLocaleString('en-PH')} bugi to the bugi bag` : 'no bugi'}</small></span><b>${peso(amt)}</b></div>`;
   }
   if (F.kind === 'collect' && F.mode === 'office_collection' && c) {
     const bill = num(v('f-bill')), gave = v('f-gave') === '' ? bill : num(v('f-gave')), ch = gave - bill;
