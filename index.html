@@ -1198,12 +1198,12 @@ function dayCard(F){
         ${(() => { // coin check: Spawn share of counted vendos + net = counted good cash + bugi
           const sc = vl.filter(r => r.done).reduce((a, r) => a + Number(r.spawn), 0), nc = vl.length - vl.filter(r => r.done).length;
           const exp = Math.round((sc + net) * 100) / 100, act = Math.round((Number(x.counted) + Number(x.bugi)) * 100) / 100;
-          const ok = Math.abs(exp - act) < 0.005;
+          const ok = Math.abs(exp - act) < 0.005, ex = Number(x.expenses) || 0, should = sc - ex, gap = Math.round((exp - should) * 100) / 100;
           return `<div class="chk">
             <div><span><i class="dot sp"></i>Spawn share${nc ? ' (counted vendos)' : ''}<small>harvest total</small></span><b class="sp">${peso(sc)}</b></div>
-            <div><span><i class="dot ho"></i>Handed over<small>coins from the collector: Spawn share ${net < 0 ? '− short' : '+ surplus'} ${peso(Math.abs(net))}</small></span><b class="ho">${peso(exp)}</b></div>
-            <div><span><i class="dot oc"></i>Office count<small>Spawn Count: ${peso(x.counted)} good cash${Number(x.bugi) ? ' + ' + peso(x.bugi) + ' bugi' : ''}</small></span><b class="oc">${peso(act)} ${ok ? '<em class="ok">✓ match</em>' : '<em class="sh">✗ check</em>'}</b></div></div>`; })()}
-        ${Number(x.expenses) ? `<div><span style="opacity:.8">Collector expenses (${peso(x.expenses)}) are taken off separately below</span></div>` : ''}</details>`;
+            ${ex ? `<div><span>− collector expenses (C.A., gas …)<small>should hand over ${peso(should)}</small></span><b style="background:#475569">− ${peso(ex)}</b></div>` : ''}
+            <div><span><i class="dot ho"></i>Handed over<small>coins from the collector incl. bugi · ${gap === 0 ? 'balanced ✓' : (gap < 0 ? 'short ' : 'over ') + peso(Math.abs(gap))}${ex ? ' after expenses' : ''}</small></span><b class="ho">${peso(exp)}</b></div>
+            <div><span><i class="dot oc"></i>Office count<small>Spawn Count: ${peso(x.counted)} good cash${Number(x.bugi) ? ' + ' + peso(x.bugi) + ' bugi' : ''}</small></span><b class="oc">${peso(act)} ${ok ? '<em class="ok">✓ match</em>' : '<em class="sh">✗ check</em>'}</b></div></div>`; })()}</details>`;
     }
     if (x.counted_vendos < x.vendos) h += `<div><span>⚠ ${x.vendos - x.counted_vendos} vendo${x.vendos - x.counted_vendos > 1 ? 's' : ''} not yet counted — type the cash yourself</span></div>`;
     else if (x.recon_id) h += `<div><span>✓ Reconciled in Spawn Count</span></div>`;
