@@ -623,6 +623,9 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .ps-h em{font-style:normal;font-weight:700;color:#5b7bbf;letter-spacing:0;overflow:hidden;text-overflow:ellipsis}
 .ps-h .ps-sum{margin-left:auto;flex:none;display:inline-block;height:auto;line-height:1.3;align-self:center;padding:3px 10px;border-radius:999px;background:#fff;color:#025ac6;letter-spacing:0;font-size:12px;box-shadow:0 0 0 1px #d6e0f2}
 .ps{display:flex;align-items:center;gap:10px;height:40px}
+.bo-s{display:flex;gap:8px;align-items:center;height:40px}
+.bo-s input{flex:1;min-width:0;height:32px;border:1.5px solid #d6c27a;border-radius:9px;padding:0 10px;font:600 13px Inter,system-ui,sans-serif;background:#fff}
+.bo-s button{flex:none;height:32px;padding:0 12px;border-radius:9px;border:1.5px solid #d6c27a;background:#fff;font:800 12px Inter,system-ui,sans-serif;color:#7a5306;cursor:pointer}
 .ps .av{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#025ac6;font:800 11px Inter,system-ui,sans-serif;box-shadow:0 0 0 1.5px #c7d7f5}
 .ps .nm{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;line-height:1.15}
 .ps .nm b{font-size:14px;font-weight:700;color:#1e2b45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -3342,11 +3345,23 @@ function nbBoPaper(d, H){
   if (!bo.length || d < minWorkDate()) { el.innerHTML = ''; return; }
   NB.hbo = bo;
   const tot = bo.reduce((s, x) => s + Number(x.amount || 0), 0);
-  el.innerHTML = `<div class="ps-wrap bo-wrap"><div class="ps-h">📒 IN BASHANG · NOT IN THE SHEET <em>· add if the office received it</em><span class="ps-sum">${bo.length} · ${peso(tot)}</span></div>`
-    + bo.map((x, i) => `<div class="ps"><span class="av">${esc(psInit(x.name))}</span>
-        <span class="nm"><b>${esc(String(x.name || '?').replace(/\s*\([^)]*\)\s*/g, ' ').trim())}</b><small>for ${esc(ymLabel(x.ym))} · ${x.gcash ? 'GCash' : 'Cash'}${x.area ? ' · ' + esc(x.area) : ''}</small></span>
-        <span class="am">${peso(x.amount)}</span><button type="button" data-pbo="${i}">＋ Add</button></div>`).join('') + '</div>';
+  // v2.16: one compact line with a search box — the names only show when you search (or tap "show all")
+  const q = String(NB.boQ || '').trim().toLowerCase(), all = !!NB.boAll;
+  const clean = x => String(x.name || '?').replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+  const hits = q ? bo.map((x, i) => [x, i]).filter(([x]) => (clean(x) + ' ' + (x.area || '')).toLowerCase().includes(q)) : all ? bo.map((x, i) => [x, i]) : [];
+  const shown = q && !all ? hits.slice(0, 6) : hits;
+  el.innerHTML = `<div class="ps-wrap bo-wrap"><div class="ps-h">📒 IN BASHANG · NOT IN THE SHEET<span class="ps-sum">${bo.length} · ${peso(tot)}</span></div>
+    <div class="bo-s"><input id="bo-q" autocomplete="off" placeholder="Search a name to add it (${bo.length} waiting)…" value="${esc(NB.boQ || '')}"><button type="button" id="bo-all">${all ? 'hide' : 'show all'}</button></div>`
+    + shown.map(([x, i]) => `<div class="ps"><span class="av">${esc(psInit(x.name))}</span>
+        <span class="nm"><b>${esc(clean(x))}</b><small>for ${esc(ymLabel(x.ym))} · ${x.gcash ? 'GCash' : 'Cash'}${x.area ? ' · ' + esc(x.area) : ''}</small></span>
+        <span class="am">${peso(x.amount)}</span><button type="button" data-pbo="${i}">＋ Add</button></div>`).join('')
+    + (q && !hits.length ? '<div class="ps"><span class="nm"><small>No name matches.</small></span></div>' : '')
+    + (q && !all && hits.length > shown.length ? `<div class="ps"><span class="nm"><small>${hits.length - shown.length} more · type more letters</small></span></div>` : '') + '</div>';
   el.querySelectorAll('[data-pbo]').forEach(b => b.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); const x = bo[+b.dataset.pbo]; if (x) addFromBashang(x); });
+  const qi = $('bo-q');
+  qi.oninput = () => { NB.boQ = qi.value; const pos = qi.selectionStart; nbBoPaper(d, H); const n = $('bo-q'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) {} } };
+  qi.onkeydown = ev => { if (ev.key === 'Escape') { ev.stopPropagation(); NB.boQ = ''; nbBoPaper(d, H); } if (ev.key === 'Enter') { const b = el.querySelector('[data-pbo]'); if (b) b.click(); } };
+  $('bo-all').onclick = () => { NB.boAll = !NB.boAll; nbBoPaper(d, H); };
 }
 function ymLabel(ym){ try { return new Date(ym + '-01T12:00:00Z').toLocaleDateString('en-PH', { month:'long', year:'numeric', timeZone:'UTC' }); } catch (e) { return ym; } }
 async function addFromBashang(x){
