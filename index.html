@@ -1528,11 +1528,24 @@ function renderSheet(){
   wireSheet();
 }
 
+// v2.9: packs are counted as HOW MANY packs (₱1,000 packs and ₱300 packs, like Spawn Harvest);
+// the app multiplies before saving, so the database still gets peso amounts in packs_5 / packs_1.
+const PACK_BIG = 1000, PACK_SMALL = 300;
+const packField = (id, label, val = '') => `<div class="f"><label for="${id}">${label}</label><input id="${id}" class="money" inputmode="numeric" autocomplete="off" placeholder="0" value="${esc(val)}"><small id="${id}-x" style="display:block;margin-top:4px;font-weight:600;color:#5b6475"></small></div>`;
 function denomFields(F){
-  return `<div class="two">${money('f-p5', '₱5 packs', F.p5 ?? '')}${money('f-p1', '₱1 packs', F.p1 ?? '')}</div>
-          <div class="two">${money('f-bills', 'Bills', F.bills ?? '')}${money('f-loose', 'Loose coins', F.loose ?? '')}</div>`;
+  return `<div class="two">${packField('f-p5', '₱1,000 packs (how many)', F.p5 ?? '')}${packField('f-p1', '₱300 packs (how many)', F.p1 ?? '')}</div>
+          <div class="two">${money('f-loose', 'Bungkig (₱)', F.loose ?? '')}${money('f-bills', 'Bills (₱)', F.bills ?? '')}</div>`;
 }
-function denomTotal(){ return num(v('f-p5')) + num(v('f-p1')) + num(v('f-bills')) + num(v('f-loose')); }
+const packPeso = () => ({ big: num(v('f-p5')) * PACK_BIG, small: num(v('f-p1')) * PACK_SMALL });
+function denomTotal(){ const p = packPeso(); return p.big + p.small + num(v('f-bills')) + num(v('f-loose')); }
+function packsCheck(){
+  for (const id of ['f-p5', 'f-p1']) { const t = v(id); if (t !== '' && !/^\d+$/.test(t.trim())) { $(id).focus(); throw new Error('Packs are counted as whole numbers (how many packs).'); } }
+}
+function packSubs(){
+  const p = packPeso();
+  if ($('f-p5-x')) $('f-p5-x').textContent = v('f-p5') !== '' ? '= ' + peso(p.big) : '';
+  if ($('f-p1-x')) $('f-p1-x').textContent = v('f-p1') !== '' ? '= ' + peso(p.small) : '';
+}
 
 function liveCalc(){
   const F = S.form; if (!F) return; const c = $('calc');
@@ -1560,6 +1573,7 @@ function liveCalc(){
       <div class="big"><span>${d === 0 ? 'Exact' : d < 0 ? 'Short' : 'Over'}</span><b class="${d === 0 ? 'diff0' : 'diffx'}">${d === 0 ? '✓' : peso(Math.abs(d))}</b></div>`;
   }
   if ((F.kind === 'count' || F.kind === 'close') && c) {
+    packSubs();
     const tot = denomTotal(), book = F.kind === 'close' ? balanceAt(F.date) : Number(S.book.balance_now), diff = tot - book;
     // Count & hand over: nothing counted yet → no Short/Over (it showed the whole drawer as Short) and no Save
     if (F.kind === 'count') {
@@ -1851,7 +1865,8 @@ async function submit(btn, next){
     }
     else if (F.kind === 'count') {
       if (F.mode === 'handover' && !F.to) throw new Error(ERR.handed_to_unknown);
-      r = await rpc('fin_cash_count', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode, p_packs_5:num(v('f-p5')), p_packs_1:num(v('f-p1')),
+      packsCheck();
+      r = await rpc('fin_cash_count', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode, p_packs_5:packPeso().big, p_packs_1:packPeso().small,
         p_bills:num(v('f-bills')), p_loose:num(v('f-loose')), p_handed_to:F.mode === 'handover' ? F.to : null, p_memo:v('f-memo') || null });
       F.result = r; await refresh(); renderSheet(); return;
     }
@@ -1863,7 +1878,8 @@ async function submit(btn, next){
     else if (F.kind === 'close') {
       const sign = v('f-sign');
       if (!/^\d{4}$/.test(sign)) throw new Error('Enter your 4-digit PIN to sign.');
-      r = await rpc('fin_day_lock', { p_pin:sign, p_client_id:F.cid, p_entry_date:F.date, p_packs_5:num(v('f-p5')), p_packs_1:num(v('f-p1')),
+      packsCheck();
+      r = await rpc('fin_day_lock', { p_pin:sign, p_client_id:F.cid, p_entry_date:F.date, p_packs_5:packPeso().big, p_packs_1:packPeso().small,
         p_bills:num(v('f-bills')), p_loose:num(v('f-loose')), p_memo:v('f-memo') || null });
       F.result = r; await refresh(); renderSheet(); return;
     }
@@ -1921,7 +1937,7 @@ function openDetail(type, id){
     if (e.voided_at) rows.push(['Voided', `${esc(e.voided_by)}: ${esc(e.void_reason)}`]);
   } else {
     title = c.kind === 'handover' ? 'Handover' : c.kind === 'closing' ? 'Closing count' : 'Count';
-    rows.push(['Counted', peso(c.counted_total)], ['₱5 packs', peso(c.packs_5)], ['₱1 packs', peso(c.packs_1)], ['Bills', peso(c.bills)], ['Loose coins', peso(c.loose)],
+    rows.push(['Counted', peso(c.counted_total)], ['₱1,000 packs', `${Number(c.packs_5) / PACK_BIG} · ${peso(c.packs_5)}`], ['₱300 packs', `${Number(c.packs_1) / PACK_SMALL} · ${peso(c.packs_1)}`], ['Bungkig', peso(c.loose)], ['Bills', peso(c.bills)],
       ['Book said', peso(c.book_balance)], ['Difference', pesoS(Number(c.difference))], ['By', esc(c.counted_by)]);
     if (c.kind === 'handover') rows.push(['Handed', `${esc(c.handed_from)} → ${esc(c.handed_to)}`]);
     if (c.memo) rows.push(['Note', esc(c.memo)]);
@@ -3015,7 +3031,7 @@ function renderNote(){
     return `<button type="button" class="ln ${isVoid ? 'void' : ''} ${markE && e.id === markE.id && !isVoid && !e._short && !e._over ? 'mark' : ''}" ${isShort && !isVoid ? 'data-short="1"' : `data-e="${e.id}"`}><b class="${s > 0 ? 'in' : s < 0 ? 'out' : 'zero'}">${amt}</b><span>— ${title}${sub ? ' <small>' + sub + '</small>' : ''}${isVoid ? ' <small>· voided</small>' : ''}</span></button>`;
   };
   const cnt = c => {
-    const diff = Number(c.difference), rows = [[c.packs_5, '₱5 coins'], [c.packs_1, '₱1 coins'], [c.bills, 'cash'], [c.loose, "wala'"]].filter(x => Number(x[0]) > 0);
+    const diff = Number(c.difference), rows = [[c.packs_5, `${Number(c.packs_5) / PACK_BIG} × ₱1,000 packs`], [c.packs_1, `${Number(c.packs_1) / PACK_SMALL} × ₱300 packs`], [c.loose, 'bungkig'], [c.bills, 'bills']].filter(x => Number(x[0]) > 0);
     const who = c.kind === 'handover' ? `Received by ${esc(c.handed_to)}` : c.kind === 'closing' ? `Closed by ${esc(c.counted_by)}` : `Counted by ${esc(c.counted_by)}`;
     return `<div class="cnt"><div class="cl">🤝 ${c.kind === 'handover' ? 'HANDOVER' : c.kind === 'closing' ? 'DAY CLOSED' : 'COUNT'} · ${tLabel(c.counted_at)}</div>${rows.map(([a, l]) => `<div class="r"><b>${Number(a).toLocaleString('en-PH')}</b><span>— ${l}</span></div>`).join('')}
       <div class="ok"><em class="${diff === 0 ? 'g' : 'r'}">${diff === 0 ? 'ok ✓' : (diff < 0 ? 'short ' : 'over ') + peso(Math.abs(diff))}</em><span>₱${Number(c.counted_total).toLocaleString('en-PH')}</span></div>
