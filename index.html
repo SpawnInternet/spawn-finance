@@ -95,8 +95,15 @@ button{cursor:pointer;border:0;background:none}
 .hv .vl span:last-child{white-space:nowrap}
 .hv em{font-style:normal;font-weight:800;margin-left:6px;font-size:12px}.hv em.sh{color:#b42318}.hv em.sp{color:#9a6700}.hv em.ok{color:#067647}.hv em.nc{color:#6b7280}
 .hv .tot{margin-top:4px;border-top:1px dashed rgba(36,76,156,.3);padding-top:4px}
-.hv div.chk{display:block;margin:8px -6px 0;padding:6px 8px;border-radius:10px;background:#fff3c4;border:1.5px solid #f2c94c;color:#5b4300}
-.hv .chk div{padding:3px 0}.hv .chk b{font-size:15px;font-weight:900;color:#3b2a00}.hv .chk>div:first-child b{font-size:17px}
+/* colour identifiers: blue = Spawn share (harvest total) · orange = handed over (coins from the collector) · green = office count (Spawn Count) */
+.hv .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.hv .dot.sp,.hv .tag.sp,.hv b.sp{background-color:#1d4ed8}.hv .dot.ho,.hv b.ho{background-color:#ea580c}.hv .dot.oc,.hv .tag.oc,.hv b.oc{background-color:#047857}
+.hv .tag{display:inline-block;padding:1px 8px;border-radius:7px;color:#fff;font-weight:900}
+.hv div.chk{display:block;margin:8px -6px 0;padding:6px 8px;border-radius:10px;background:#fff;border:1.5px solid #cfd8ea;color:#1e293b}
+.hv .chk div{padding:4px 0;align-items:center;gap:10px}
+.hv .chk span{min-width:0}.hv .chk span small{display:block;font-size:11.5px;color:#64748b;font-weight:500;line-height:1.3}
+.hv .chk b{flex:none;padding:3px 9px;border-radius:8px;color:#fff;font-size:15px;font-weight:900;white-space:nowrap}
+.hv .chk>div:first-child b{font-size:17px}.hv .chk b em{color:#fff;margin-left:4px;font-size:12px}
 .owed{background:#fff;border:1px solid var(--line);border-radius:14px}
 .owed div{display:flex;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--line);font-size:14px}
 .owed div:first-child{border-top:0}
@@ -1163,14 +1170,14 @@ function dayCard(F){
   const x = scdDay(F.collector, od.date), loaded = !!S.scd[String(F.collector).toLowerCase()];
   const row = (l, a, strong) => `<div><span>${l}</span>${strong ? `<b>${peso(a)}</b>` : `<span>${peso(a)}</span>`}</div>`;
   const pk = (a, each, l) => Number(a) ? row((Number(a) % each === 0 ? (Number(a) / each) + ' × ' : '') + l, a) : '';
-  let h = `<div class="hv"><div><span><b>${dLabel(od.date)}</b> · ${od.vendos} vendo${od.vendos > 1 ? 's' : ''} · Spawn share</span><b>${peso(od.spawn)}</b></div>`;
+  let h = `<div class="hv"><div><span><b>${dLabel(od.date)}</b> · ${od.vendos} vendo${od.vendos > 1 ? 's' : ''} · <i class="dot sp"></i>Spawn share</span><b class="tag sp">${peso(od.spawn)}</b></div>`;
   if (Number(od.pending) < Number(od.spawn)) h += row('Already handed in', Number(od.spawn) - Number(od.pending));
   if (!loaded) h += `<div><span>Loading Spawn Count…</span></div>`;
   else if (!x || !x.counted_vendos) h += `<div><span>Not yet counted in Spawn Count</span><span>—</span></div>`;
   else {
     h += `<div style="margin-top:6px;border-top:1px solid rgba(36,76,156,.18);padding-top:6px"><span>Spawn Count</span><span>${x.counted_vendos === x.vendos ? 'all ' + x.vendos + ' counted' : x.counted_vendos + ' of ' + x.vendos + ' counted'}</span></div>`;
     h += pk(x.mix, 1000, '₱1,000 packs') + pk(x.peso, 300, '₱300 packs') + (Number(x.bungkig) ? row('Bungkig', x.bungkig) : '') + (Number(x.bills) ? row('Bills', x.bills) : '');
-    h += row('Counted (good cash)', x.counted, true);
+    h += `<div><span><i class="dot oc"></i>Counted (good cash)</span><b class="tag oc">${peso(x.counted)}</b></div>`;
     if (Number(x.bugi)) h += row('Bugi (old coins)', x.bugi);
     if (Number(x.expenses)) h += row('Collector expenses', x.expenses);
     // v2.11: each vendo with its Spawn share and Spawn Count result, then total short / surplus (Spawn Count rule: counted + bugi vs Spawn share)
@@ -1187,9 +1194,11 @@ function dayCard(F){
         ${(() => { // coin check: Spawn share of counted vendos + net = counted good cash + bugi
           const sc = vl.filter(r => r.done).reduce((a, r) => a + Number(r.spawn), 0), nc = vl.length - vl.filter(r => r.done).length;
           const exp = Math.round((sc + net) * 100) / 100, act = Math.round((Number(x.counted) + Number(x.bugi)) * 100) / 100;
-          return `<div class="chk"><div><span>Spawn share${nc ? ' (counted vendos)' : ''}</span><b>${peso(sc)}</b></div>
-            <div><span>${net < 0 ? '− net short' : '+ net surplus'} ${peso(Math.abs(net))}</span><b>= ${peso(exp)}</b></div>
-            <div><span>Counted ${peso(x.counted)}${Number(x.bugi) ? ' + bugi ' + peso(x.bugi) : ''}</span><b>= ${peso(act)} ${Math.abs(exp - act) < 0.005 ? '<em class="ok">✓ match</em>' : '<em class="sh">✗ check</em>'}</b></div></div>`; })()}
+          const ok = Math.abs(exp - act) < 0.005;
+          return `<div class="chk">
+            <div><span><i class="dot sp"></i>Spawn share${nc ? ' (counted vendos)' : ''}<small>harvest total</small></span><b class="sp">${peso(sc)}</b></div>
+            <div><span><i class="dot ho"></i>Handed over<small>coins from the collector: Spawn share ${net < 0 ? '− short' : '+ surplus'} ${peso(Math.abs(net))}</small></span><b class="ho">${peso(exp)}</b></div>
+            <div><span><i class="dot oc"></i>Office count<small>Spawn Count: ${peso(x.counted)} good cash${Number(x.bugi) ? ' + ' + peso(x.bugi) + ' bugi' : ''}</small></span><b class="oc">${peso(act)} ${ok ? '<em class="ok">✓ match</em>' : '<em class="sh">✗ check</em>'}</b></div></div>`; })()}
         ${Number(x.expenses) ? `<div><span style="opacity:.8">Collector expenses (${peso(x.expenses)}) are taken off separately below</span></div>` : ''}</details>`;
     }
     if (x.counted_vendos < x.vendos) h += `<div><span>⚠ ${x.vendos - x.counted_vendos} vendo${x.vendos - x.counted_vendos > 1 ? 's' : ''} not yet counted — type the cash yourself</span></div>`;
