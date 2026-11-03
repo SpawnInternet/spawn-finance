@@ -1162,7 +1162,15 @@ async function loadScd(name){
   keep();
   // fill only what staff haven't typed yet
   if (!F.amt && !F.le && !F.lb && !F.c1k && !F.c300 && !F.waki && F.htAuto) fillDay(); else { const x = scdDay(name, F.hday); F.rid = x && x.recon_id || null; }
+  renderKeepFocus();
+}
+function renderKeepFocus(){   // redraw the form but keep the box or chip the keyboard was on
+  const a = document.activeElement, at = a && $('sh-body').contains(a) ? (a.id ? ['id', a.id] : (dataAttr(a) ? [dataAttr(a).name, dataAttr(a).value] : null)) : null;
+  const pos = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
   renderSheet();
+  if (!at) return;
+  const n = at[0] === 'id' ? $(at[1]) : $('sh-body').querySelector(`[${at[0]}="${CSS.escape(at[1])}"]`);
+  if (n) { n.focus({preventScroll:true}); if (pos && n.setSelectionRange) try { n.setSelectionRange(pos[0], pos[1]); } catch (x) {} }
 }
 function pickCollector(name){
   const F = S.form; keep(); F.collector = name; F.recon = null;
@@ -2244,13 +2252,31 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
       const bs = [...grp.querySelectorAll('button')], i = bs.indexOf(a);
       const n = bs[(i + (e.key === 'ArrowRight' ? 1 : -1) + bs.length) % bs.length];
-      if (grp.classList.contains('seg')) clickKeepFocus(n); else n.focus();
+      if (grp.classList.contains('seg') || dataAttr(n)) clickKeepFocus(n); else n.focus();
       return;
+    }
+    // v2.15: ← → between two boxes that sit side by side (₱1,000 / ₱300 packs, waki / bugi, dates)
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && a.matches('input') && a.closest('.two') && !e.shiftKey) {
+      const atEdge = a.type === 'date' || a.selectionStart == null || (e.key === 'ArrowLeft' ? a.selectionStart === 0 && a.selectionEnd === 0 : a.selectionEnd === a.value.length);
+      if (atEdge) {
+        const row = a.closest('.two'), ins = [...row.querySelectorAll('input:not([type=hidden])')], i = ins.indexOf(a);
+        const n = ins[i + (e.key === 'ArrowRight' ? 1 : -1)];
+        if (n) { e.preventDefault(); n.focus(); if (n.select) try { n.select(); } catch (x) {} return; }
+      }
     }
     if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.isComposing && !a.matches('select, textarea') && (grp || a.matches('input:not([type=checkbox]), button.go'))) {
       const st = sheetStops();
       let i = st.indexOf(a); if (i < 0 && grp) i = st.findIndex(x => grp.contains(x));
-      const n = st[i + (e.key === 'ArrowDown' ? 1 : -1)];
+      let n = st[i + (e.key === 'ArrowDown' ? 1 : -1)];
+      const row = a.closest('.two');
+      if (row && n && row.contains(n)) {               // skip the box beside this one: go to the next row
+        const dir = e.key === 'ArrowDown' ? 1 : -1; let j = i + dir;
+        while (st[j] && row.contains(st[j])) j += dir;
+        n = st[j];
+        if (n && n.closest('.two') && dir < 0) { const r2 = n.closest('.two'), ins = [...r2.querySelectorAll('input:not([type=hidden])')], col = [...row.querySelectorAll('input:not([type=hidden])')].indexOf(a); if (ins[col]) n = ins[col]; }
+      } else if (row && n && n.closest('.two') && n.closest('.two') !== row) {   // same column in the next pair
+        const r2 = n.closest('.two'), ins = [...r2.querySelectorAll('input:not([type=hidden])')], col = [...row.querySelectorAll('input:not([type=hidden])')].indexOf(a); if (ins[col]) n = ins[col];
+      }
       e.preventDefault();
       if (n) { n.focus(); if (n.select && n.matches('input[type=text], input[type=number], input:not([type])')) try { n.select(); } catch (x) {} n.scrollIntoView({block:'nearest'}); }
       return;
@@ -2268,6 +2294,13 @@ document.addEventListener('keydown', e => {
     return;
   }
 
+  /* notebook tabs (Logbook · Collect · GCash · Deposit · Parts · Approve · More): ← → switch, Enter/Space opens */
+  if (a && a.closest('.nb-tabs') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    const bs = [...a.closest('.nb-tabs').querySelectorAll('button')].filter(b => b.offsetParent), i = bs.indexOf(a);
+    const n = bs[(i + (e.key === 'ArrowRight' ? 1 : -1) + bs.length) % bs.length];
+    if (n) { e.preventDefault(); n.click(); n.focus({preventScroll:true}); }
+    return;
+  }
   /* home: arrows move across tiles and the side lists */
   if (!$('v-home').classList.contains('hide') && ARROWS.includes(e.key)) {
     const items = [...document.querySelectorAll('.tiles .tile, #h-gc, #h-coll button')].filter(x => x.offsetParent);
