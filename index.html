@@ -571,6 +571,20 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 @media (hover:hover) and (pointer:fine){.nb-keys{display:block}}
 #v-note button:focus-visible,#nb-choose button:focus-visible{outline:3px solid #025ac6;outline-offset:2px}
 .paper .ln:focus-visible{outline:2px solid #025ac6;outline-offset:0;background:rgba(2,90,198,.08)}
+/* v2.12 PC layout (≥960px): the notebook uses the screen width, and Record collection shows the form on the left
+   with the Spawn Count day card on the right. Phones and tablets keep the single column. */
+@media (min-width:960px){
+  .nb-wrap{max-width:1000px;padding:14px 18px 0}
+  .nb-tabs{padding:0 max(0px,calc((100% - 1000px) / 2))}
+  .nb-bar{width:min(1000px,100%)}
+  .sheet{width:min(680px,calc(100vw - 48px))}
+  .sheet.wide{width:min(1120px,calc(100vw - 48px))}
+  .sheet.wide #sh-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 32px;grid-template-rows:repeat(40,auto) minmax(0,1fr);align-items:start}
+  .sheet.wide #sh-body>*{grid-column:1;min-width:0}
+  .sheet.wide #sh-body>.daycol{grid-column:2;grid-row:1 / span 41;position:sticky;top:70px;max-height:calc(min(86vh,900px) - 118px);overflow:auto;padding-right:2px}
+  .sheet.wide .daycol .hv{margin-top:0;font-size:14px}
+  .sheet.wide .daycol .hv .vl span:last-child{font-size:14px}
+}
 @media (min-width:760px){.nb-tabs{padding:0 max(0px,calc((100% - 720px) / 2))}.nb-bar{left:50%;right:auto;width:min(720px,100%);transform:translateX(-50%);border-radius:18px 18px 0 0;border:1px solid #e3e7ef;border-bottom:0}
   #nb-choose{align-items:center;justify-content:center}#nb-choose .sh{width:min(520px,calc(100vw - 48px));border-radius:22px}}
 .paper .wl{display:flex;align-items:center;gap:10px;height:40px;white-space:nowrap}
@@ -1366,7 +1380,7 @@ function renderSheet(){
       const names = [...new Set([...(S.coll ? S.coll.collectors.filter(c => Number(c.unremitted) > 0).map(c => c.collector) : []), ...(L.collectors || []).map(c => c.name)])];
       h += `<div class="f"><label>Collector</label><div class="chips" id="col-chips">${names.map(n => { const st = collStatus(n), u = st ? Number(st.unremitted) : 0;
         return `<button type="button" data-col="${esc(n)}" class="${F.collector === n ? 'on' : ''}">${esc(n)}${u > 0 ? ` · ${peso(u)}` : ''}</button>`; }).join('')}</div></div>`;
-      if (F.collector && collStatus(F.collector)) h += dayCard(F);
+      if (F.collector && collStatus(F.collector)) h += `<div class="daycol" id="daycol">${dayCard(F)}</div>`;
       h += money('f-ht', 'Harvest total (Spawn share)', F.ht ?? '');
       h += `<div class="two">${money('f-le', 'Less expense', F.le ?? '')}${money('f-lb', 'Less bugi', F.lb ?? '')}</div>`;
       h += money('f-amt', 'Cash counted from collector', F.amt ?? '');
@@ -1599,6 +1613,7 @@ function renderSheet(){
     title = F.title; h = F.html;
   }
   $('sh-title').textContent = title;
+  $('sheet').classList.toggle('wide', F.kind === 'collect' && F.mode === 'collection' && !!F.collector && !!collStatus(F.collector));
   body.innerHTML = h;
   wireSheet();
 }
