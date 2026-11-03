@@ -1132,13 +1132,17 @@ function fillDay(){
   const F = S.form; if (!F) return;
   const od = openDaysFor(F.collector).find(d => d.date === F.hday);
   F.rid = null;
-  if (!od) { if (F.htAuto) { F.ht = ''; F.le = ''; F.lb = ''; F.amt = ''; } return; }
+  if (!od) { if (F.htAuto) { F.ht = ''; F.le = ''; F.lb = ''; F.amt = ''; F.c1k = ''; F.c300 = ''; F.waki = ''; F.cbills = ''; } return; }
   const x = scdDay(F.collector, od.date);
   const full = !!x && x.counted_vendos > 0 && x.counted_vendos === x.vendos && Number(od.pending) === Number(od.spawn);
   F.ht = String(Number(od.pending)); F.htAuto = true;
   F.le = x && Number(x.expenses) ? String(Number(x.expenses)) : '';
   F.lb = x && Number(x.bugi) ? String(Number(x.bugi)) : '';
-  F.amt = full ? String(Number(x.counted)) : '';
+  if (full) {   // Spawn Count's packs as a start; Joi changes them to how she regrouped the coins
+    F.c1k = Number(x.mix) ? String(Number(x.mix) / PACK_BIG) : ''; F.c300 = Number(x.peso) ? String(Number(x.peso) / PACK_SMALL) : '';
+    F.waki = Number(x.bungkig) ? String(Number(x.bungkig)) : ''; F.cbills = Number(x.bills) ? String(Number(x.bills)) : '';
+    F.amt = String(Number(x.counted));
+  } else { F.c1k = ''; F.c300 = ''; F.waki = ''; F.cbills = ''; F.amt = ''; }
   F.rid = x && x.recon_id ? x.recon_id : null;
 }
 async function loadScd(name){
@@ -1150,7 +1154,7 @@ async function loadScd(name){
   if (!F || F.kind !== 'collect' || F.mode !== 'collection' || F.collector !== name) return;
   keep();
   // fill only what staff haven't typed yet
-  if (!F.amt && !F.le && !F.lb && F.htAuto) fillDay(); else { const x = scdDay(name, F.hday); F.rid = x && x.recon_id || null; }
+  if (!F.amt && !F.le && !F.lb && !F.c1k && !F.c300 && !F.waki && F.htAuto) fillDay(); else { const x = scdDay(name, F.hday); F.rid = x && x.recon_id || null; }
   renderSheet();
 }
 function pickCollector(name){
@@ -1160,7 +1164,7 @@ function pickCollector(name){
   F.hday = day ? day.date : null; F.htAuto = true;
   fillDay();
   renderSheet();
-  const a = $('f-amt'); if (a) a.focus({preventScroll:true});
+  const a = $('f-c1k') || $('f-amt'); if (a) a.focus({preventScroll:true});
   loadScd(name);
 }
 function dayCard(F){
@@ -1316,7 +1320,7 @@ function openSheet(kind, preset){
   S.form = { kind, cid:uuid(), mode:null, ...(preset || {}) };
   $('sh-body').innerHTML = ''; renderSheet();
   $('scrim').classList.add('on'); $('sheet').classList.add('on');
-  setTimeout(() => { if (!S.form || S.form.kind !== kind) return; const f = (kind === 'collect' && S.form.collector && $('f-amt')) || (kind === 'collect' && S.form.mode === 'collection' && !S.form.recon && $('sh-body').querySelector('#col-chips button')) || $('sh-body').querySelector('input.money,input:not(#f-date),select'); if (f && kind !== 'detail') f.focus({preventScroll:true}); }, 260);
+  setTimeout(() => { if (!S.form || S.form.kind !== kind) return; const f = (kind === 'collect' && S.form.collector && ($('f-c1k') || $('f-amt'))) || (kind === 'collect' && S.form.mode === 'collection' && !S.form.recon && $('sh-body').querySelector('#col-chips button')) || $('sh-body').querySelector('input.money,input:not(#f-date),select'); if (f && kind !== 'detail') f.focus({preventScroll:true}); }, 260);
 }
 function closeSheet(){
   $('scrim').classList.remove('on'); $('sheet').classList.remove('on'); S.form = null;
@@ -1399,9 +1403,14 @@ function renderSheet(){
       h += `<div class="f"><label>Collector</label><div class="chips" id="col-chips">${names.map(n => { const st = collStatus(n), u = st ? Number(st.unremitted) : 0;
         return `<button type="button" data-col="${esc(n)}" class="${F.collector === n ? 'on' : ''}">${esc(n)}${u > 0 ? ` · ${peso(u)}` : ''}</button>`; }).join('')}</div></div>`;
       if (F.collector && collStatus(F.collector)) h += `<div class="daycol" id="daycol">${dayCard(F)}</div>`;
-      h += money('f-ht', 'Harvest total (Spawn share)', F.ht ?? '');
-      h += `<div class="two">${money('f-le', 'Less expense', F.le ?? '')}${money('f-lb', 'Less bugi', F.lb ?? '')}</div>`;
-      h += money('f-amt', 'Cash counted from collector', F.amt ?? '');
+      h += money('f-ht', '<i class="dot sp" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#1d4ed8;margin-right:6px"></i>Harvest total (Spawn share)', F.ht ?? '');
+      h += money('f-le', 'Less expense (collector)', F.le ?? '');
+      // v2.13: coins handed over, grouped by Joi after the Spawn Count — ₱5-coin packs, ₱1-coin packs, waki, bugi, bills
+      h += `<div class="f" style="margin-bottom:6px"><label><i class="dot ho" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#ea580c;margin-right:6px"></i>Coins handed over — regrouped <small style="font-weight:600;color:var(--muted)">(how many packs)</small></label></div>`;
+      h += `<div class="two">${packField('f-c1k', '₱1,000 packs (₱5 coins)', F.c1k ?? '')}${packField('f-c300', '₱300 packs (₱1 coins)', F.c300 ?? '')}</div>`;
+      h += `<div class="two">${money('f-waki', 'Waki / bungkig (₱)', F.waki ?? '')}${money('f-lb', 'Bugi — old coins (₱)', F.lb ?? '')}</div>`;
+      h += money('f-cbills', 'Bills (₱)', F.cbills ?? '');
+      h += `<input type="hidden" id="f-amt" value="${esc(F.amt ?? '')}">`;
       h += `<div class="calc" id="calc"></div>`;
       h += `<div class="f"><label for="f-snote">If short or over: where / why <small style="font-weight:600;color:var(--muted)">(goes to the Shorts list)</small></label><input id="f-snote" autocomplete="off" placeholder="e.g. 1 pack ₱1K kulang ₱35" value="${esc(F.snote || '')}"></div>`;
     } else if (F.mode === 'office_collection') {
@@ -1645,24 +1654,37 @@ function denomFields(F){
           <div class="two">${money('f-loose', 'Bungkig (₱)', F.loose ?? '')}${money('f-bills', 'Bills (₱)', F.bills ?? '')}</div>`;
 }
 const packPeso = () => ({ big: num(v('f-p5')) * PACK_BIG, small: num(v('f-p1')) * PACK_SMALL });
+// collection hand-in coins: ₱5-coin packs ×₱1,000, ₱1-coin packs ×₱300, waki, bills, bugi (all ₱)
+function coinsHanded(){ return num(v('f-c1k')) * PACK_BIG + num(v('f-c300')) * PACK_SMALL + num(v('f-waki')) + num(v('f-cbills')) + num(v('f-lb')); }
+function coinPacks(){ return { p1000:num(v('f-c1k')), p300:num(v('f-c300')), waki:num(v('f-waki')), bills:num(v('f-cbills')), bugi:num(v('f-lb')), total:coinsHanded() }; }
+function coinParts(){ const k = coinPacks(); return [k.p1000 ? `${k.p1000}×₱1,000` : '', k.p300 ? `${k.p300}×₱300` : '', k.waki ? `waki ${peso(k.waki)}` : '', k.bills ? `bills ${peso(k.bills)}` : '', k.bugi ? `bugi ${peso(k.bugi)}` : ''].filter(Boolean).join(' · '); }
+function packsText(pk){ if (!pk) return ''; const n = x => Number(x || 0); return [n(pk.p1000) ? `${n(pk.p1000)}×₱1,000` : '', n(pk.p300) ? `${n(pk.p300)}×₱300` : '', n(pk.waki) ? `waki ${peso(pk.waki)}` : '', n(pk.bills) ? `bills ${peso(pk.bills)}` : '', n(pk.bugi) ? `bugi ${peso(pk.bugi)}` : ''].filter(Boolean).join(' · '); }
 function denomTotal(){ const p = packPeso(); return p.big + p.small + num(v('f-bills')) + num(v('f-loose')); }
-function packsCheck(){
-  for (const id of ['f-p5', 'f-p1']) { const t = v(id); if (t !== '' && !/^\d+$/.test(t.trim())) { $(id).focus(); throw new Error('Packs are counted as whole numbers (how many packs).'); } }
+function packsCheck(){ packsCheckIds(['f-p5', 'f-p1']); }
+function packsCheckIds(ids){
+  for (const id of ids) { if (!$(id)) continue; const t = v(id); if (t !== '' && !/^\d+$/.test(t.trim())) { $(id).focus(); throw new Error('Packs are counted as whole numbers (how many packs).'); } }
 }
 function packSubs(){
-  const p = packPeso();
-  if ($('f-p5-x')) $('f-p5-x').textContent = v('f-p5') !== '' ? '= ' + peso(p.big) : '';
-  if ($('f-p1-x')) $('f-p1-x').textContent = v('f-p1') !== '' ? '= ' + peso(p.small) : '';
+  for (const [id, each] of [['f-p5', PACK_BIG], ['f-p1', PACK_SMALL], ['f-c1k', PACK_BIG], ['f-c300', PACK_SMALL]])
+    if ($(id + '-x')) $(id + '-x').textContent = v(id) !== '' ? '= ' + peso(num(v(id)) * each) : '';
 }
 
 function liveCalc(){
   const F = S.form; if (!F) return; const c = $('calc');
   if (F.kind === 'collect' && F.mode === 'collection' && c) {
-    const ht = num(v('f-ht')), le = num(v('f-le')), lb = num(v('f-lb')), amt = num(v('f-amt'));
-    if (!v('f-ht')) { c.innerHTML = `<div><span>Book gets</span><b>${peso(amt)}</b></div>`; return; }
-    const should = ht - le - lb, so = amt - should;
-    c.innerHTML = `<div><span>Should hand in</span><b>${peso(should)}</b></div><div><span>Counted</span><b>${peso(amt)}</b></div>
-      <div class="big"><span>${so < 0 ? 'Short' : so > 0 ? 'Over' : 'Balanced'}</span><b class="${so === 0 ? 'diff0' : 'diffx'}">${so === 0 ? '✓' : peso(Math.abs(so))}</b></div>`;
+    packSubs();
+    const ht = num(v('f-ht')), le = num(v('f-le')), lb = num(v('f-lb'));
+    const coins = coinsHanded();                         // total coins handed over incl. bugi
+    const amt = coins - lb;                              // good cash that goes into the book
+    if ($('f-amt')) $('f-amt').value = amt > 0 ? String(amt) : '';
+    const sub = coinParts();
+    if (!v('f-ht')) { c.innerHTML = `<div><span>Coins handed over</span><b style="color:#ea580c">${peso(coins)}</b></div><div><span>Book gets (less bugi)</span><b>${peso(amt)}</b></div>`; return; }
+    const so = coins - ht + le;                          // vs the harvest: coins + expenses should equal the Spawn share
+    c.innerHTML = `<div><span>Harvest total</span><b style="color:#1d4ed8">${peso(ht)}</b></div>
+      <div><span>Coins handed over${sub ? ` <small style="font-weight:600;color:var(--muted)">${sub}</small>` : ''}</span><b style="color:#ea580c">${peso(coins)}</b></div>
+      ${le ? `<div><span>+ expenses paid by collector</span><b>${peso(le)}</b></div>` : ''}
+      <div class="big"><span>${so < 0 ? 'Short' : so > 0 ? 'Over' : 'Balanced'}</span><b class="${so === 0 ? 'diff0' : 'diffx'}">${so === 0 ? '✓' : peso(Math.abs(so))}</b></div>
+      <div><span>Book gets (good cash, bugi to the bugi bag)</span><b>${peso(amt)}</b></div>`;
   }
   if (F.kind === 'collect' && F.mode === 'office_collection' && c) {
     const bill = num(v('f-bill')), gave = v('f-gave') === '' ? bill : num(v('f-gave')), ch = gave - bill;
@@ -1706,7 +1728,7 @@ function liveCalc(){
 
 function keep(){ // remember typed values when switching modes
   const F = S.form; if (!F) return;
-  const map = { 'f-amt':'amt','f-ht':'ht','f-le':'le','f-lb':'lb','f-memo':'memo','f-party':'party','f-bank':'bank','f-ref':'ref','f-cf':'cf','f-ct':'ct','f-by':'by','f-p5':'p5','f-p1':'p1','f-bills':'bills','f-loose':'loose','f-area':'area','f-q':'q',
+  const map = { 'f-amt':'amt','f-ht':'ht','f-le':'le','f-lb':'lb','f-memo':'memo','f-party':'party','f-bank':'bank','f-ref':'ref','f-cf':'cf','f-ct':'ct','f-by':'by','f-p5':'p5','f-p1':'p1','f-bills':'bills','f-loose':'loose','f-c1k':'c1k','f-c300':'c300','f-waki':'waki','f-cbills':'cbills','f-area':'area','f-q':'q',
     'f-cust':'cust','f-bill':'bill','f-gave':'gave','f-gref':'gref','f-part':'part','f-qty':'qty','f-unit':'unit','f-taker':'taker','f-purpose':'purpose','f-jo':'jo',
     'f-gadj':'gadj','f-gmemo':'gmemo','f-snote':'snote','f-or':'or','f-sq':'sq','f-dq':'dq','f-ddays':'ddays','f-dreason':'dreason','f-dym':'dym','f-pym':'pym','f-pother':'pother','f-pnote':'pnote' };
   for (const [id, k] of Object.entries(map)) if ($(id)) F[k] = $(id).value;
@@ -1716,7 +1738,7 @@ function wireSheet(){
   const F = S.form, body = $('sh-body');
   body.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { keep(); F.mode = b.dataset.mode; F.cid = uuid(); renderSheet(); });
   body.querySelectorAll('[data-col]').forEach(b => b.onclick = () => pickCollector(b.dataset.col));
-  body.querySelectorAll('[data-hday]').forEach(b => b.onclick = () => { keep(); F.hday = b.dataset.hday; F.htAuto = true; fillDay(); renderSheet(); const a = $('f-amt'); if (a) a.focus({preventScroll:true}); });
+  body.querySelectorAll('[data-hday]').forEach(b => b.onclick = () => { keep(); F.hday = b.dataset.hday; F.htAuto = true; fillDay(); renderSheet(); const a = $('f-c1k') || $('f-amt'); if (a) a.focus({preventScroll:true}); });
   if ($('f-ht')) $('f-ht').addEventListener('input', () => { F.htAuto = false; });
   body.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { keep(); F.cat = b.dataset.cat; F.catAuto = false; renderSheet(); });
   body.querySelectorAll('[data-amt]').forEach(b => b.onclick = () => { $('f-amt').value = b.dataset.amt; liveCalc(); });
@@ -1754,7 +1776,7 @@ function wireSheet(){
     $('f-date').addEventListener('change', () => setWorkDate($('f-date').value));
     $('datebar').querySelectorAll('[data-qd]').forEach(b => b.onclick = () => {
       setWorkDate(b.dataset.qd);
-      const first = (S.form && S.form.kind === 'expense' && $('f-memo')) || $('f-amt') || $('f-cust') || $('f-part') || $('f-party'); if (first) first.focus({preventScroll:true});
+      const first = (S.form && S.form.kind === 'expense' && $('f-memo')) || $('f-c1k') || $('f-amt') || $('f-cust') || $('f-part') || $('f-party'); if (first) first.focus({preventScroll:true});
     });
   }
   ['pv','cv','ga','np'].forEach(n => body.querySelectorAll(`[data-${n}]`).forEach(b => b.onclick = () => {
@@ -1936,7 +1958,13 @@ async function submit(btn, next){
       if (F.mode === 'collection') {
         if (!F.collector) throw new Error(ERR.collector_required);
         Object.assign(det, { collector:F.collector, area:(S.look.collectors.find(c => c.name === F.collector) || {}).area || null });
-        if (v('f-ht')) Object.assign(det, { harvest_total:num(v('f-ht')), less_expense:num(v('f-le')), less_bugi:num(v('f-lb')) });
+        packsCheckIds(['f-c1k', 'f-c300']);
+        const pk = coinPacks();
+        if (!(pk.total > 0)) { $('f-c1k').focus(); throw new Error('Enter the coins handed over (packs, waki, bugi or bills).'); }
+        if (!(pk.total - pk.bugi > 0)) { $('f-lb').focus(); throw new Error('The hand-in cannot be bugi only.'); }
+        $('f-amt').value = String(pk.total - pk.bugi);
+        det.packs = pk;
+        if (v('f-ht')) Object.assign(det, { harvest_total:num(v('f-ht')), less_expense:num(v('f-le')), less_bugi:pk.bugi });
         if (F.recon) det.recon_id = F.recon.id; else if (F.rid) det.recon_id = F.rid;
         if (v('f-snote')) det.memo = v('f-snote');
       } else {
@@ -3079,7 +3107,9 @@ function nbTitle(e){
   const or = (e.memo || '').match(/OR\s*([0-9A-Za-z-]+)/i);
   switch (e.kind) {
     case 'opening': return ['Opening balance', ''];
-    case 'collection': { let s = ''; if (e.harvest_total != null) { s = `harvest ${peso(e.harvest_total)}`; if (+e.less_expense) s += ` − expenses ${peso(e.less_expense)}`; if (+e.less_bugi) s += ` − bugi ${peso(e.less_bugi)}`; if (e.short_over != null && +e.short_over !== 0) s += ` · ${+e.short_over < 0 ? 'short' : 'over'} ${peso(Math.abs(e.short_over))}`; } return [`${esc(e.collector)} hand-in`, s]; }
+    case 'collection': { let s = ''; if (e.harvest_total != null) { s = `harvest ${peso(e.harvest_total)}`; if (+e.less_expense) s += ` − expenses ${peso(e.less_expense)}`; if (e.short_over != null && +e.short_over !== 0) s += ` · ${+e.short_over < 0 ? 'short' : 'over'} ${peso(Math.abs(e.short_over))}`; }
+      const pt = packsText(e.packs); if (pt) s += (s ? ' · ' : '') + 'coins ' + pt; else if (+e.less_bugi) s += ` · bugi ${peso(e.less_bugi)}`;
+      return [`${esc(e.collector)} hand-in`, s]; }
     case 'office_collection': if (e.party === 'Payment sheet') return ['Payment sheet', m.replace(/^Payment sheet · /, '')];
       return e.payment_id ? [`Paid here · ${p || 'subscriber'}`, or ? 'OR ' + esc(or[1]) : ''] : ['Office collection', [p, m].filter(Boolean).join(' · ')];
     case 'expense': return [m || esc(e.category || 'Expense'), [e.category && m ? esc(e.category) : '', p].filter(Boolean).join(' · ')];
@@ -3211,6 +3241,9 @@ function renderNote(){
           + (ot.length ? `<div class="wl-wrap"><div class="wl-h">⏳ STILL TO ADD FOR THIS DAY <em>· tap to count</em></div>${ot.map(([x, i]) => `<div class="wl"><b>+ ${Number(x.amt).toLocaleString('en-PH')}</b><span>— ${esc(x.title)} <small>${esc(x.sub)}</small></span><button type="button" data-wi="${i}">Count</button></div>`).join('')}</div>` : ''); })()}
       ${!(lock && lock.locked_at) ? '<div id="nb-bo"></div>' : ''}
       ${olderN && !(lock && lock.locked_at) ? `<button type="button" class="wl-old" id="nb-older">⏳ ${olderN} from earlier days still to add →</button>` : ''}
+      ${(() => { const cs = entries.filter(e => e.kind === 'collection' && e.packs); if (!cs.length) return '';
+        const t = cs.reduce((a, e) => { const k = e.packs; a.p1000 += Number(k.p1000 || 0); a.p300 += Number(k.p300 || 0); a.waki += Number(k.waki || 0); a.bills += Number(k.bills || 0); a.bugi += Number(k.bugi || 0); a.total += Number(k.total || 0); return a; }, { p1000:0, p300:0, waki:0, bills:0, bugi:0, total:0 });
+        return `<div class="tot inout coins"><small>🪙 coins received today · ${packsText(t)} = <b style="color:#ea580c">₱${Number(t.total).toLocaleString('en-PH')}</b>${t.bugi ? ` · to bugi bag ₱${Number(t.bugi).toLocaleString('en-PH')}` : ''}</small></div>`; })()}
       <div class="tot inout"><small>in <b class="pin">+ ${Number(inT).toLocaleString('en-PH', {maximumFractionDigits:2})}</b> · out <b class="pout">− ${Number(outT).toLocaleString('en-PH', {maximumFractionDigits:2})}</b></small></div>
       <div class="tot big"><small>left in the drawer →</small><span>₱${Number(endBal).toLocaleString('en-PH', {maximumFractionDigits:2})}</span></div>
     </div>
