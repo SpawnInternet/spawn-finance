@@ -95,6 +95,8 @@ button{cursor:pointer;border:0;background:none}
 .hv .vl span:last-child{white-space:nowrap}
 .hv em{font-style:normal;font-weight:800;margin-left:6px;font-size:12px}.hv em.sh{color:#b42318}.hv em.sp{color:#9a6700}.hv em.ok{color:#067647}.hv em.nc{color:#6b7280}
 .hv .tot{margin-top:4px;border-top:1px dashed rgba(36,76,156,.3);padding-top:4px}
+.hv div.chk{display:block;margin:8px -6px 0;padding:6px 8px;border-radius:10px;background:#fff3c4;border:1.5px solid #f2c94c;color:#5b4300}
+.hv .chk div{padding:3px 0}.hv .chk b{font-size:15px;font-weight:900;color:#3b2a00}.hv .chk>div:first-child b{font-size:17px}
 .owed{background:#fff;border:1px solid var(--line);border-radius:14px}
 .owed div{display:flex;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--line);font-size:14px}
 .owed div:first-child{border-top:0}
@@ -1185,8 +1187,9 @@ function dayCard(F){
         ${(() => { // coin check: Spawn share of counted vendos + net = counted good cash + bugi
           const sc = vl.filter(r => r.done).reduce((a, r) => a + Number(r.spawn), 0), nc = vl.length - vl.filter(r => r.done).length;
           const exp = Math.round((sc + net) * 100) / 100, act = Math.round((Number(x.counted) + Number(x.bugi)) * 100) / 100;
-          return `<div class="tot"><span>Spawn share${nc ? ' (counted vendos)' : ''} ${peso(sc)} ${net < 0 ? '−' : '+'} ${peso(Math.abs(net))}</span><span>= ${peso(exp)}</span></div>
-            <div><span>Counted ${peso(x.counted)}${Number(x.bugi) ? ' + bugi ' + peso(x.bugi) : ''}</span><span>= ${peso(act)} ${Math.abs(exp - act) < 0.005 ? '<em class="ok">✓ match</em>' : '<em class="sh">✗ check</em>'}</span></div>`; })()}
+          return `<div class="chk"><div><span>Spawn share${nc ? ' (counted vendos)' : ''}</span><b>${peso(sc)}</b></div>
+            <div><span>${net < 0 ? '− net short' : '+ net surplus'} ${peso(Math.abs(net))}</span><b>= ${peso(exp)}</b></div>
+            <div><span>Counted ${peso(x.counted)}${Number(x.bugi) ? ' + bugi ' + peso(x.bugi) : ''}</span><b>= ${peso(act)} ${Math.abs(exp - act) < 0.005 ? '<em class="ok">✓ match</em>' : '<em class="sh">✗ check</em>'}</b></div></div>`; })()}
         ${Number(x.expenses) ? `<div><span style="opacity:.8">Collector expenses (${peso(x.expenses)}) are taken off separately below</span></div>` : ''}</details>`;
     }
     if (x.counted_vendos < x.vendos) h += `<div><span>⚠ ${x.vendos - x.counted_vendos} vendo${x.vendos - x.counted_vendos > 1 ? 's' : ''} not yet counted — type the cash yourself</span></div>`;
