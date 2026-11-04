@@ -751,12 +751,13 @@ function chatHtml(ch){
         : `<div class="pform" style="display:grid;gap:8px">
           ${pk === 'vendo' && !S.vendoOff ? `<input type="search" id="vq" placeholder="Which vendo? Name, owner or code…" aria-label="Find vendo" value="${esc(S.vq || '')}" autocomplete="off">
           <div class="lres">${(S.vres || []).map(v => `<button type="button" class="tpl" data-cx="vpick" data-vendo="${v.id}">🏪 ${esc(v.name || 'vendo')}${v.owner ? ' · ' + esc(v.owner) : ''}${v.area ? ' · ' + esc(v.area) : ''}${v.code ? ' · ' + esc(v.code) : ''}</button>`).join('') || (S.vnone ? '<span class="sent">No vendo with that name</span>' : '')}</div>
-          <div class="sent">Tap the vendo to link this number to it — or type a name below and tap Save.</div>` : ''}
-          <div class="pnp"><input type="text" id="pnm" placeholder="Name" aria-label="Name" maxlength="120" value="${esc(S.pnm != null ? S.pnm : (ch.person && ch.person.name) || '')}">
+          ${(S.vres || []).length ? `<div class="sent">Tap the vendo to link this number to it. <button type="button" class="linkbtn" data-vmanual="1">Not in the list? Type a name instead</button></div>`
+            : `<div class="sent">Search the vendo above — or type a name below and tap Save.</div>`}` : ''}
+          ${pk === 'vendo' && !S.vendoOff && (S.vres || []).length ? '' : `<div class="pnp"><input type="text" id="pnm" placeholder="Name" aria-label="Name" maxlength="120" value="${esc(S.pnm != null ? S.pnm : (ch.person && ch.person.name) || '')}">
           <input type="text" id="ppl" placeholder="Place (optional)" aria-label="Place" maxlength="200" value="${esc(S.ppl != null ? S.ppl : (ch.person && ch.person.place) || '')}"></div>
-          <button type="button" class="btn" data-cx="psavep">Save</button></div>`}` : ''}
+          <button type="button" class="btn" data-cx="psavep">Save</button>`}</div>`}` : ''}
       ${f === 'more' ? `<div class="acts" style="margin:4px 0 8px"><button type="button" class="btn" data-cx="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-cx="block" data-why="stop">Stop texting them</button></div>` : ''}
-      </div><div class="row"><button type="button" class="btn plus${S.cmenu ? ' on' : ''}" data-cx="menu" aria-label="Actions and ready answers" aria-expanded="${!!S.cmenu}">${S.cmenu ? '×' : '＋'}${openIds.length && !S.cmenu ? `<i>${openIds.length}</i>` : ''}</button><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message" enterkeyhint="send"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
+      </div><div class="row"><button type="button" class="btn plus${S.cmenu || f ? ' on' : ''}" data-cx="menu" aria-label="${f ? 'Close this form' : 'Actions and ready answers'}" aria-expanded="${!!(S.cmenu || f)}">${S.cmenu || f ? '×' : '＋'}${openIds.length && !S.cmenu && !f ? `<i>${openIds.length}</i>` : ''}</button><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message" enterkeyhint="send"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
     </div></div>`;
 }
 async function openChat(address){
@@ -812,6 +813,7 @@ $('list').addEventListener('click', async e => {
   const row = e.target.closest('[data-ch]'); if (row) { openChat(row.dataset.ch); return; }
   const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; try { localStorage.setItem('spawn-text-cf', S.cf); } catch (x) {} render(); return; }   // filter remembered on this device
   const sb = e.target.closest('[data-csort]'); if (sb) { S.csort = sb.dataset.csort; try { localStorage.setItem('remind_csort', S.csort); } catch (x) {} render(); return; }
+  if (e.target.closest('[data-vmanual]')) { S.vq = ''; S.vres = []; S.vnone = false; render(); const i = $('pnm'); if (i) i.focus(); return; }   // 🏪 vendo not in the results: back to name + place + Save
   const pk = e.target.closest('[data-pkind]'); if (pk) { S.pkind = pk.dataset.pkind; render(); const i = $('vq') || $('lq') || $('pnm'); if (i) i.focus(); return; }   // typed name/place are kept in S.pnm / S.ppl; the cursor goes to that choice's first box
   const tp = e.target.closest('[data-ctpl]'); if (tp) { const txt = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = txt; ta.focus(); } return; }
   const eb = e.target.closest('[data-eng]'); if (eb) { S.engOpen = S.engOpen === +eb.dataset.eng ? null : +eb.dataset.eng; keepScroll(render); return; }
@@ -859,7 +861,7 @@ $('list').addEventListener('click', async e => {
   }
   if (!S.chat) return;
   const a = b.dataset.cx, ch = S.chat, mid = ch.lastIn, box = b.closest('.compose');
-  if (a === 'menu') { S.cmenu = !S.cmenu; S.cform = null; render(); return; }   // menu and a form are never open together (the chat stays readable)
+  if (a === 'menu') { if (S.cform) { S.cform = null; S.cmenu = false; } else S.cmenu = !S.cmenu; render(); return; }   // a form open: ＋ (shown as ×) closes it; otherwise ＋ opens/closes the menu — never both open (the chat stays readable)
   if (a === 'back' && history.state && history.state.sv && history.state.chat) { history.back(); return; }   // same as the phone Back button
   if (a === 'back') { S.chat = null; S.cmenu = false; render(); window.scrollTo(0, S.listY || 0); return; }
   if (a === 'f') { S.cform = S.cform === b.dataset.f ? null : b.dataset.f; S.cmenu = false; S.lq = ''; S.lres = []; S.lnone = false; render(); const i = $('list').querySelector('.pform input'); if (i) i.focus(); return; }
