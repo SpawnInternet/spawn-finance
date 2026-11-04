@@ -682,10 +682,10 @@ const whenLabel = ts => { const d = String(ts).slice(0, 10); return d === S.toda
 // which chats a filter chip shows (also used for the count on each chip)
 const cfMatch = (c, k) => k === 'all' || (k === 'new' && isNew(c)) || (k === 'unread' && c.unread) || (k === 'repair' && c.repair) || (k === 'check' && c.to_check) || (k === 'lead' && c.lead)
   || (k === 'paid' && c.paid) || (k === 'vendo' && c.vendo) || (k === 'care' && (c.hardship || c.urgent));
+const cqMatch = (c, q) => !q || [c.name, c.address, c.area, c.last_body].join(' ').toLowerCase().includes(q);   // chat search word
 const chatRows = () => {
   const q = (S.cq || '').trim().toLowerCase();
-  const rows = S.chats.filter(c => cfMatch(c, S.cf))
-    .filter(c => !q || [c.name, c.address, c.area, c.last_body].join(' ').toLowerCase().includes(q));
+  const rows = S.chats.filter(c => cfMatch(c, S.cf)).filter(c => cqMatch(c, q));
   // ⏳ Oldest waiting first: unanswered chats by the age of their oldest open text (needs remind_chats_v3), then the rest newest first
   if (S.csort === 'oldest') rows.sort((a, b) => (a.oldest_open_at && b.oldest_open_at) ? String(a.oldest_open_at).localeCompare(String(b.oldest_open_at))
     : a.oldest_open_at ? -1 : b.oldest_open_at ? 1 : String(b.last_at).localeCompare(String(a.last_at)));
@@ -721,7 +721,7 @@ function chatsHtml(){
     <div class="cfil">${[['all', 'All'], ['new', 'Unread'], ['unread', 'Needs reply'], ['repair', '🔧 Repairs'], ['check', '💳 To check']]
         .concat(S.chats.some(c => c.lead) ? [['lead', '🆕 Install']] : [])
         .concat(S.chatsV3 ? [['paid', '💰 Paid?'], ['vendo', '🏪 Vendo'], ['care', '🤍 Care']] : [])
-        .map(([k, l]) => { const n = S.chats.filter(c => cfMatch(c, k)).length;   // every chip shows how many people it has
+        .map(([k, l]) => { const cq = (S.cq || '').trim().toLowerCase(), n = S.chats.filter(c => cfMatch(c, k) && cqMatch(c, cq)).length;   // counts follow the search word too   // every chip shows how many people it has
           return `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}${n ? ' ' + n : ''}</button>`; }).join('')}
       ${S.chatsV3 ? `<button type="button" class="tpl${S.csort === 'oldest' ? ' on' : ''}" data-csort="${S.csort === 'oldest' ? 'newest' : 'oldest'}" aria-pressed="${S.csort === 'oldest'}" title="Unanswered chats, longest waiting first">⏳ Oldest first</button>` : ''}</div>
     ${C.length ? C.map(c => `<button type="button" class="crow${isNew(c) ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
@@ -786,7 +786,8 @@ async function openChat(address){
   const cached = (S.chatCache || {})[address];   // opened before on this visit: show those messages at once, then refresh
   const hadChat = !!S.chat;
   S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, person:c.person, rows:cached || [], lastIn:c.last_in_id, loading:!cached }; S.pkind = null; S.pnm = null; S.ppl = null; S.vq = ''; S.vres = []; S.vnone = false; S.cform = null; S.cmenu = false; S.lres = []; render();
-  if (hadChat) navReplace(); else navPush();   // phone Back from this chat returns to the list
+  // phone Back from this chat returns to the list: a chat-to-chat switch replaces the chat step; otherwise a new step is added
+  if (hadChat && history.state && history.state.sv && history.state.chat) navReplace(); else navPush();
   if (cached) scrollChatEnd();
   await refreshChat(true); render(); scrollChatEnd();
 }
@@ -1014,8 +1015,8 @@ function plainNote(rows, r, who){
 let navApplying = false;
 const navUrl = () => location.pathname + location.search;
 function navState(){ return { sv:1, tab:S.tab, chat:S.chat ? S.chat.address : null }; }
-function navPush(){ if (navApplying) return; try { history.pushState(navState(), '', navUrl()); } catch (x) {} }
-function navReplace(){ if (navApplying) return; try { history.replaceState(navState(), '', navUrl()); } catch (x) {} }
+function navPush(extra){ if (navApplying) return; try { history.pushState(Object.assign(navState(), extra || {}), '', navUrl()); } catch (x) {} }
+function navReplace(extra){ if (navApplying) return; try { history.replaceState(Object.assign(navState(), extra || {}), '', navUrl()); } catch (x) {} }
 function navBase(){ try { history.replaceState({ sv:1, tab:S.tab, chat:null }, '', navUrl()); } catch (x) {} }   // also drops a #chat=… link
 window.addEventListener('popstate', e => {
   if (!S.pin) return;   // PIN pad showing: nothing to go back to inside the app
@@ -1024,7 +1025,7 @@ window.addEventListener('popstate', e => {
   try {
     S.cmenu = false; S.cform = null; S.open = null; if (st.tab) S.tab = st.tab;
     if (st.chat && S.chats && S.chats.some(c => c.address === st.chat)) { if (!S.chat || S.chat.address !== st.chat) openChat(st.chat); else render(); }
-    else { const was = !!S.chat; S.chat = null; render(); if (was) window.scrollTo(0, S.listY || 0); }
+    else { const was = !!S.chat; S.chat = null; render(); if (was) { const y = S.listY || 0; window.scrollTo(0, y); requestAnimationFrame(() => window.scrollTo(0, y)); } }   // again after layout settles (phone: the list came back ~1 row off)
   } finally { navApplying = false; }
 });
 // ↩ Reply / Open chat from a notification: open that person's chat (reply box ready). Works from the service worker
@@ -1441,7 +1442,14 @@ function render(){
   if (aeId) { const el = document.getElementById(aeId); if (el) { el.focus({ preventScroll:true }); if (aePos != null) try { el.setSelectionRange(aePos, aePos); } catch (x) {} } }
 }
 
-$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; const to = b.dataset.tab, moved = to !== S.tab; S.tab = to; if (moved) navPush(); if (to === 'chats' && S.chat) markSeen(S.chat.address, S.chat.lastIn); S.tabPicked = true; S.open = null; render(); window.scrollTo({ top:0 }); });
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; const to = b.dataset.tab, from = S.tab, moved = to !== from;
+  // Back history stays short: Chats is the home; any other tab is ONE step above it (switching between other tabs replaces
+  // that step); tapping 💬 Chats from such a step goes back down instead of adding another one
+  const st = history.state || {};
+  if (moved && to === 'chats' && st.sv && st.fromChats) { history.back(); return; }   // popstate draws Chats as it was
+  S.tab = to;
+  if (moved) { if (to !== 'chats' && st.sv && st.fromChats && st.tab !== 'chats') navReplace({ fromChats:true }); else navPush({ fromChats: from === 'chats' }); }
+  if (to === 'chats' && S.chat) markSeen(S.chat.address, S.chat.lastIn); S.tabPicked = true; S.open = null; render(); window.scrollTo({ top:0 }); });
 $('list').addEventListener('click', e => { if (e.target.closest('#tests')) { S.showTests = !S.showTests; render(); } });
 $('prev').onclick = () => { S.date = addDays(S.date, -1); S.open = null; reload(); };
 $('next').onclick = () => { S.date = addDays(S.date, 1); S.open = null; reload(); };
