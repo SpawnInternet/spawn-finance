@@ -162,17 +162,17 @@ body.chats header .day{display:none}   /* the day arrows are for the reminder li
 @media (min-width:900px){
   /* laptop: list and conversation side by side, each scrolling on its own; reply box always visible at the bottom */
   .chatwrap{display:grid;grid-template-columns:360px minmax(0,1fr);gap:18px;align-items:start}
-  .chatwrap .clist{height:78vh;overflow:auto;padding-right:4px}
-  .chatwrap .chat{height:78vh;min-height:0}
+  .chatwrap .clist{height:var(--chat-h, 78vh);overflow:auto;padding-right:4px}   /* --chat-h = window height below the tabs (set after each draw) */
+  .chatwrap .chat{height:var(--chat-h, 78vh);min-height:0}
   .chatwrap .chat .cbody{flex:1 1 auto;min-height:0;overflow:auto;padding-right:4px}
   .chatwrap .chat .compose{position:static}
-  .chatwrap .chat .compose .cpanel{max-height:44vh;overflow:auto}   /* a long form (📇 Save number) scrolls inside; the chat above keeps room to read */
+  .chatwrap .chat .compose .cpanel{max-height:max(140px, min(44vh, calc(var(--chat-h, 78vh) - 250px)));overflow:auto}   /* a long form (📇 Save number) scrolls inside; the chat above keeps room to read */
   .chatwrap .chat .cbody{min-height:110px}
   .chat .compose .cpanel [data-cx="psavep"]{position:sticky;bottom:0;z-index:1}   /* Save stays on screen even when many results push the form down */
   .chat .compose .pnp{grid-template-columns:1fr 1fr}   /* laptop: name and place side by side */
   .chat .compose .lres{max-height:84px;overflow:auto}   /* many search results scroll in their own box */
   .chat .chh .back{display:none}
-  .cempty{height:78vh}
+  .cempty{height:var(--chat-h, 78vh)}
 }
 @media (max-width:899px){
   /* phone: one screen at a time; header stays on top, reply box stays at the bottom */
@@ -1306,6 +1306,14 @@ $('list').addEventListener('click', async e => {
 });
 function smsHref(r){ return `sms:${r.phone}${IOS ? '&' : '?'}body=${encodeURIComponent(r.body)}`; }
 
+// laptop Chats: list + conversation exactly fill the window below the header, whatever its height (two rows of tabs,
+// a help box, the status bar), so the reply bar is never cut off at the bottom
+function chatFit(){
+  const cw = $('list').querySelector('.chatwrap'); if (!cw || !matchMedia('(min-width:900px)').matches) return;
+  const top = cw.getBoundingClientRect().top + window.scrollY;
+  document.documentElement.style.setProperty('--chat-h', Math.max(360, Math.floor(window.innerHeight - top - 14)) + 'px');
+}
+window.addEventListener('resize', () => { if (S.tab === 'chats') chatFit(); });
 function render(){
   titleCount(); document.body.classList.toggle('chats', S.tab === 'chats'); document.body.classList.toggle('inchat', S.tab === 'chats' && !!S.chat);
   const L = lists(), d = S.date, t = S.today;
@@ -1391,6 +1399,7 @@ function render(){
   const ob = box.querySelector('.chat .cbody'), oaddr = ob && ob.closest('[data-chat]') && ob.closest('[data-chat]').dataset.chat;
   const atEnd = !ob || ob.scrollHeight - ob.scrollTop - ob.clientHeight < 40, oldTop = ob ? ob.scrollTop : 0;
   box.innerHTML = h;
+  chatFit();
   const nb = box.querySelector('.chat .cbody');
   if (nb && matchMedia('(min-width:900px)').matches) nb.scrollTop = (atEnd || oaddr !== (S.chat && S.chat.address)) ? nb.scrollHeight : oldTop;
 }
