@@ -802,7 +802,7 @@ $('list').addEventListener('click', async e => {
     try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); S.lres = j.rows || []; if (!S.lres.length) toast('No subscriber found'); render(); const i = $('list').querySelector('.pform input'); if (i) i.value = q; }
     catch (x) { toast(x.message, 4000); } return;
   }
-  if (!mid && a !== 'block' && a !== 'send') { toast('They have not texted yet — nothing to act on'); return; }
+  if (!mid && a !== 'block' && a !== 'send' && !(a === 'psave' && ch.sub)) { toast('They have not texted yet — nothing to act on'); return; }
   let text = '';
   if (a === 'send') { text = box.querySelector('textarea').value.trim(); if (!text) { toast('Type a reply first'); return; } }
   if (a === 'block' && !confirm(b.dataset.why === 'stop' ? 'Stop texting this number?' : 'Mark as wrong number? It is never texted again.')) return;
@@ -825,7 +825,11 @@ $('list').addEventListener('click', async e => {
       await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'to_check', p_msg_id:mid, p_sub:ch.sub, p_text:ref }); toast('On To check — reminders paused 3 days');
     } else if (a === 'psave') {
       const d = box.querySelector('.pform input').value; if (!d) { toast('Pick a date'); b.disabled = false; return; }
-      await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:mid, p_action:'promise', p_date:d }); toast('Promise saved — quiet until ' + dLabel(d));
+      if (mid) await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:mid, p_action:'promise', p_date:d });
+      // no text from them (they called or came to the office): save the promise on the subscriber directly
+      else await rpc('remind_promise_v1', { p_pin:S.pin, p_sub:ch.sub, p_date:d, p_note:'phone call / walk-in' })
+        .catch(x => { throw new Error(/function|404/i.test(x.message) ? 'Promise without a text is not switched on yet' : x.message); });
+      toast('Promise saved — quiet until ' + dLabel(d));
     } else if (a === 'lpick') {
       await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'link', p_msg_id:mid, p_sub:+b.dataset.sub }); toast('Linked — number saved to that subscriber');
     } else if (a === 'job') {
