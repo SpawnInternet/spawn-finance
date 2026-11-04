@@ -166,9 +166,8 @@ body.chats header .day{display:none}   /* the day arrows are for the reminder li
   .chatwrap .chat{height:var(--chat-h, 78vh);min-height:0}
   .chatwrap .chat .cbody{flex:1 1 auto;min-height:0;overflow:auto;padding-right:4px}
   .chatwrap .chat .compose{position:static}
-  .chatwrap .chat .compose .cpanel{max-height:max(140px, min(44vh, calc(var(--chat-h, 78vh) - 250px)));overflow:auto}   /* a long form (📇 Save number) scrolls inside; the chat above keeps room to read */
-  .chatwrap .chat .cbody{min-height:110px}
-  .chat .compose .cpanel [data-cx="psavep"]{position:sticky;bottom:0;z-index:1}   /* Save stays on screen even when many results push the form down */
+  .chatwrap .chat .compose .cpanel{max-height:max(120px, calc(var(--chat-h, 78vh) - 215px));overflow:auto}   /* a long form gets all the room the chat can spare (scrolls inside only on a very short window) */
+  .chatwrap .chat .cbody{min-height:80px}
   .chat .compose .pnp{grid-template-columns:1fr 1fr}   /* laptop: name and place side by side */
   .chat .compose .lres{max-height:84px;overflow:auto}   /* many search results scroll in their own box */
   .chat .chh .back{display:none}
@@ -256,7 +255,8 @@ body.chats header .day{display:none}   /* the day arrows are for the reminder li
 .rform{margin-top:10px}.tpls{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .tpl{padding:6px 11px;border-radius:999px;font-size:13px;font-weight:700;background:var(--blue-l);color:var(--blue)}
 .tpl.on{background:var(--blue);color:#fff}   /* the chosen Chats filter */
-header .help{max-height:calc(100vh - 130px);overflow-y:auto;overscroll-behavior:contain}   /* ? and 🤖 panels scroll on a phone */
+header .help{max-height:min(45vh, calc(100vh - 130px));overflow-y:auto;overscroll-behavior:contain}   /* help never covers the whole window: the page below stays reachable */
+@media (min-width:900px) and (max-height:560px){ header{position:static} }   /* short laptop window: the header scrolls away so Chats can use the full height */   /* ? and 🤖 panels scroll on a phone */
 @media (min-width:900px){.tabs{flex-wrap:wrap;overflow:visible}}   /* laptop: every tab visible */
 .rform textarea{width:100%;box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--paper);padding:10px 12px;font:inherit;font-size:15px;margin-bottom:8px;resize:vertical}
 .savebar{position:sticky;bottom:0;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--paper) 70%,transparent)}
@@ -369,8 +369,8 @@ pad.addEventListener('click', e => { const b = e.target.closest('button'); if (b
 document.addEventListener('keydown', e => { if (!$('lock').classList.contains('hide')) { if (/^\d$/.test(e.key)) key(e.key); else if (e.key === 'Backspace') key('b'); } });
 function lock(msg){ S.pin = ''; typed = ''; clearInterval(pollT); clearInterval(lineT); $('linebar').className = 'linebar hide'; document.title = 'Spawn Text'; dots(); try { sessionStorage.removeItem(SESS); } catch (x) {} $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
 $('out').onclick = () => lock();
-$('helpbtn').onclick = () => $('helpbox').classList.toggle('hide');
-$('helpclose').onclick = () => $('helpbox').classList.add('hide');
+$('helpbtn').onclick = () => { $('helpbox').classList.toggle('hide'); chatFit(); };
+$('helpclose').onclick = () => { $('helpbox').classList.add('hide'); chatFit(); };
 
 /* 🤖 Robot test — remind_robot_test_v1 runs the robot's own checks on a typed text; read-only, sends nothing */
 $('botbtn').onclick = () => { $('botbox').classList.toggle('hide'); if (!$('botbox').classList.contains('hide')) $('bott').focus(); };
@@ -1310,8 +1310,9 @@ function smsHref(r){ return `sms:${r.phone}${IOS ? '&' : '?'}body=${encodeURICom
 // a help box, the status bar), so the reply bar is never cut off at the bottom
 function chatFit(){
   const cw = $('list').querySelector('.chatwrap'); if (!cw || !matchMedia('(min-width:900px)').matches) return;
-  const top = cw.getBoundingClientRect().top + window.scrollY;
-  document.documentElement.style.setProperty('--chat-h', Math.max(360, Math.floor(window.innerHeight - top - 14)) + 'px');
+  const pinned = getComputedStyle(document.querySelector('header')).position === 'sticky';
+  const top = pinned ? cw.getBoundingClientRect().top + window.scrollY : 0;   // header scrolls away (short window): the chat may use the whole height
+  document.documentElement.style.setProperty('--chat-h', Math.max(300, Math.floor(window.innerHeight - top - (pinned ? 14 : 44))) + 'px');
 }
 window.addEventListener('resize', () => { if (S.tab === 'chats') chatFit(); });
 function render(){
