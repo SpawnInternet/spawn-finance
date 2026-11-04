@@ -333,7 +333,7 @@ const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 1
   no_phone:'No number for this person yet.', bad_phone:'That is not a mobile number. Use 09XXXXXXXXX.', bad_date:'Pick a date from today on.',
   sending_off:'Automatic texting is OFF — turn it on to send replies.', empty_text:'Type a reply first.', not_found:'This text is gone — refresh.',
   no_subscriber:'This number is not matched to a subscriber — save their number first.',
-  empty_name:'Type their name first.',
+  empty_name:'Type their name first.', no_vendo:'That vendo is not active any more — search again.',
   no_lineman:'That lineman is not on the list any more — refresh.' };
 async function rpc(fn, args){
   let res; try { res = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' }, body:JSON.stringify(args) }); }
@@ -439,7 +439,8 @@ async function load(pin, date){
   S.repairs = rp; if (!rp && S.tab === 'jobs') S.tab = 'send';
 }
 function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); navBase(); render(); bell(); startPoll(); pushEnsure(); lineStart();
-  if (S.pendingChat) goChat(S.pendingChat.address, S.pendingChat.reply); }   // opened from a notification's ↩ Reply / Open chat
+  if (S.pendingChat) goChat(S.pendingChat.address, S.pendingChat.reply);
+  setTimeout(prefetchChats, 800); }   // opened from a notification's ↩ Reply / Open chat
 /* 📶 SMS phone status bar: is the office SMS phone receiving and sending? Asked every minute; shows nothing if the
    action is missing or the switch remind_line_bar is off. Red = a number that worked before just failed, or the queue is stuck. */
 let lineT = null;
@@ -468,7 +469,7 @@ async function lineLoad(){
   if (w.level === 'red') h += `<span class="lb-do">Open Spawn SMS Watch on the office phone (it restarts itself), check SMS is allowed and Battery is Unrestricted. Until then, replies typed on the phone are not recorded and Guard is off.</span>`;
   el.innerHTML = h; el.className = 'linebar ' + (j.level || '');
 }
-async function reload(){ try { await load(S.pin, S.date); render(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
+async function reload(){ try { await load(S.pin, S.date); render(); prefetchChats(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
 
 /* ── lists ── */
 const promised = r => !!(r.promise && r.promise.date >= S.date);   // open promise, date not yet passed
@@ -715,6 +716,7 @@ function chatHtml(ch){
   const rows = ch.rows || [], lastIn = ch.lastIn, openIds = rows.filter(r => r.dir === 'in' && r.status === 'received').map(r => r.id);
   const text = rows.filter(r => r.dir === 'in').map(r => r.body || '').join(' \n '), gd = guessDate(text), ref = refOf(text);
   const f = S.cform;
+  const pk = S.pkind || (ch.person && ch.person.kind) || 'sub';   // 📇 who is this: subscriber (search + link) or vendo / lead / staff / other
   return `<div class="chat" data-chat="${esc(ch.address)}">
     <div class="chh"><button type="button" class="back" data-cx="back" aria-label="Back to chats">‹</button>
       <span class="av" style="background:${avColor(ch.name || ch.address)}" aria-hidden="true">${esc((ch.name || '#').trim()[0].toUpperCase())}</span>
@@ -736,15 +738,18 @@ function chatHtml(ch){
       </div>` : ''}
       ${f === 'check' ? `<div class="pform"><input type="text" inputmode="numeric" value="${esc(ref)}" placeholder="GCash ref no." aria-label="GCash reference number"><button type="button" class="btn" data-cx="csave">Pause 3 days</button></div>` : ''}
       ${f === 'promise' ? `<div class="pform"><input type="date" min="${S.today}" value="${gd}" aria-label="Promised pay date"><button type="button" class="btn" data-cx="psave">Save date</button></div>` : ''}
-      ${f === 'link' ? `<div class="sent"><b>📇 Save number</b> — is this one of our subscribers? Search and tap the name:</div>
-        <div class="pform"><input type="search" id="lq" placeholder="Search subscriber name…" aria-label="Find subscriber" value="${esc(S.lq || '')}" autocomplete="off"></div>
+      ${f === 'link' ? `<div class="sent"><b>📇 Save number</b> — who is this?</div>
+        <div class="cchips">${[['sub', '👤 Subscriber'], ...Object.entries(PKIND)].map(([k, l]) => `<button type="button" class="tpl${pk === k ? ' on' : ''}" data-pkind="${k}" aria-pressed="${pk === k}">${l}</button>`).join('')}</div>
+        ${pk === 'sub' ? `<div class="pform"><input type="search" id="lq" placeholder="Search subscriber name…" aria-label="Find subscriber" value="${esc(S.lq || '')}" autocomplete="off"></div>
         <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || (S.lnone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>
-        <div class="sent" style="margin-top:10px">Not a subscriber? Save who it is:</div>
-        <div class="pform" style="display:grid;gap:8px">
+        <div class="sent">Tap the name to link this number to that subscriber.</div>`
+        : `<div class="pform" style="display:grid;gap:8px">
+          ${pk === 'vendo' && !S.vendoOff ? `<input type="search" id="vq" placeholder="Which vendo? Name, owner or code…" aria-label="Find vendo" value="${esc(S.vq || '')}" autocomplete="off">
+          <div class="lres">${(S.vres || []).map(v => `<button type="button" class="tpl" data-cx="vpick" data-vendo="${v.id}">🏪 ${esc(v.name || 'vendo')}${v.owner ? ' · ' + esc(v.owner) : ''}${v.area ? ' · ' + esc(v.area) : ''}</button>`).join('') || (S.vnone ? '<span class="sent">No vendo with that name</span>' : '')}</div>
+          <div class="sent">Tap the vendo to link this number to it — or type a name below and tap Save.</div>` : ''}
           <div class="pnp"><input type="text" id="pnm" placeholder="Name" aria-label="Name" maxlength="120" value="${esc(S.pnm != null ? S.pnm : (ch.person && ch.person.name) || '')}">
           <input type="text" id="ppl" placeholder="Place (optional)" aria-label="Place" maxlength="200" value="${esc(S.ppl != null ? S.ppl : (ch.person && ch.person.place) || '')}"></div>
-          <div class="cchips">${Object.entries(PKIND).map(([k, l]) => `<button type="button" class="tpl${(S.pkind || (ch.person && ch.person.kind) || 'vendo') === k ? ' on' : ''}" data-pkind="${k}" aria-pressed="${(S.pkind || (ch.person && ch.person.kind) || 'vendo') === k}">${l}</button>`).join('')}</div>
-          <button type="button" class="btn" data-cx="psavep">Save</button></div>` : ''}
+          <button type="button" class="btn" data-cx="psavep">Save</button></div>`}` : ''}
       ${f === 'more' ? `<div class="acts" style="margin:4px 0 8px"><button type="button" class="btn" data-cx="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-cx="block" data-why="stop">Stop texting them</button></div>` : ''}
       </div><div class="row"><button type="button" class="btn plus${S.cmenu ? ' on' : ''}" data-cx="menu" aria-label="Actions and ready answers" aria-expanded="${!!S.cmenu}">${S.cmenu ? '×' : '＋'}${openIds.length && !S.cmenu ? `<i>${openIds.length}</i>` : ''}</button><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message" enterkeyhint="send"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
     </div></div>`;
@@ -755,25 +760,44 @@ async function openChat(address){
   markSeen(address, c.last_in_id);   // opening = read: the blue number goes away
   const cached = (S.chatCache || {})[address];   // opened before on this visit: show those messages at once, then refresh
   const hadChat = !!S.chat;
-  S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, person:c.person, rows:cached || [], lastIn:c.last_in_id, loading:!cached }; S.pkind = null; S.pnm = null; S.ppl = null; S.cform = null; S.cmenu = false; S.lres = []; render();
+  S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, person:c.person, rows:cached || [], lastIn:c.last_in_id, loading:!cached }; S.pkind = null; S.pnm = null; S.ppl = null; S.vq = ''; S.vres = []; S.vnone = false; S.cform = null; S.cmenu = false; S.lres = []; render();
   if (hadChat) navReplace(); else navPush();   // phone Back from this chat returns to the list
   if (cached) scrollChatEnd();
-  await refreshChat(); render(); scrollChatEnd();
+  await refreshChat(true); render(); scrollChatEnd();
+}
+/* Opening a chat feels instant: after each load, the top chats' messages are fetched quietly in the background, one at a
+   time, only those not fetched yet or with a newer text. Kept in memory only — nothing is stored on the device. */
+async function prefetchChats(){
+  if (S.prefetching || !S.pin || !S.chats) return; S.prefetching = true;
+  try {
+    const cache = S.chatCache = S.chatCache || {}, at = S.cacheIn = S.cacheIn || {};
+    const todo = S.chats.filter(c => !cache[c.address] || at[c.address] !== c.last_in_id)
+      .sort((x, y) => (isNew(y) ? 1 : 0) - (isNew(x) ? 1 : 0)).slice(0, 12);
+    for (const c of todo) {
+      if (!S.pin || document.hidden) break;
+      if (S.chat && S.chat.address === c.address) continue;
+      const j = await rpc('remind_thread_v1', { p_pin:S.pin, p_address:c.address, p_sub:c.sub || null, p_limit:200 }).catch(() => null);
+      if (!j) break;   // no signal or the PIN stopped working: stop at once (never repeat a failing PIN)
+      cache[c.address] = j.rows || []; at[c.address] = c.last_in_id;
+    }
+  } finally { S.prefetching = false; }
 }
 function scrollChatEnd(){   // newest message in view: laptop scrolls the conversation pane, phone scrolls the page to the reply box
   const body = $('list').querySelector('.chat .cbody'), end = $('list').querySelector('.chat .compose');
   if (matchMedia('(min-width:900px)').matches) { if (body) body.scrollTop = body.scrollHeight; }
   else if (end) window.scrollTo(0, document.documentElement.scrollHeight);   // the reply box is sticky, so scroll the page itself to the bottom
 }
-async function refreshChat(){
+async function refreshChat(early){
   if (!S.chat) return;
   try {
     const me = S.chat;   // the chat this refresh is for (the office may open another one meanwhile)
     const j = await rpc('remind_thread_v1', { p_pin:S.pin, p_address:me.address, p_sub:me.sub || null, p_limit:200 });
     const rows = j.rows || [], ins = rows.filter(r => r.dir === 'in');
-    await Promise.all([engLoad(rows), sugLoad(rows)]);   // robot reading + suggestions at the same time (were one after the other)
     if (S.chat !== me) return;
     S.chat.rows = rows; (S.chatCache = S.chatCache || {})[S.chat.address] = rows; S.chat.lastIn = ins.length ? ins[ins.length - 1].id : S.chat.lastIn; S.chat.loading = false;
+    if (early) { render(); scrollChatEnd(); }   // opening a chat: show the messages now; robot labels + suggestions fill in after
+    await Promise.all([engLoad(rows), sugLoad(rows)]);   // robot reading + suggestions at the same time (were one after the other)
+    if (S.chat !== me) return;
     if (!document.hidden) markSeen(S.chat.address, S.chat.lastIn);   // a text that arrives while this chat is on screen counts as read
     const c = S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; S.chat.person = c.person; }
   } catch (x) { if (S.chat) S.chat.loading = false; toast(x.message, 4000); }
@@ -840,7 +864,7 @@ $('list').addEventListener('click', async e => {
     try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); S.lres = j.rows || []; if (!S.lres.length) toast('No subscriber found'); render(); const i = $('list').querySelector('.pform input'); if (i) i.value = q; }
     catch (x) { toast(x.message, 4000); } return;
   }
-  if (!mid && a !== 'block' && a !== 'send' && a !== 'psavep' && !(a === 'psave' && ch.sub)) { toast('They have not texted yet — nothing to act on'); return; }
+  if (!mid && a !== 'block' && a !== 'send' && a !== 'psavep' && a !== 'vpick' && !(a === 'psave' && ch.sub)) { toast('They have not texted yet — nothing to act on'); return; }
   let text = '';
   if (a === 'send') { text = box.querySelector('textarea').value.trim(); if (!text) { toast('Type a reply first'); return; } }
   if (a === 'block' && !confirm(b.dataset.why === 'stop' ? 'Stop texting this number?' : 'Mark as wrong number? It is never texted again.')) return;
@@ -874,6 +898,11 @@ $('list').addEventListener('click', async e => {
       await rpc('remind_person_save_v2', { p_pin:S.pin, p_address:ch.address, p_name:nm, p_place:pl || null, p_kind:k })
         .catch(x => { throw new Error(/function|404/i.test(x.message) ? 'Save number is not switched on yet' : x.message); });
       S.pkind = null; S.pnm = null; S.ppl = null; toast('Saved — ' + nm + ' · ' + (PKIND[k] || 'contact'));
+    } else if (a === 'vpick') {   // 📇 vendo owner: link the number to that vendo (remind_person_vendo_v1)
+      const nm = (S.pnm != null ? S.pnm : ($('pnm') && $('pnm').value) || '').trim();
+      const j = await rpc('remind_person_vendo_v1', { p_pin:S.pin, p_address:ch.address, p_vendo:+b.dataset.vendo, p_name:nm || null });
+      S.pkind = null; S.pnm = null; S.ppl = null; S.vq = ''; S.vres = []; S.vnone = false;
+      toast('Saved — ' + (j.name || nm || 'owner') + ' · 🏪 ' + (j.vendo || 'vendo') + (j.filled ? ' · number added to the vendo' : j.vendo_has_other_number ? ' · the vendo keeps its other number' : ''), 4000);
     } else if (a === 'lpick') {
       await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'link', p_msg_id:mid, p_sub:+b.dataset.sub }); toast('Linked — number saved to that subscriber');
     } else if (a === 'job') {
@@ -887,7 +916,14 @@ $('list').addEventListener('click', async e => {
 });
 let lqT = null;
 async function linkSearch(q){ try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); if ((S.lq || '').trim() !== q) return; S.lres = j.rows || []; S.lnone = !S.lres.length; render(); const i = $('lq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } catch (x) { toast(x.message, 4000); } }
+let vqT = null;
+async function vendoSearch(q){
+  try { const j = await rpc('remind_vendo_search_v1', { p_pin:S.pin, p_q:q }); if ((S.vq || '').trim() !== q) return;
+    S.vres = j.rows || []; S.vnone = !S.vres.length; render(); const i = $('vq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+  catch (x) { if (/function|404|schema cache/i.test(x.message)) { S.vendoOff = true; render(); } else toast(x.message, 4000); }   // not installed yet: the vendo box hides
+}
 $('list').addEventListener('input', e => { if (e.target.id === 'pnm') S.pnm = e.target.value; if (e.target.id === 'ppl') S.ppl = e.target.value;   // typed name/place survive a refresh (a new text re-draws the page)
+  if (e.target.id === 'vq') { S.vq = e.target.value; clearTimeout(vqT); const q = S.vq.trim(); if (q.length < 2) { S.vres = []; S.vnone = false; return; } vqT = setTimeout(() => vendoSearch(q), 350); }
   if (e.target.id === 'lq') { S.lq = e.target.value; clearTimeout(lqT); const q = S.lq.trim(); if (q.length < 2) { S.lres = []; S.lnone = false; return; } lqT = setTimeout(() => linkSearch(q), 350); } });
 $('list').addEventListener('keydown', e => { if (e.target.id === 'lq' && e.key === 'Enter') { e.preventDefault(); clearTimeout(lqT); const q = (S.lq || '').trim(); if (q.length >= 2) linkSearch(q); } });
 $('list').addEventListener('input', e => { if (e.target.id === 'cq') { S.cq = e.target.value; const pos = e.target.selectionStart; render(); const i = $('cq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } } });
