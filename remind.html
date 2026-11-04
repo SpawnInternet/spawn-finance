@@ -338,12 +338,17 @@ const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 1
   empty_name:'Type their name first.', no_vendo:'That vendo is not active any more — search again.',
   no_lineman:'That lineman is not on the list any more — refresh.' };
 async function rpc(fn, args){
+  // the remembered PIN just failed: no more calls with it for 15 s (fallbacks and parallel calls would each count as a
+  // wrong PIN — 8 in 10 min lock the whole office). Typing at the PIN pad is not blocked (that PIN is not S.pin yet).
+  if (args && args.p_pin && args.p_pin === S.pin && S.pinBadAt && Date.now() - S.pinBadAt < 15000) { const e = new Error(ERR.bad_pin); e.pin = true; throw e; }
   let res; try { res = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' }, body:JSON.stringify(args) }); }
   catch (e) { throw new Error('No signal — try again.'); }
   let j = null; try { j = await res.json(); } catch (e) {}
   if (!res.ok) { const m = (j && (j.message || j.hint)) || ('Error ' + res.status); throw new Error(ERR[m] || m); }
-  if (j && j.ok === false) throw new Error(ERR[j.error] || j.error || 'Not done');
-  if (args && args.p_pin && args.p_pin === S.pin) S.pinOkAt = Date.now();   // this PIN just passed: the next reload may ask everything at once
+  if (j && j.ok === false) { const e = new Error(ERR[j.error] || j.error || 'Not done');
+    if (j.error === 'bad_pin' || j.error === 'too_many_attempts') { e.pin = true; S.pinOkAt = 0; if (args && args.p_pin === S.pin) S.pinBadAt = Date.now(); }
+    throw e; }
+  if (args && args.p_pin && args.p_pin === S.pin) { S.pinOkAt = Date.now(); S.pinBadAt = 0; }   // this PIN just passed: the next reload may ask everything at once
   return j;
 }
 
@@ -405,6 +410,11 @@ async function load(pin, date){
   const r0 = fast ? null : await boardP;
   const day = r0 ? r0.date : (date || S.date);
   const chatP = fast && S.chat ? refreshChat() : null;   // the open conversation refreshes alongside
+  const chatsP = rpc('remind_chats_v3', { p_pin:pin, p_days:60 }).catch(x => x.pin ? null : rpc('remind_chats_v2', { p_pin:pin, p_days:60 })).catch(x => x.pin ? null : rpc('remind_chats_v1', { p_pin:pin, p_days:60 })).catch(() => null);   // v3 = oldest-waiting + labels; v2 = office number labelled   // 💬 Chats tab: the old Messages tab shows if missing
+  const peopleP = rpc('remind_people_v1', { p_pin:pin }).catch(() => null);   // 📇 saved names for numbers that are not subscribers (missing = no names)
+  // fast: first wave = Today's list + Chats (+ the open chat); the rest is asked only after the PIN passed again, so a PIN
+  // that stopped working costs at most a few wrong tries (rpc then blocks the remembered PIN for 15 s)
+  if (fast) await Promise.all([boardP, chatsP, peopleP, chatP]);
   const [a, ib, rp, lm, ch, pp, ops, r] = await Promise.all([
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:day }).catch(() => null),
     // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
@@ -413,8 +423,8 @@ async function load(pin, date){
     rpc('remind_repairs_v3', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_repairs_v2', { p_pin:pin, p_days:14 })).catch(() => rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null)),   // v3 = + extra repair words
     // Lineman list: v2 = names with optional number (sms flag); v1 = names with numbers only. Hidden if none set.
     rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
-    rpc('remind_chats_v3', { p_pin:pin, p_days:60 }).catch(() => rpc('remind_chats_v2', { p_pin:pin, p_days:60 })).catch(() => rpc('remind_chats_v1', { p_pin:pin, p_days:60 })).catch(() => null),   // v3 = oldest-waiting + labels; v2 = office number labelled   // 💬 Chats tab: the old Messages tab shows if missing
-    rpc('remind_people_v1', { p_pin:pin }).catch(() => null),   // 📇 saved names for numbers that are not subscribers (missing = no names)
+    chatsP,
+    peopleP,
     rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null),   // Checks tab: hidden if missing
     r0 || boardP,
     chatP,
@@ -453,7 +463,7 @@ const lineAgo = t => { if (!t) return 'none in 7 days'; const m = Math.max(0, Ma
 async function lineLoad(){
   const el = $('linebar'); if (!S.pin || !el) return;
   const j = await rpc('remind_line_status_v1', { p_pin:S.pin }).catch(() => null);
-  if (!j || !j.on) { el.className = 'linebar hide'; return; }
+  if (!j || !j.on) { const was = !el.classList.contains('hide'); el.className = 'linebar hide'; if (was && S.tab === 'chats') chatFit(); return; }
   const line = j.line_level || j.level, w = j.watch || { level:'none' };
   const icon = { red:'🔴', amber:'🟠', green:'🟢', night:'🌙' }[line] || '⚪';   // the bar colour (class) follows the overall level
   const head = { red:'SMS phone NOT sending', amber:'SMS phone: no customer text for 2 h', green:'SMS phone OK', night:'SMS phone (outside texting hours ' + esc(j.hours || '') + ')' }[line] || 'SMS phone';
@@ -470,6 +480,7 @@ async function lineLoad(){
   else if (line === 'amber') h += `<span class="lb-do">Could be a quiet time, or receiving is stuck: open SMS Gateway on the phone and check it says connected.</span>`;
   if (w.level === 'red') h += `<span class="lb-do">Open Spawn SMS Watch on the office phone (it restarts itself), check SMS is allowed and Battery is Unrestricted. Until then, replies typed on the phone are not recorded and Guard is off.</span>`;
   el.innerHTML = h; el.className = 'linebar ' + (j.level || '');
+  if (S.tab === 'chats') chatFit();   // the bar changes the header height: the laptop chat re-fits so the reply bar stays on screen
 }
 async function reload(){ try { await load(S.pin, S.date); render(); prefetchChats(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
 
@@ -686,13 +697,20 @@ const chatTags = c => [c.person && ({ vendo:'🏪', lead:'🆕', staff:'🧰' })
 // Seen (this device): opening a chat clears its blue number, like Messenger. The text still "needs reply"
 // (small gray mark, Needs reply filter) until someone answers or taps ✓ Handled. A newer text brings the number back.
 const SEEN = 'spawn-text-seen';
-const seenMap = () => { try { return JSON.parse(localStorage.getItem(SEEN) || '{}'); } catch (x) { return {}; } };
-function markSeen(address, id){ if (!address || !id) return; const m = seenMap(); if ((m[address] || 0) >= id) return; m[address] = id;
+// read once and kept in memory (it was parsed from storage on every check — slow typing on phones); another tab's change resets it
+let seenCache = null;
+const seenMap = () => { if (seenCache) return seenCache; try { seenCache = JSON.parse(localStorage.getItem(SEEN) || '{}') || {}; } catch (x) { seenCache = {}; } return seenCache; };
+window.addEventListener('storage', e => { if (e.key === SEEN) { seenCache = null; if (S.pin) render(); } });
+function markSeen(address, id){ if (!address || !id) return; const m = seenMap(); if ((m[address] || 0) >= id) return;
+  delete m[address]; m[address] = id;   // re-insert: the newest-seen numbers sit at the end, so the trim below drops the longest-unseen ones
   const keys = Object.keys(m); if (keys.length > 400) keys.slice(0, keys.length - 400).forEach(k => delete m[k]);
   try { localStorage.setItem(SEEN, JSON.stringify(m)); } catch (x) {} }
 const isNew = c => !!(c.unread && c.last_in_id && (seenMap()[c.address] || 0) < c.last_in_id);
 const waitAge = c => { if (!c.oldest_open_at) return ''; const h = Math.floor((Date.now() - new Date(c.oldest_open_at)) / 36e5); return h >= 48 ? Math.floor(h / 24) + 'd' : h >= 1 ? h + 'h' : '<1h'; };
 function chatsHtml(){
+  // a remembered filter whose chip is not shown now (e.g. 🆕 Install when there are no leads) would hide every chat: back to All
+  const cfKeys = ['all', 'new', 'unread', 'repair', 'check'].concat(S.chats.some(c => c.lead) ? ['lead'] : []).concat(S.chatsV3 ? ['paid', 'vendo', 'care'] : []);
+  if (!cfKeys.includes(S.cf)) S.cf = 'all';
   const C = chatRows(), open = S.chat;
   const list = `<div class="clist">
     <div class="acts" style="margin-bottom:10px"><button type="button" class="btn" data-cx="newtext">✏️ New text</button></div>
@@ -745,7 +763,8 @@ function chatHtml(ch){
       ${f === 'promise' ? `<div class="pform"><input type="date" min="${S.today}" value="${gd}" aria-label="Promised pay date"><button type="button" class="btn" data-cx="psave">Save date</button></div>` : ''}
       ${f === 'link' ? `<div class="sent"><b>📇 Save number</b> — who is this?</div>
         <div class="cchips">${[['sub', '👤 Subscriber'], ...Object.entries(PKIND)].map(([k, l]) => `<button type="button" class="tpl${pk === k ? ' on' : ''}" data-pkind="${k}" aria-pressed="${pk === k}">${l}</button>`).join('')}</div>
-        ${pk === 'sub' ? `<div class="pform"><input type="search" id="lq" placeholder="Search subscriber name…" aria-label="Find subscriber" value="${esc(S.lq || '')}" autocomplete="off"></div>
+        ${pk === 'sub' && !ch.lastIn ? `<div class="sent">They have not texted yet, so this chat cannot be linked to a subscriber yet — it works after their first text. To save the number for a subscriber now: <b>No number</b> tab → <b>📞 Add a number for anyone</b>.</div>`
+        : pk === 'sub' ? `<div class="pform"><input type="search" id="lq" placeholder="Search subscriber name…" aria-label="Find subscriber" value="${esc(S.lq || '')}" autocomplete="off"></div>
         <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || (S.lnone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>
         <div class="sent">Tap the name to link this number to that subscriber.</div>`
         : `<div class="pform" style="display:grid;gap:8px">
@@ -757,7 +776,7 @@ function chatHtml(ch){
           <input type="text" id="ppl" placeholder="Place (optional)" aria-label="Place" maxlength="200" value="${esc(S.ppl != null ? S.ppl : (ch.person && ch.person.place) || '')}"></div>
           <button type="button" class="btn" data-cx="psavep">Save</button>`}</div>`}` : ''}
       ${f === 'more' ? `<div class="acts" style="margin:4px 0 8px"><button type="button" class="btn" data-cx="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-cx="block" data-why="stop">Stop texting them</button></div>` : ''}
-      </div><div class="row"><button type="button" class="btn plus${S.cmenu || f ? ' on' : ''}" data-cx="menu" aria-label="${f ? 'Close this form' : 'Actions and ready answers'}" aria-expanded="${!!(S.cmenu || f)}">${S.cmenu || f ? '×' : '＋'}${openIds.length && !S.cmenu && !f ? `<i>${openIds.length}</i>` : ''}</button><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message" enterkeyhint="send"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
+      </div><div class="row"><button type="button" class="btn plus${S.cmenu || f ? ' on' : ''}" data-cx="menu" aria-label="${f ? 'Close this form' : 'Actions and ready answers'}" aria-expanded="${!!(S.cmenu || f)}">${S.cmenu || f ? '×' : '＋'}${openIds.length && !S.cmenu && !f ? `<i>${openIds.length}</i>` : ''}</button><textarea id="creply" rows="1" maxlength="480" aria-label="Reply" placeholder="Text message" enterkeyhint="send">${esc((S.draft || {})[ch.address] || '')}</textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
     </div></div>`;
 }
 async function openChat(address){
@@ -804,7 +823,7 @@ async function refreshChat(early){
     if (early) { render(); scrollChatEnd(); }   // opening a chat: show the messages now; robot labels + suggestions fill in after
     await Promise.all([engLoad(rows), sugLoad(rows)]);   // robot reading + suggestions at the same time (were one after the other)
     if (S.chat !== me) return;
-    if (!document.hidden) markSeen(S.chat.address, S.chat.lastIn);   // a text that arrives while this chat is on screen counts as read
+    if (!document.hidden && S.tab === 'chats') markSeen(S.chat.address, S.chat.lastIn);   // a text that arrives while this chat is ON SCREEN counts as read (not while another tab is showing)
     const c = S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; S.chat.person = c.person; }
   } catch (x) { if (S.chat) S.chat.loading = false; toast(x.message, 4000); }
 }
@@ -815,7 +834,7 @@ $('list').addEventListener('click', async e => {
   const sb = e.target.closest('[data-csort]'); if (sb) { S.csort = sb.dataset.csort; try { localStorage.setItem('remind_csort', S.csort); } catch (x) {} render(); return; }
   if (e.target.closest('[data-vmanual]')) { S.vq = ''; S.vres = []; S.vnone = false; render(); const i = $('pnm'); if (i) i.focus(); return; }   // 🏪 vendo not in the results: back to name + place + Save
   const pk = e.target.closest('[data-pkind]'); if (pk) { S.pkind = pk.dataset.pkind; render(); const i = $('vq') || $('lq') || $('pnm'); if (i) i.focus(); return; }   // typed name/place are kept in S.pnm / S.ppl; the cursor goes to that choice's first box
-  const tp = e.target.closest('[data-ctpl]'); if (tp) { const txt = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = txt; ta.focus(); } return; }
+  const tp = e.target.closest('[data-ctpl]'); if (tp) { const txt = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); S.cmenu = false; (S.draft = S.draft || {})[S.chat.address] = txt; render(); const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = txt; ta.focus(); } return; }
   const eb = e.target.closest('[data-eng]'); if (eb) { S.engOpen = S.engOpen === +eb.dataset.eng ? null : +eb.dataset.eng; keepScroll(render); return; }
   const lb = e.target.closest('[data-elab]'); if (lb) {   // 🏷 teach the engine; tapping the saved one again removes it
     const id = +lb.dataset.emid, x = S.engR && S.engR[id]; if (!x) return;
@@ -918,6 +937,7 @@ $('list').addEventListener('click', async e => {
     } else if (a === 'block') {
       await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'block', p_msg_id:mid, p_sub:ch.sub, p_text:b.dataset.why }); toast('Number blocked');
     }
+    if (a === 'send' && S.draft) delete S.draft[ch.address];   // sent: the draft is done
     S.cform = null; S.lres = []; S.cmenu = false; await reload(); scrollChatEnd();
   } catch (x) { toast(x.message, 4000); b.disabled = false; }
 });
@@ -931,10 +951,12 @@ async function vendoSearch(q){
     S.vres = j.rows || []; S.vnone = !S.vres.length; render(); const i = $('vq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
   catch (x) { if (/function|404|schema cache/i.test(x.message)) { S.vendoOff = true; render(); } else toast(x.message, 4000); }   // not installed yet: the vendo box hides
 }
-$('list').addEventListener('input', e => { if (e.target.id === 'pnm') S.pnm = e.target.value; if (e.target.id === 'ppl') S.ppl = e.target.value;   // typed name/place survive a refresh (a new text re-draws the page)
+$('list').addEventListener('input', e => { if (e.target.id === 'creply' && S.chat) (S.draft = S.draft || {})[S.chat.address] = e.target.value;   // the reply being typed survives every re-draw (new texts, refresh) — memory only
+  if (e.target.id === 'pnm') S.pnm = e.target.value; if (e.target.id === 'ppl') S.ppl = e.target.value;   // typed name/place survive a refresh (a new text re-draws the page)
   if (e.target.id === 'vq') { S.vq = e.target.value; clearTimeout(vqT); const q = S.vq.trim(); if (q.length < 2) { const had = (S.vres || []).length || S.vnone; S.vres = []; S.vnone = false; if (had) redrawKeep('vq'); return; } vqT = setTimeout(() => vendoSearch(q), 350); }
   if (e.target.id === 'lq') { S.lq = e.target.value; clearTimeout(lqT); const q = S.lq.trim(); if (q.length < 2) { const had = (S.lres || []).length || S.lnone; S.lres = []; S.lnone = false; if (had) redrawKeep('lq'); return; } lqT = setTimeout(() => linkSearch(q), 350); } });
-$('list').addEventListener('keydown', e => { if (e.target.id === 'lq' && e.key === 'Enter') { e.preventDefault(); clearTimeout(lqT); const q = (S.lq || '').trim(); if (q.length >= 2) linkSearch(q); } });
+$('list').addEventListener('keydown', e => { if (e.target.id === 'vq' && e.key === 'Enter') { e.preventDefault(); clearTimeout(vqT); const q = (S.vq || '').trim(); if (q.length >= 2) vendoSearch(q); return; }
+  if (e.target.id === 'lq' && e.key === 'Enter') { e.preventDefault(); clearTimeout(lqT); const q = (S.lq || '').trim(); if (q.length >= 2) linkSearch(q); } });
 $('list').addEventListener('input', e => { if (e.target.id === 'cq') { S.cq = e.target.value; const pos = e.target.selectionStart; render(); const i = $('cq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } } });
 // Enter sends (laptop and phone, like Messenger); Shift+Enter = new line. (✏️ New text already sends on Enter via its form.)
 $('list').addEventListener('keydown', e => {
@@ -971,13 +993,20 @@ function notify(rows){
   }
 }
 function plainNote(rows, r, who){
-  {
+  try {
     const n = new Notification(rows.length > 1 ? `${rows.length} new texts — Spawn Text` : `${who} — Spawn Text`, { body: rows.length > 1 ? rows.map(x => (x.name || x.from) + ': ' + (x.body || '')).join('\n').slice(0, 200) : (r.body || ''), tag:'spawn-text', renotify:true });
     // open the person's conversation in 💬 Chats (the old Messages cards only when Chats is not available)
     n.onclick = () => { window.focus(); S.q = ''; n.close();
       if (!S.chats) { S.tab = 'replies'; render(); return; }
       S.tab = 'chats'; const a = rows.length === 1 && r.from;
       if (a && S.chats.some(c => c.address === a)) openChat(a); else render(); };
+  } catch (x) {
+    // Android Chrome has no "new Notification()" (Illegal constructor): show it through the service worker instead
+    const title = rows.length > 1 ? `${rows.length} new texts — Spawn Text` : `${who} — Spawn Text`;
+    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration('./remind-sw.js').then(reg => {
+      if (reg) reg.showNotification(title, { body: rows.length > 1 ? rows.map(x => (x.name || x.from) + ': ' + (x.body || '')).join('\n').slice(0, 300) : (r.body || ''),
+        tag:'spawn-multi', renotify:true, icon:'./remind-icon-192.png', data:{ url:'./remind.html#chats' } });
+    }).catch(() => {});
   }
 }
 /* 📱 Phone Back button, like other apps: Back closes the open chat (back to the list) or returns to the tab you came from.
@@ -1004,7 +1033,9 @@ function goChat(address, reply){
   if (!S.pin || !S.chats) { S.pendingChat = { address, reply }; return; }
   S.pendingChat = null; S.tab = 'chats'; S.tabPicked = true; S.cq = '';
   const done = () => { if (reply) { const ta = $('list').querySelector('.chat textarea'); if (ta) ta.focus(); } };
-  if (S.chats.some(c => c.address === address)) openChat(address).then(done); else { render(); toast('That conversation is not in the list yet — refresh'); }
+  if (S.chats.some(c => c.address === address)) { openChat(address).then(done); return; }
+  // a brand-new number (the pop-up came before the list refreshed): refresh once, then open it
+  render(); reload().then(() => { if (S.chats && S.chats.some(c => c.address === address)) openChat(address).then(done); else toast('That conversation is not in the list yet — refresh'); });
 }
 { const m = /^#chat=(09\d{9})(&reply=1)?$/.exec(location.hash); if (m) S.pendingChat = { address:m[1], reply:!!m[2] }; }
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
@@ -1018,7 +1049,7 @@ async function poll(){
   try {
     const j = await rpc('remind_inbox_v2', { p_pin:S.pin, p_days:1 }).catch(() => rpc('remind_inbox_v1', { p_pin:S.pin, p_days:1 }));
     const fresh = (j.rows || []).filter(r => r.id > lastInId && r.status === 'received');
-    if (fresh.length && lastInId) { notify(fresh); await reload(); }
+    if (fresh.length && lastInId) { try { notify(fresh); } catch (x) {} await reload(); }   // a failing pop-up must never stop the refresh
     lastInId = Math.max(lastInId, ...(j.rows || []).map(r => r.id));
   } catch (x) { if (/PIN/.test(x.message)) lock(x.message); }
 }
@@ -1399,13 +1430,18 @@ function render(){
   // message; scrolled up it stays where it was; a chat drawn fresh starts at the newest (it used to jump to the oldest)
   const ob = box.querySelector('.chat .cbody'), oaddr = ob && ob.closest('[data-chat]') && ob.closest('[data-chat]').dataset.chat;
   const atEnd = !ob || ob.scrollHeight - ob.scrollTop - ob.clientHeight < 40, oldTop = ob ? ob.scrollTop : 0;
+  const pageEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 40;   // phone: was the page at the bottom (newest message)?
+  // the box being typed in keeps the cursor after the re-draw (reply, name, search) — the text itself is kept in S
+  const ae = document.activeElement, aeId = ae && box.contains(ae) && ae.id, aePos = aeId && typeof ae.selectionStart === 'number' ? ae.selectionStart : null;
   box.innerHTML = h;
   chatFit();
-  const nb = box.querySelector('.chat .cbody');
-  if (nb && matchMedia('(min-width:900px)').matches) nb.scrollTop = (atEnd || oaddr !== (S.chat && S.chat.address)) ? nb.scrollHeight : oldTop;
+  const nb = box.querySelector('.chat .cbody'), wide = matchMedia('(min-width:900px)').matches;
+  if (nb && wide) nb.scrollTop = (atEnd || oaddr !== (S.chat && S.chat.address)) ? nb.scrollHeight : oldTop;
+  if (nb && !wide && pageEnd && oaddr === (S.chat && S.chat.address)) window.scrollTo(0, document.documentElement.scrollHeight);   // phone: a new text stays in view above the reply bar
+  if (aeId) { const el = document.getElementById(aeId); if (el) { el.focus({ preventScroll:true }); if (aePos != null) try { el.setSelectionRange(aePos, aePos); } catch (x) {} } }
 }
 
-$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; const to = b.dataset.tab, moved = to !== S.tab; S.tab = to; if (moved) navPush(); S.tabPicked = true; S.open = null; render(); window.scrollTo({ top:0 }); });
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; const to = b.dataset.tab, moved = to !== S.tab; S.tab = to; if (moved) navPush(); if (to === 'chats' && S.chat) markSeen(S.chat.address, S.chat.lastIn); S.tabPicked = true; S.open = null; render(); window.scrollTo({ top:0 }); });
 $('list').addEventListener('click', e => { if (e.target.closest('#tests')) { S.showTests = !S.showTests; render(); } });
 $('prev').onclick = () => { S.date = addDays(S.date, -1); S.open = null; reload(); };
 $('next').onclick = () => { S.date = addDays(S.date, 1); S.open = null; reload(); };
@@ -1466,6 +1502,7 @@ $('list').addEventListener('click', async e => {
 });
 $('list').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
+  if (e.target.id === 'vq' || e.target.id === 'lq') return;   // 📇 searches: Enter searches (own handler) — it must never press a result or Save (it used to save the first vendo result)
   const f = e.target.closest('.nform,.pform'); if (!f) return;
   const b = f.querySelector('button'); if (b) b.click();
 });

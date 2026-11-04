@@ -31,7 +31,9 @@ self.addEventListener('notificationclick', e => {
   const url = address ? `${page}#chat=${address}${reply ? '&reply=1' : ''}` : new URL(d.url || './remind.html#chats', self.location.href).href;
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
     for (const c of list) {
-      if (c.url.split('#')[0] === page && 'focus' in c) {
+      // same page even if opened as /remind or with ?v=… (only the path counts, ".html" optional)
+      const same = (u) => { try { const x = new URL(u); return x.origin + x.pathname.replace(/\.html$/, ''); } catch (_) { return u; } };
+      if (same(c.url) === same(page) && 'focus' in c) {
         // the open Spawn Text tab keeps its PIN session: tell it which chat to open instead of reloading it
         if (address) c.postMessage({ type: 'spawn-open-chat', address, reply });
         return c.focus();
