@@ -61,6 +61,13 @@ input{font:inherit;color:inherit}
 /* ── top ── */
 header{position:sticky;top:0;z-index:20;background:var(--paper);padding-top:env(safe-area-inset-top,0px)}
 .top{display:flex;align-items:center;gap:10px;padding:14px 0 6px}
+/* 📶 SMS phone status bar (remind_line_status_v1; hidden while the switch remind_line_bar is off) */
+.linebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;line-height:1.35;padding:7px 10px;border-radius:10px;margin:0 0 6px;border:1px solid var(--line);background:var(--card);color:var(--ink-2)}
+.linebar b{color:var(--ink)}
+.linebar.red{background:var(--utang-l);border-color:var(--utang);color:var(--ink)}
+.linebar.amber{background:var(--late-l);border-color:var(--late);color:var(--ink)}
+.linebar.green{background:var(--done-l);border-color:var(--done)}
+.linebar .lb-do{flex-basis:100%;font-size:12px;color:var(--ink-2)}
 .top .brand b,.top .brand span{font-size:21px}
 .who{margin-left:auto;font-size:13px;color:var(--muted)}
 .who button{color:var(--blue);font-weight:600;margin-left:6px}
@@ -111,6 +118,10 @@ main{padding:4px 0 28px}
 .th .eng.urg{border-color:var(--late);color:var(--late)}.th .eng.lab{border-style:solid;border-color:var(--done);color:var(--done)}
 .th .engp{align-self:stretch;margin:0 0 8px;padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:13px}
 .th .engp ul{margin:6px 0;padding-left:18px}.th .engp li{margin-bottom:3px}
+.th .sugc{align-self:flex-start;max-width:88%;margin:0 0 8px 4px;padding:8px 10px;border-radius:12px;background:var(--card);border:1px dashed var(--muted);font-size:13px}   /* 💡 suggestion: a person decides */
+.th .sugc .sgl{font-size:11.5px;font-weight:700;color:var(--ink-2);margin-bottom:3px}.th .sugc .sgt{margin-bottom:6px}
+.th .sugc input{display:block;width:100%;box-sizing:border-box;margin:0 0 6px;padding:7px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);font:inherit;font-size:14px}
+.th .sugc .err{color:var(--late);font-size:12px;margin:-2px 0 6px}
 .q{width:100%;height:42px;padding:0 14px;border-radius:12px;font-size:15px;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line) inset;margin-bottom:10px}
 #bell{min-width:42px;height:42px;border-radius:12px;font-size:18px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset}
 /* 💬 Chats: list like a phone's messaging app; the open conversation beside it on a wide screen */
@@ -122,6 +133,8 @@ main{padding:4px 0 28px}
 .crow.unread .cm small{color:var(--ink);font-weight:600}
 .crow .ct{flex:none;text-align:right;font-size:12px;color:var(--muted);display:grid;justify-items:end;gap:4px}
 .crow .ub{min-width:20px;height:20px;border-radius:10px;background:var(--blue);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;padding:0 6px}
+.crow .nr{font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:9px;padding:1px 7px}
+.crow .ct .wait{font-size:11px;color:var(--late);font-weight:700}   /* ⏳ how long the oldest unanswered text has waited */
 .crow.on{background:var(--blue-l);border-radius:12px}
 .chat{display:flex;flex-direction:column;min-height:50vh}
 .chat .chh{display:flex;align-items:center;gap:10px;padding:4px 0 10px;border-bottom:1px solid var(--line)}
@@ -260,11 +273,12 @@ header .help{max-height:calc(100vh - 130px);overflow-y:auto;overscroll-behavior:
 <div id="app" class="hide">
   <header><div class="wrap">
     <div class="top"><div class="brand"><b>Spawn</b><span>Text</span></div><div class="who"><span id="uname"></span><button type="button" id="bell" aria-label="New-text alerts" title="New-text alerts: pop-up + ringtone">🔔</button><button type="button" id="botbtn" aria-label="Robot test" title="Robot test: what would the robot do with a text?">🤖</button><button type="button" id="helpbtn" aria-label="How to use" title="How to use">?</button><button type="button" id="out">Lock</button></div></div>
+    <div id="linebar" class="linebar hide" role="status" aria-live="polite"></div>
     <div id="helpbox" class="help hide" role="dialog" aria-label="How to use Spawn Text">
       <b>Unsaon paggamit ang Spawn Text</b>
       <ol>
         <li><b>Today's list</b> — kinsa ang ma-remind karon. <b>Automatic na ang text</b> (8:05 AM), ayaw na i-text sa phone. Bayad na? → <b>Already paid</b>. Mosaad og petsa? → <b>Promised</b>.</li>
-        <li><b>💬 Chats</b> — sama sa Messages sa phone. Pindota ang tawo → makita ang tanan nga text (ila ug ato), reply sa ubos (Enter = send, Shift+Enter = bag-ong linya). Mga chip: <b>Handled</b>, <b>To check</b> (GCash ref), <b>Promised</b> (petsa), <b>Link</b> (wala pa nakilala ang number), <b>Job order</b>. <b>✏️ New text</b> = text kang bisan kinsa. Bag-ong text → 🔔 pop-up ug ringtone.</li>
+        <li><b>💬 Chats</b> — sama sa Messages sa phone. Pindota ang tawo → makita ang tanan nga text (ila ug ato), reply sa ubos (Enter = send, Shift+Enter = bag-ong linya). Mga chip: <b>Handled</b>, <b>To check</b> (GCash ref), <b>Promised</b> (petsa), <b>Link</b> (wala pa nakilala ang number), <b>Job order</b>. <b>✏️ New text</b> = text kang bisan kinsa. Bag-ong text → 🔔 pop-up ug ringtone. Ang asul nga numero = <b>wala pa matubag</b> (dili mawala kung ablihan ra): mawala kung mo-reply (dinhi o sa phone) o pindota <b>✓ Handled</b> sa ibabaw sa chat.</li>
         <li><b>To check</b> — GCash ref nga i-verify. Kung makita na ang bayad sa libro, <b>Confirmed</b> (o automatic). Number nga dili mo-work → <b>Block number</b>.</li>
         <li><b>Sent &amp; coming</b> — kinsa na ang na-text, ug kinsa ang sunod (pindota ▶ para ugma).</li>
         <li><b>🔧 Job orders</b> — mga reklamo nga guba / walay internet; 🏪 = vendo (di mahulugan, validity). <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b> (naay restart steps, lineman, installer), dayon <b>✅ Done</b> kung naayo na.</li>
@@ -343,7 +357,7 @@ async function key(k){
 }
 pad.addEventListener('click', e => { const b = e.target.closest('button'); if (b) key(b.dataset.k); });
 document.addEventListener('keydown', e => { if (!$('lock').classList.contains('hide')) { if (/^\d$/.test(e.key)) key(e.key); else if (e.key === 'Backspace') key('b'); } });
-function lock(msg){ S.pin = ''; typed = ''; clearInterval(pollT); document.title = 'Spawn Text'; dots(); try { sessionStorage.removeItem(SESS); } catch (x) {} $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
+function lock(msg){ S.pin = ''; typed = ''; clearInterval(pollT); clearInterval(lineT); $('linebar').className = 'linebar hide'; document.title = 'Spawn Text'; dots(); try { sessionStorage.removeItem(SESS); } catch (x) {} $('app').classList.add('hide'); $('lock').classList.remove('hide'); $('perr').textContent = msg || ''; }
 $('out').onclick = () => lock();
 $('helpbtn').onclick = () => $('helpbox').classList.toggle('hide');
 $('helpclose').onclick = () => $('helpbox').classList.add('hide');
@@ -384,9 +398,11 @@ async function load(pin, date){
     rpc('remind_repairs_v3', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_repairs_v2', { p_pin:pin, p_days:14 })).catch(() => rpc('remind_repairs_v1', { p_pin:pin, p_days:14 }).catch(() => null)),   // v3 = + extra repair words
     // Lineman list: v2 = names with optional number (sms flag); v1 = names with numbers only. Hidden if none set.
     rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
-    rpc('remind_chats_v2', { p_pin:pin, p_days:60 }).catch(() => rpc('remind_chats_v1', { p_pin:pin, p_days:60 })).catch(() => null),   // v2 = office number labelled   // 💬 Chats tab: the old Messages tab shows if missing
+    rpc('remind_chats_v3', { p_pin:pin, p_days:60 }).catch(() => rpc('remind_chats_v2', { p_pin:pin, p_days:60 })).catch(() => rpc('remind_chats_v1', { p_pin:pin, p_days:60 })).catch(() => null),   // v3 = oldest-waiting + labels; v2 = office number labelled   // 💬 Chats tab: the old Messages tab shows if missing
   ]);
   S.chats = ch ? (ch.rows || []) : null; if (!S.chats && S.tab === 'chats') S.tab = 'send';
+  S.chatsV3 = !!(ch && ch.v >= 3);
+  if (S.csort === undefined) { try { S.csort = localStorage.getItem('remind_csort') || 'newest'; } catch (x) { S.csort = 'newest'; } }
   if (S.chats && !S.tabPicked && S.tab === 'send') S.tab = 'chats';   // Chats opens first (unless a tab or #jobs was chosen)
   S.tabPicked = true;
   if (S.chat) await refreshChat();   // keep the open conversation fresh
@@ -401,7 +417,36 @@ async function load(pin, date){
   if (S.thread && !(ib && ib.rows.some(r => (r.from || 'id' + r.id) === S.thread.key))) S.thread = null;
   S.repairs = rp; if (!rp && S.tab === 'jobs') S.tab = 'send';
 }
-function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); bell(); startPoll(); pushEnsure(); }
+function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); bell(); startPoll(); pushEnsure(); lineStart();
+  if (S.pendingChat) goChat(S.pendingChat.address, S.pendingChat.reply); }   // opened from a notification's ↩ Reply / Open chat
+/* 📶 SMS phone status bar: is the office SMS phone receiving and sending? Asked every minute; shows nothing if the
+   action is missing or the switch remind_line_bar is off. Red = a number that worked before just failed, or the queue is stuck. */
+let lineT = null;
+function lineStart(){ clearInterval(lineT); lineLoad(); lineT = setInterval(lineLoad, 60000); }
+const lineAgo = t => { if (!t) return 'none in 7 days'; const m = Math.max(0, Math.round((Date.now() - new Date(t)) / 60000));
+  const hm = new Date(t).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' });
+  return hm + ' (' + (m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min ago' : Math.floor(m / 1440) + ' d ago') + ')'; };
+async function lineLoad(){
+  const el = $('linebar'); if (!S.pin || !el) return;
+  const j = await rpc('remind_line_status_v1', { p_pin:S.pin }).catch(() => null);
+  if (!j || !j.on) { el.className = 'linebar hide'; return; }
+  const line = j.line_level || j.level, w = j.watch || { level:'none' };
+  const icon = { red:'🔴', amber:'🟠', green:'🟢', night:'🌙' }[line] || '⚪';   // the bar colour (class) follows the overall level
+  const head = { red:'SMS phone NOT sending', amber:'SMS phone: no customer text for 2 h', green:'SMS phone OK', night:'SMS phone (outside texting hours ' + esc(j.hours || '') + ')' }[line] || 'SMS phone';
+  let h = `<span>${icon} <b>${head}</b></span><span>· last text in ${lineAgo(j.last_in)}</span><span>· last delivered ${lineAgo(j.last_ok_out)}</span>`;
+  if (j.fails) h += `<span>· ${j.fails} failed since</span>`;
+  if (j.queued) h += `<span>· ${j.queued} waiting to send${j.oldest_queued_min ? ' (oldest ' + j.oldest_queued_min + ' min)' : ''}</span>`;
+  // 📱 office-phone reporter (Spawn SMS Watch v1.6+); 'none' = not set up yet → not shown
+  if (w.level !== 'none') {
+    const wi = { red:'🔴', amber:'🟠', green:'🟢', night:'🌙' }[w.level] || '⚪';
+    const wt = w.status === 'no_sms' ? 'lost SMS access' : w.level === 'red' ? 'STOPPED' : w.status === 'ok_no_guard' ? 'running, Guard OFF' : 'running';
+    h += `<span class="lb-do">${wi} <b>Office-phone reporter ${wt}</b> · last seen ${lineAgo(w.last_beat)}${w.v ? ' · v' + esc(w.v) : ''}</span>`;
+  }
+  if (line === 'red') h += `<span class="lb-do">Check the SMS phone: SMS Gateway open, permissions (SMS, Phone) allowed, internet on. Reminders and replies are not going out.</span>`;
+  else if (line === 'amber') h += `<span class="lb-do">Could be a quiet time, or receiving is stuck: open SMS Gateway on the phone and check it says connected.</span>`;
+  if (w.level === 'red') h += `<span class="lb-do">Open Spawn SMS Watch on the office phone (it restarts itself), check SMS is allowed and Battery is Unrestricted. Until then, replies typed on the phone are not recorded and Guard is off.</span>`;
+  el.innerHTML = h; el.className = 'linebar ' + (j.level || '');
+}
 async function reload(){ try { await load(S.pin, S.date); render(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
 
 /* ── lists ── */
@@ -528,6 +573,7 @@ function threadHtml(th){
     const tag = { auto:'🤖 automatic', rem:'📅 reminder', note:'📣 to office', test:'🧪 test copy — went to the office test number only', human:r.by === 'phone' ? '📱 typed on the office phone' : '👤 ' + esc(r.by || 'office') }[who] || '';
     h += `<div class="tb ${out ? 'out ' + who : 'in'}${cont ? ' cont' : ''}${r.status === 'failed' ? ' failed' : ''}">${esc(r.body || '')}${showSmall ? `<small>${out ? tag + (KIND[r.kind] && who !== 'human' ? ' · ' + esc(KIND[r.kind].replace(/^(auto-reply|reminder|alert to office) · /, '')) : '') + ' · ' : ''}${tLabel(r.at)}${out ? ' · ' + esc(ST[r.status] || r.status) + (r.error ? ' — ' + esc(r.error) : '') : ''}</small>` : ''}</div>`;
     if (th.eng && !out && S.engR && S.engR[r.id]) h += engHtml(S.engR[r.id]);
+    if (th.eng && !out && r.status === 'received' && S.sugR && S.sugR[r.id] && !(S.sugNo || {})[r.id]) h += sugHtml(S.sugR[r.id]);
   });
   return h + '</div>';
 }
@@ -564,6 +610,31 @@ async function engLoad(rows){   // only texts not read yet; one call per new bat
   S.engI = j.intents || [];
   for (const x of j.rows || []) S.engR[x.id] = x;
 }
+/* 💡 Suggestion box (remind_suggest_v1): under an open customer text, a suggested reply or "maybe a name". A person decides —
+   Use only fills the reply box (edit, then Send = a human reply); Save to person card first shows editable name + place.
+   Shows nothing when remind_suggest is off or the action is not installed. Never sends or saves by itself. */
+function sugHtml(x){
+  if (x.kind === 'name') {
+    if (x.saved) return `<div class="sugc"><div class="sgl">👤 Saved to person card</div><div class="sgt">${esc(x.saved)}</div></div>`;
+    if (S.sugName === x.id) return `<div class="sugc"><div class="sgl">👤 Check the name before saving</div>
+      <input id="sgn" maxlength="120" value="${esc(x.name)}" aria-label="Name to save"><input id="sgp" maxlength="200" placeholder="Place (purok, barangay)" aria-label="Place">
+      <div class="err" id="sgerr" role="alert"></div>
+      <div class="cchips"><button type="button" class="tpl" data-ssave="${x.id}">Save</button><button type="button" class="tpl" data-scancel="${x.id}">Cancel</button></div></div>`;
+    return `<div class="sugc"><div class="sgl">👤 Maybe a name</div><div class="sgt">${esc(x.name)}</div>
+      <div class="cchips"><button type="button" class="tpl" data-sname="${x.id}">Save to person card</button><button type="button" class="tpl" data-sno="${x.id}">Not right</button></div></div>`;
+  }
+  return `<div class="sugc"><div class="sgl">💡 Suggested reply · ${esc(x.label || '')}</div><div class="sgt">${esc(x.text)}</div>
+    <div class="cchips"><button type="button" class="tpl" data-suse="${x.id}">Use</button><button type="button" class="tpl" data-sno="${x.id}">Not right</button></div></div>`;
+}
+async function sugLoad(rows){   // open customer texts only; asked again on every refresh because texts get handled
+  if (S.sugOff) return;
+  const ids = rows.filter(r => r.dir === 'in' && r.status === 'received').map(r => r.id).slice(-40);
+  if (!ids.length) return;
+  const j = await rpc('remind_suggest_v1', { p_pin:S.pin, p_ids:ids }).catch(() => null);
+  if (!j || !j.on) { S.sugOff = true; return; }
+  S.sugR = S.sugR || {};
+  for (const x of j.rows || []) if (!(S.sugR[x.id] && S.sugR[x.id].saved)) S.sugR[x.id] = x;
+}
 const keepScroll = fn => {   // re-render without jumping: same spot in the conversation and the page
   const b = $('list').querySelector('.chat .cbody'), y = b ? b.scrollTop : 0, wy = window.scrollY;
   fn(); const b2 = $('list').querySelector('.chat .cbody'); if (b2) b2.scrollTop = y; window.scrollTo(0, wy);
@@ -575,9 +646,25 @@ const avColor = s => AV[[...String(s || '')].reduce((n, c) => n + c.charCodeAt(0
 const whenLabel = ts => { const d = String(ts).slice(0, 10); return d === S.today ? tLabel(ts) : dLabel(d); };
 const chatRows = () => {
   const q = (S.cq || '').trim().toLowerCase();
-  return S.chats.filter(c => S.cf === 'all' || (S.cf === 'unread' && c.unread) || (S.cf === 'repair' && c.repair) || (S.cf === 'check' && c.to_check) || (S.cf === 'lead' && c.lead))
+  const rows = S.chats.filter(c => S.cf === 'all' || (S.cf === 'unread' && c.unread) || (S.cf === 'repair' && c.repair) || (S.cf === 'check' && c.to_check) || (S.cf === 'lead' && c.lead)
+      || (S.cf === 'paid' && c.paid) || (S.cf === 'vendo' && c.vendo) || (S.cf === 'care' && (c.hardship || c.urgent)))
     .filter(c => !q || [c.name, c.address, c.area, c.last_body].join(' ').toLowerCase().includes(q));
+  // ⏳ Oldest waiting first: unanswered chats by the age of their oldest open text (needs remind_chats_v3), then the rest newest first
+  if (S.csort === 'oldest') rows.sort((a, b) => (a.oldest_open_at && b.oldest_open_at) ? String(a.oldest_open_at).localeCompare(String(b.oldest_open_at))
+    : a.oldest_open_at ? -1 : b.oldest_open_at ? 1 : String(b.last_at).localeCompare(String(a.last_at)));
+  return rows;
 };
+// small category labels on a chat row (facts from remind_chats_v3; v2 gives only 🔧 💳 🆕)
+const chatTags = c => [c.hardship && '🤍', c.urgent && '🚨', c.lead && '🆕', c.repair && '🔧', c.vendo && '🏪', c.paid && '💰', c.to_check && '💳'].filter(Boolean).join('');
+// Seen (this device): opening a chat clears its blue number, like Messenger. The text still "needs reply"
+// (small gray mark, Needs reply filter) until someone answers or taps ✓ Handled. A newer text brings the number back.
+const SEEN = 'spawn-text-seen';
+const seenMap = () => { try { return JSON.parse(localStorage.getItem(SEEN) || '{}'); } catch (x) { return {}; } };
+function markSeen(address, id){ if (!address || !id) return; const m = seenMap(); if ((m[address] || 0) >= id) return; m[address] = id;
+  const keys = Object.keys(m); if (keys.length > 400) keys.slice(0, keys.length - 400).forEach(k => delete m[k]);
+  try { localStorage.setItem(SEEN, JSON.stringify(m)); } catch (x) {} }
+const isNew = c => !!(c.unread && c.last_in_id && (seenMap()[c.address] || 0) < c.last_in_id);
+const waitAge = c => { if (!c.oldest_open_at) return ''; const h = Math.floor((Date.now() - new Date(c.oldest_open_at)) / 36e5); return h >= 48 ? Math.floor(h / 24) + 'd' : h >= 1 ? h + 'h' : '<1h'; };
 function chatsHtml(){
   const C = chatRows(), open = S.chat;
   const list = `<div class="clist">
@@ -586,11 +673,16 @@ function chatsHtml(){
       <textarea id="nttext" rows="3" maxlength="480" aria-label="Message" placeholder="Text message" enterkeyhint="send" style="box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px"></textarea>
       <div class="acts"><button type="button" class="btn send" data-cx="newsend">Send</button><button type="button" class="btn" data-cx="newcancel">Cancel</button></div></div>` : ''}
     <input class="q" id="cq" type="search" placeholder="Search name or number" aria-label="Search chats" value="${esc(S.cq || '')}">
-    <div class="cfil">${[['all', 'All'], ['unread', 'Unread'], ['repair', '🔧 Repairs'], ['check', '💳 To check']].concat(S.chats.some(c => c.lead) ? [['lead', '🆕 Install']] : []).map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}</div>
-    ${C.length ? C.map(c => `<button type="button" class="crow${c.unread ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
+    <div class="cfil">${[['all', 'All'], ['unread', 'Needs reply'], ['repair', '🔧 Repairs'], ['check', '💳 To check']]
+        .concat(S.chats.some(c => c.lead) ? [['lead', '🆕 Install']] : [])
+        .concat(S.chatsV3 ? [['paid', '💰 Paid?'], ['vendo', '🏪 Vendo'], ['care', '🤍 Care']] : [])
+        .map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}
+      ${S.chatsV3 ? `<button type="button" class="tpl${S.csort === 'oldest' ? ' on' : ''}" data-csort="${S.csort === 'oldest' ? 'newest' : 'oldest'}" aria-pressed="${S.csort === 'oldest'}" title="Unanswered chats, longest waiting first">⏳ Oldest first</button>` : ''}</div>
+    ${C.length ? C.map(c => `<button type="button" class="crow${isNew(c) ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
         <span class="av" style="background:${c.office ? 'var(--ink-2)' : avColor(c.name || c.address)}">${c.office ? '📣' : esc((c.name || '#').trim()[0].toUpperCase())}</span>
-        <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''}${c.lead ? ' 🆕' : ''}${c.repair ? ' 🔧' : ''}${c.to_check ? ' 💳' : ''}</b><small>${c.last_dir === 'out' ? 'You: ' : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
-        <span class="ct">${esc(whenLabel(c.last_at))}${c.unread ? `<span class="ub">${c.unread}</span>` : ''}</span></button>`).join('')
+        <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''} ${chatTags(c)}</b><small>${c.last_dir === 'out' ? (c.phone_reply ? '📱 ' : 'You: ') : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
+        <span class="ct">${esc(whenLabel(c.last_at))}${isNew(c) ? `<span class="ub" title="${c.unread} new text${c.unread > 1 ? 's' : ''} — opening the chat clears this">${c.unread}</span>`
+          : c.unread ? `<span class="nr" title="Seen, not answered yet — reply, or tap ✓ Handled">reply</span>` : ''}${S.csort === 'oldest' && c.unread ? `<small class="wait">${waitAge(c)}</small>` : ''}</span></button>`).join('')
       : `<div class="empty"><b>${S.cq ? 'Nothing matches' : 'No conversations yet'}</b></div>`}
   </div>`;
   const wide = matchMedia('(min-width:900px)').matches;
@@ -605,6 +697,7 @@ function chatHtml(ch){
     <div class="chh"><button type="button" class="back" data-cx="back" aria-label="Back to chats">‹</button>
       <span class="av" style="background:${avColor(ch.name || ch.address)}" aria-hidden="true">${esc((ch.name || '#').trim()[0].toUpperCase())}</span>
       <div class="nm"><b>${esc(ch.name || ch.address)}</b><small>${ch.name ? esc(ch.area || '') + ' · ' + esc(ch.address) : 'not linked to a subscriber'}${ch.blocked ? ' · ⛔ blocked' : ''}</small></div>
+      ${openIds.length ? `<button type="button" class="btn" data-cx="handled" title="Nothing more to answer: clears 'needs reply' for this person">✓ Handled${openIds.length > 1 ? ' (' + openIds.length + ')' : ''}</button>` : ''}
       <a class="btn" href="tel:${esc(ch.address)}">📞</a></div>
     <div class="cbody">${ch.loading ? '<div class="sent">Loading…</div>' : threadHtml({ rows, eng:true })}</div>
     <div class="compose">
@@ -628,6 +721,7 @@ function chatHtml(ch){
 async function openChat(address){
   const c = S.chats.find(x => x.address === address); if (!c) return;
   S.listY = window.scrollY;   // phone: ‹ back returns to the same spot in the list
+  markSeen(address, c.last_in_id);   // opening = read: the blue number goes away
   S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, rows:[], lastIn:c.last_in_id, loading:true }; S.cform = null; S.cmenu = false; S.lres = []; render();
   await refreshChat(); render(); scrollChatEnd();
 }
@@ -642,7 +736,9 @@ async function refreshChat(){
     const j = await rpc('remind_thread_v1', { p_pin:S.pin, p_address:S.chat.address, p_sub:S.chat.sub || null, p_limit:200 });
     const rows = j.rows || [], ins = rows.filter(r => r.dir === 'in');
     await engLoad(rows);
+    await sugLoad(rows);
     S.chat.rows = rows; S.chat.lastIn = ins.length ? ins[ins.length - 1].id : S.chat.lastIn; S.chat.loading = false;
+    if (!document.hidden) markSeen(S.chat.address, S.chat.lastIn);   // a text that arrives while this chat is on screen counts as read
     const c = S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; }
   } catch (x) { S.chat.loading = false; toast(x.message, 4000); }
 }
@@ -650,6 +746,7 @@ $('list').addEventListener('click', async e => {
   if (S.tab !== 'chats' || !S.chats) return;
   const row = e.target.closest('[data-ch]'); if (row) { openChat(row.dataset.ch); return; }
   const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; render(); return; }
+  const sb = e.target.closest('[data-csort]'); if (sb) { S.csort = sb.dataset.csort; try { localStorage.setItem('remind_csort', S.csort); } catch (x) {} render(); return; }
   const tp = e.target.closest('[data-ctpl]'); if (tp) { const txt = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = txt; ta.focus(); } return; }
   const eb = e.target.closest('[data-eng]'); if (eb) { S.engOpen = S.engOpen === +eb.dataset.eng ? null : +eb.dataset.eng; keepScroll(render); return; }
   const lb = e.target.closest('[data-elab]'); if (lb) {   // 🏷 teach the engine; tapping the saved one again removes it
@@ -661,6 +758,25 @@ $('list').addEventListener('click', async e => {
       x.office = intent === 'clear' ? null : intent; x.office_by = S.user;
       toast(intent === 'clear' ? 'Label removed' : 'Saved — the robot learns from this'); keepScroll(render);
     } catch (x2) { toast(/engine_ui_off/.test(x2.message) ? 'Robot reading is switched off' : x2.message, 4000); lb.disabled = false; }
+    return;
+  }
+  const su = e.target.closest('[data-suse]'); if (su) {   // 💡 Use: only fills the reply box — the person edits, then Send
+    const x = S.sugR && S.sugR[+su.dataset.suse]; if (!x) return;
+    S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea');
+    if (ta) { ta.value = x.text; ta.focus(); } toast('In the reply box — edit it, then Send'); return;
+  }
+  const sn = e.target.closest('[data-sno]'); if (sn) { (S.sugNo = S.sugNo || {})[+sn.dataset.sno] = true; keepScroll(render); return; }
+  const sv = e.target.closest('[data-sname]'); if (sv) { S.sugName = +sv.dataset.sname; keepScroll(render); const i = $('sgn'); if (i) i.focus(); return; }
+  const sc = e.target.closest('[data-scancel]'); if (sc) { S.sugName = null; keepScroll(render); return; }
+  const ss = e.target.closest('[data-ssave]'); if (ss) {   // 👤 save the checked name (remind_person_save_v1)
+    const x = S.sugR && S.sugR[+ss.dataset.ssave]; if (!x || !S.chat) return;
+    const nm = ($('sgn').value || '').trim().replace(/\s+/g, ' '), pl = ($('sgp').value || '').trim();
+    if (nm.split(' ').filter(w => w.length > 1).length < 2) { $('sgerr').textContent = 'Type the first and last name'; $('sgn').focus(); return; }
+    ss.disabled = true;
+    try {
+      await rpc('remind_person_save_v1', { p_pin:S.pin, p_address:S.chat.address, p_name:nm, p_place:pl || null, p_kind:'unknown' });
+      x.saved = nm; S.sugName = null; toast('Saved to the person card — job alerts will show this name'); keepScroll(render);
+    } catch (x2) { toast(x2.message, 4000); ss.disabled = false; }
     return;
   }
   const b = e.target.closest('[data-cx]'); if (!b) return;
@@ -744,6 +860,20 @@ function notify(rows){
   ring();
   if ('Notification' in window && Notification.permission === 'granted') {
     const r = rows[0], who = r.name || r.from || 'Unknown number';
+    // one text from a mobile number → show it through the service worker so it gets ↩ Reply / Open chat buttons
+    if (rows.length === 1 && /^09\d{9}$/.test(r.from || '') && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration('./remind-sw.js').then(reg => {
+        if (!reg) return plainNote(rows, r, who);
+        reg.showNotification(`${who} — Spawn Text`, { body:r.body || '', tag:'spawn-' + r.from, renotify:true, icon:'./remind-icon-192.png',
+          actions:[{ action:'reply', title:'↩ Reply' }, { action:'open', title:'Open chat' }], data:{ address:r.from, url:'./remind.html#chats' } });
+      }).catch(() => plainNote(rows, r, who));
+      return;
+    }
+    plainNote(rows, r, who);
+  }
+}
+function plainNote(rows, r, who){
+  {
     const n = new Notification(rows.length > 1 ? `${rows.length} new texts — Spawn Text` : `${who} — Spawn Text`, { body: rows.length > 1 ? rows.map(x => (x.name || x.from) + ': ' + (x.body || '')).join('\n').slice(0, 200) : (r.body || ''), tag:'spawn-text', renotify:true });
     // open the person's conversation in 💬 Chats (the old Messages cards only when Chats is not available)
     n.onclick = () => { window.focus(); S.q = ''; n.close();
@@ -752,8 +882,21 @@ function notify(rows){
       if (a && S.chats.some(c => c.address === a)) openChat(a); else render(); };
   }
 }
+// ↩ Reply / Open chat from a notification: open that person's chat (reply box ready). Works from the service worker
+// message (tab already open) and from the #chat=<number>&reply=1 link (tab opened by the notification, after the PIN).
+function goChat(address, reply){
+  if (!S.pin || !S.chats) { S.pendingChat = { address, reply }; return; }
+  S.pendingChat = null; S.tab = 'chats'; S.tabPicked = true; S.cq = '';
+  const done = () => { if (reply) { const ta = $('list').querySelector('.chat textarea'); if (ta) ta.focus(); } };
+  if (S.chats.some(c => c.address === address)) openChat(address).then(done); else { render(); toast('That conversation is not in the list yet — refresh'); }
+}
+{ const m = /^#chat=(09\d{9})(&reply=1)?$/.exec(location.hash); if (m) S.pendingChat = { address:m[1], reply:!!m[2] }; }
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
+  const d = e.data || {}; if (d.type === 'spawn-open-chat' && /^09\d{9}$/.test(d.address || '')) { window.focus(); goChat(d.address, !!d.reply); }
+});
 let lastInId = 0, pollT = null;
-function titleCount(){ const n = S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; }
+// tab title "(n) Spawn Text": same rule as the 💬 Chats count — new texts not opened yet on this device (all unanswered when Chats is not available)
+function titleCount(){ const n = S.chats ? S.chats.reduce((t, c) => t + (isNew(c) ? c.unread : 0), 0) : S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; }
 async function poll(){
   if (!S.pin || S.tab === 'import') return;
   try {
@@ -1056,7 +1199,7 @@ function render(){
   $('prev').disabled = d <= addDays(t, -14);
   $('next').disabled = d >= addDays(t, 7);
   const T = [];
-  if (S.chats) T.push(['chats', '💬 Chats', S.chats.reduce((n, c) => n + (c.unread || 0), 0)]);   // first: the office lives here
+  if (S.chats) T.push(['chats', '💬 Chats', S.chats.reduce((n, c) => n + (isNew(c) ? c.unread : 0), 0)]);   // new (not yet opened) texts   // first: the office lives here
   T.push(['send', "Today's list", L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]);
   if (S.imp) T.push(['import', 'Contacts', S.imp.rows.filter(r => r.bucket !== 'none').length]);
   if (!S.chats && S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
@@ -1097,6 +1240,14 @@ function render(){
   if (S.tab === 'nonum') {
     h += `<button type="button" class="imp" id="impbtn"><span class="ic">📇</span><span><b>Find numbers in the phone's contacts</b><small>Export Contacts as a .vcf file, then choose it here. Matching happens on this phone only.</small></span></button>`;
     h += `<div class="note">Found their number? Save it and they move to To text. The number is kept for next time.</div>`;
+    // 📞 Add a number for ANY subscriber (not only today's list) — for the numbers collectors bring back from the "Numbers to Ask" sheet.
+    // Uses the existing actions remind_sub_search_v1 (name search) and remind_set_phone (format check, saved as the main number).
+    h += `<article class="item"><b>📞 Add a number for anyone</b><small style="display:block;color:var(--muted)">From the Numbers to Ask sheet: search the name, tap the person, type the number, Save.</small>
+        <div class="nform"><input type="search" id="anq" placeholder="Search name (2+ letters)" aria-label="Search subscriber name" value="${esc(S.anq || '')}" autocomplete="off"></div>
+        ${S.anpick ? '' : `<div class="lres">${(S.anres || []).map(s => `<button type="button" class="tpl" data-anpick="${s.id}" data-anname="${esc(s.name)}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || (S.annone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>`}
+        ${S.anpick ? `<div class="sent" style="margin-top:8px">Number for <b>${esc(S.anpick.name)}</b> <button type="button" class="linkbtn" id="ancancel">change</button></div>
+        <div class="nform"><input type="tel" inputmode="tel" id="annum" placeholder="09XX XXX XXXX" aria-label="Mobile number for ${esc(S.anpick.name)}"><button type="button" class="btn" id="ansave">Save number</button></div>` : ''}
+      </article>`;
     h += L.nonum.length ? L.nonum.map(r => `<article class="item" data-key="${esc(r.key)}">${head(r)}
         <div class="nform"><input type="tel" inputmode="tel" placeholder="09XX XXX XXXX" aria-label="Mobile number for ${esc(r.name)}"><button type="button" class="btn" data-act="phone">Save number</button></div>
         ${future ? '' : `<div class="acts" style="margin-top:8px"><button type="button" class="btn" data-act="paid">Already paid</button><button type="button" class="btn" data-act="promise">Promised</button></div>`}
@@ -1155,6 +1306,31 @@ $('list').addEventListener('click', async e => {
     try { const j = await rpc('remind_set_phone', { p_pin:S.pin, p_sub:r.sub, p_phone:v }); toast(`Saved ${j.phone} · moved to To text`); await reload(); }
     catch (x) { toast(x.message, 4000); a.disabled = false; }
   }
+});
+/* 📞 Add a number for anyone (No number tab) */
+let anT = null;
+async function anSearch(q){
+  try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); if ((S.anq || '').trim() !== q) return;
+    S.anres = j.rows || []; S.annone = !S.anres.length; render(); const i = $('anq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+  catch (x) { toast(x.message, 4000); }
+}
+$('list').addEventListener('input', e => {
+  if (e.target.id !== 'anq') return;
+  S.anq = e.target.value; S.anpick = null; clearTimeout(anT); const q = S.anq.trim();
+  if (q.length < 2) { S.anres = []; S.annone = false; return; }
+  anT = setTimeout(() => anSearch(q), 350);
+});
+$('list').addEventListener('click', async e => {
+  const p = e.target.closest('[data-anpick]');
+  if (p) { S.anpick = { id:+p.dataset.anpick, name:p.dataset.anname }; render(); const i = $('annum'); if (i) i.focus(); return; }
+  if (e.target.closest('#ancancel')) { S.anpick = null; render(); return; }
+  const sv = e.target.closest('#ansave'); if (!sv || !S.anpick) return;
+  const v = ($('annum').value || '').trim(); if (!v) { toast('Type the number first'); return; }
+  sv.disabled = true;
+  try { const j = await rpc('remind_set_phone', { p_pin:S.pin, p_sub:S.anpick.id, p_phone:v });
+    toast(`Saved ${j.phone} for ${S.anpick.name} — reminders and replies can reach them now`, 4000);
+    S.anpick = null; S.anq = ''; S.anres = []; S.annone = false; await reload(); }
+  catch (x) { toast(x.message, 4000); sv.disabled = false; }
 });
 $('list').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
