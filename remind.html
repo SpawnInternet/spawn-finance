@@ -133,6 +133,7 @@ main{padding:4px 0 28px}
 .crow.unread .cm small{color:var(--ink);font-weight:600}
 .crow .ct{flex:none;text-align:right;font-size:12px;color:var(--muted);display:grid;justify-items:end;gap:4px}
 .crow .ub{min-width:20px;height:20px;border-radius:10px;background:var(--blue);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;padding:0 6px}
+.crow .nr{font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:9px;padding:1px 7px}
 .crow .ct .wait{font-size:11px;color:var(--late);font-weight:700}   /* ⏳ how long the oldest unanswered text has waited */
 .crow.on{background:var(--blue-l);border-radius:12px}
 .chat{display:flex;flex-direction:column;min-height:50vh}
@@ -654,6 +655,14 @@ const chatRows = () => {
 };
 // small category labels on a chat row (facts from remind_chats_v3; v2 gives only 🔧 💳 🆕)
 const chatTags = c => [c.hardship && '🤍', c.urgent && '🚨', c.lead && '🆕', c.repair && '🔧', c.vendo && '🏪', c.paid && '💰', c.to_check && '💳'].filter(Boolean).join('');
+// Seen (this device): opening a chat clears its blue number, like Messenger. The text still "needs reply"
+// (small gray mark, Needs reply filter) until someone answers or taps ✓ Handled. A newer text brings the number back.
+const SEEN = 'spawn-text-seen';
+const seenMap = () => { try { return JSON.parse(localStorage.getItem(SEEN) || '{}'); } catch (x) { return {}; } };
+function markSeen(address, id){ if (!address || !id) return; const m = seenMap(); if ((m[address] || 0) >= id) return; m[address] = id;
+  const keys = Object.keys(m); if (keys.length > 400) keys.slice(0, keys.length - 400).forEach(k => delete m[k]);
+  try { localStorage.setItem(SEEN, JSON.stringify(m)); } catch (x) {} }
+const isNew = c => !!(c.unread && c.last_in_id && (seenMap()[c.address] || 0) < c.last_in_id);
 const waitAge = c => { if (!c.oldest_open_at) return ''; const h = Math.floor((Date.now() - new Date(c.oldest_open_at)) / 36e5); return h >= 48 ? Math.floor(h / 24) + 'd' : h >= 1 ? h + 'h' : '<1h'; };
 function chatsHtml(){
   const C = chatRows(), open = S.chat;
@@ -668,10 +677,11 @@ function chatsHtml(){
         .concat(S.chatsV3 ? [['paid', '💰 Paid?'], ['vendo', '🏪 Vendo'], ['care', '🤍 Care']] : [])
         .map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}
       ${S.chatsV3 ? `<button type="button" class="tpl${S.csort === 'oldest' ? ' on' : ''}" data-csort="${S.csort === 'oldest' ? 'newest' : 'oldest'}" aria-pressed="${S.csort === 'oldest'}" title="Unanswered chats, longest waiting first">⏳ Oldest first</button>` : ''}</div>
-    ${C.length ? C.map(c => `<button type="button" class="crow${c.unread ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
+    ${C.length ? C.map(c => `<button type="button" class="crow${isNew(c) ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
         <span class="av" style="background:${c.office ? 'var(--ink-2)' : avColor(c.name || c.address)}">${c.office ? '📣' : esc((c.name || '#').trim()[0].toUpperCase())}</span>
         <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''} ${chatTags(c)}</b><small>${c.last_dir === 'out' ? (c.phone_reply ? '📱 ' : 'You: ') : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
-        <span class="ct">${esc(whenLabel(c.last_at))}${c.unread ? `<span class="ub" title="${c.unread} text${c.unread > 1 ? 's' : ''} not answered yet (opening the chat does not clear it: reply, or tap ✓ Handled)">${c.unread}</span>` : ''}${S.csort === 'oldest' && c.unread ? `<small class="wait">${waitAge(c)}</small>` : ''}</span></button>`).join('')
+        <span class="ct">${esc(whenLabel(c.last_at))}${isNew(c) ? `<span class="ub" title="${c.unread} new text${c.unread > 1 ? 's' : ''} — opening the chat clears this">${c.unread}</span>`
+          : c.unread ? `<span class="nr" title="Seen, not answered yet — reply, or tap ✓ Handled">reply</span>` : ''}${S.csort === 'oldest' && c.unread ? `<small class="wait">${waitAge(c)}</small>` : ''}</span></button>`).join('')
       : `<div class="empty"><b>${S.cq ? 'Nothing matches' : 'No conversations yet'}</b></div>`}
   </div>`;
   const wide = matchMedia('(min-width:900px)').matches;
@@ -710,6 +720,7 @@ function chatHtml(ch){
 async function openChat(address){
   const c = S.chats.find(x => x.address === address); if (!c) return;
   S.listY = window.scrollY;   // phone: ‹ back returns to the same spot in the list
+  markSeen(address, c.last_in_id);   // opening = read: the blue number goes away
   S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, rows:[], lastIn:c.last_in_id, loading:true }; S.cform = null; S.cmenu = false; S.lres = []; render();
   await refreshChat(); render(); scrollChatEnd();
 }
@@ -726,6 +737,7 @@ async function refreshChat(){
     await engLoad(rows);
     await sugLoad(rows);
     S.chat.rows = rows; S.chat.lastIn = ins.length ? ins[ins.length - 1].id : S.chat.lastIn; S.chat.loading = false;
+    if (!document.hidden) markSeen(S.chat.address, S.chat.lastIn);   // a text that arrives while this chat is on screen counts as read
     const c = S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; }
   } catch (x) { S.chat.loading = false; toast(x.message, 4000); }
 }
@@ -1159,7 +1171,7 @@ function render(){
   $('prev').disabled = d <= addDays(t, -14);
   $('next').disabled = d >= addDays(t, 7);
   const T = [];
-  if (S.chats) T.push(['chats', '💬 Chats', S.chats.reduce((n, c) => n + (c.unread || 0), 0)]);   // first: the office lives here
+  if (S.chats) T.push(['chats', '💬 Chats', S.chats.reduce((n, c) => n + (isNew(c) ? c.unread : 0), 0)]);   // new (not yet opened) texts   // first: the office lives here
   T.push(['send', "Today's list", L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]);
   if (S.imp) T.push(['import', 'Contacts', S.imp.rows.filter(r => r.bucket !== 'none').length]);
   if (!S.chats && S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
