@@ -141,6 +141,7 @@ main{padding:4px 0 28px}
 .chat .chh .back{width:42px;height:42px;border-radius:12px;font-size:20px;background:var(--paper);box-shadow:0 0 0 1px var(--line) inset;flex:none}
 .chat .chh .av{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:16px;color:#fff;flex:none}
 body.chats header .day{display:none}   /* the day arrows are for the reminder lists, not for Chats */
+.chat .chh .nm .savenum{display:inline-block;margin-top:4px;padding:5px 12px;border:1px solid var(--line, #d6dbe4);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .chat .chh .nm{flex:1;min-width:0}.chat .chh .nm b{display:block;font-size:16px}.chat .chh .nm small{color:var(--muted);font-size:12.5px}
 .chat .chh a.btn{display:inline-grid;place-items:center;text-decoration:none;flex:none}
 .chat .cbody{flex:1;padding:6px 0}
@@ -335,6 +336,7 @@ async function rpc(fn, args){
   let j = null; try { j = await res.json(); } catch (e) {}
   if (!res.ok) { const m = (j && (j.message || j.hint)) || ('Error ' + res.status); throw new Error(ERR[m] || m); }
   if (j && j.ok === false) throw new Error(ERR[j.error] || j.error || 'Not done');
+  if (args && args.p_pin && args.p_pin === S.pin) S.pinOkAt = Date.now();   // this PIN just passed: the next reload may ask everything at once
   return j;
 }
 
@@ -388,11 +390,16 @@ $('botgo').onclick = async () => {
 };
 
 async function load(pin, date){
-  const r = await rpc('remind_board', { p_pin:pin, p_date:date });   // checks the PIN first
-  // Auto texts breakdown: asked only after the PIN passed (a wrong PIN must count once), and optional —
-  // if its database function is not there yet, the tab just stays hidden
-  const [a, ib, rp, lm, ch, pp] = await Promise.all([
-    rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null),
+  // Faster reloads: when this PIN passed in the last minute (poll, a reply, the last reload), everything is asked at the
+  // same time, so the slow Today's list (remind_board) no longer holds up Chats. Otherwise (login, or the page was idle)
+  // remind_board checks the PIN alone first — a wrong PIN must count once, not once per call (8 wrong = office locked 10 min).
+  const fast = !!(S.pin && pin === S.pin && S.pinOkAt && Date.now() - S.pinOkAt < 60000 && (date || S.date));
+  const boardP = rpc('remind_board', { p_pin:pin, p_date:date });
+  const r0 = fast ? null : await boardP;
+  const day = r0 ? r0.date : (date || S.date);
+  const chatP = fast && S.chat ? refreshChat() : null;   // the open conversation refreshes alongside
+  const [a, ib, rp, lm, ch, pp, ops, r] = await Promise.all([
+    rpc('remind_auto_log_v1', { p_pin:pin, p_date:day }).catch(() => null),
     // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
     rpc('remind_inbox_v2', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null)),
     // Job orders tab: v2 includes vendo complaints (kind); v1 until v2 exists; hidden if neither
@@ -401,6 +408,9 @@ async function load(pin, date){
     rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
     rpc('remind_chats_v3', { p_pin:pin, p_days:60 }).catch(() => rpc('remind_chats_v2', { p_pin:pin, p_days:60 })).catch(() => rpc('remind_chats_v1', { p_pin:pin, p_days:60 })).catch(() => null),   // v3 = oldest-waiting + labels; v2 = office number labelled   // 💬 Chats tab: the old Messages tab shows if missing
     rpc('remind_people_v1', { p_pin:pin }).catch(() => null),   // 📇 saved names for numbers that are not subscribers (missing = no names)
+    rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null),   // Checks tab: hidden if missing
+    r0 || boardP,
+    chatP,
   ]);
   S.people = {}; for (const p of (pp && pp.rows) || []) S.people[p.address] = p;
   S.chats = ch ? (ch.rows || []) : null; if (!S.chats && S.tab === 'chats') S.tab = 'send';
@@ -410,9 +420,10 @@ async function load(pin, date){
   if (S.csort === undefined) { try { S.csort = localStorage.getItem('remind_csort') || 'newest'; } catch (x) { S.csort = 'newest'; } }
   if (S.chats && !S.tabPicked && S.tab === 'send') S.tab = 'chats';   // Chats opens first (unless a tab or #jobs was chosen)
   S.tabPicked = true;
-  if (S.chat) await refreshChat();   // keep the open conversation fresh
+  if (S.chat && !chatP) await refreshChat();   // keep the open conversation fresh
+  else if (S.chat) { const c = S.chats && S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; S.chat.person = c.person; } }
   S.linemen = lm ? (lm.linemen || (lm.names || []).map(name => ({ name, sms:true }))) : [];
-  S.ops = await rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null);   // Checks tab: hidden if missing
+  S.ops = ops;
   if (!S.ops && S.tab === 'checks') S.tab = 'send';
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
   S.auto = a; if (!a && S.tab === 'auto') S.tab = 'send';
@@ -703,7 +714,8 @@ function chatHtml(ch){
     <div class="chh"><button type="button" class="back" data-cx="back" aria-label="Back to chats">‹</button>
       <span class="av" style="background:${avColor(ch.name || ch.address)}" aria-hidden="true">${esc((ch.name || '#').trim()[0].toUpperCase())}</span>
       <div class="nm"><b>${esc(ch.name || ch.address)}</b><small>${ch.person ? esc(PKIND[ch.person.kind] || 'saved contact') + (ch.person.place ? ' · ' + esc(ch.person.place) : '') + ' · ' + esc(ch.address)
-        : ch.name ? esc(ch.area || '') + ' · ' + esc(ch.address) : 'not saved yet — ＋ → 📇 Save number'}${ch.blocked ? ' · ⛔ blocked' : ''}</small></div>
+        : ch.name ? esc(ch.area || '') + ' · ' + esc(ch.address) : 'not saved yet'}${ch.blocked ? ' · ⛔ blocked' : ''}</small>
+        ${!ch.sub && !ch.person ? `<button type="button" class="savenum" data-cx="f" data-f="link">📇 Save number</button>` : ''}</div>
       ${openIds.length ? `<button type="button" class="btn" data-cx="handled" title="Nothing more to answer: clears 'needs reply' for this person">✓ Handled${openIds.length > 1 ? ' (' + openIds.length + ')' : ''}</button>` : ''}
       <a class="btn" href="tel:${esc(ch.address)}">📞</a></div>
     <div class="cbody">${ch.loading ? '<div class="sent">Loading…</div>' : threadHtml({ rows, eng:true })}</div>
@@ -736,7 +748,9 @@ async function openChat(address){
   const c = S.chats.find(x => x.address === address); if (!c) return;
   S.listY = window.scrollY;   // phone: ‹ back returns to the same spot in the list
   markSeen(address, c.last_in_id);   // opening = read: the blue number goes away
-  S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, person:c.person, rows:[], lastIn:c.last_in_id, loading:true }; S.pkind = null; S.cform = null; S.cmenu = false; S.lres = []; render();
+  const cached = (S.chatCache || {})[address];   // opened before on this visit: show those messages at once, then refresh
+  S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, person:c.person, rows:cached || [], lastIn:c.last_in_id, loading:!cached }; S.pkind = null; S.cform = null; S.cmenu = false; S.lres = []; render();
+  if (cached) scrollChatEnd();
   await refreshChat(); render(); scrollChatEnd();
 }
 function scrollChatEnd(){   // newest message in view: laptop scrolls the conversation pane, phone scrolls the page to the reply box
@@ -747,14 +761,15 @@ function scrollChatEnd(){   // newest message in view: laptop scrolls the conver
 async function refreshChat(){
   if (!S.chat) return;
   try {
-    const j = await rpc('remind_thread_v1', { p_pin:S.pin, p_address:S.chat.address, p_sub:S.chat.sub || null, p_limit:200 });
+    const me = S.chat;   // the chat this refresh is for (the office may open another one meanwhile)
+    const j = await rpc('remind_thread_v1', { p_pin:S.pin, p_address:me.address, p_sub:me.sub || null, p_limit:200 });
     const rows = j.rows || [], ins = rows.filter(r => r.dir === 'in');
-    await engLoad(rows);
-    await sugLoad(rows);
-    S.chat.rows = rows; S.chat.lastIn = ins.length ? ins[ins.length - 1].id : S.chat.lastIn; S.chat.loading = false;
+    await Promise.all([engLoad(rows), sugLoad(rows)]);   // robot reading + suggestions at the same time (were one after the other)
+    if (S.chat !== me) return;
+    S.chat.rows = rows; (S.chatCache = S.chatCache || {})[S.chat.address] = rows; S.chat.lastIn = ins.length ? ins[ins.length - 1].id : S.chat.lastIn; S.chat.loading = false;
     if (!document.hidden) markSeen(S.chat.address, S.chat.lastIn);   // a text that arrives while this chat is on screen counts as read
     const c = S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; S.chat.person = c.person; }
-  } catch (x) { S.chat.loading = false; toast(x.message, 4000); }
+  } catch (x) { if (S.chat) S.chat.loading = false; toast(x.message, 4000); }
 }
 $('list').addEventListener('click', async e => {
   if (S.tab !== 'chats' || !S.chats) return;
