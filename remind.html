@@ -417,7 +417,8 @@ async function load(pin, date){
   if (S.thread && !(ib && ib.rows.some(r => (r.from || 'id' + r.id) === S.thread.key))) S.thread = null;
   S.repairs = rp; if (!rp && S.tab === 'jobs') S.tab = 'send';
 }
-function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); bell(); startPoll(); pushEnsure(); lineStart(); }
+function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); render(); bell(); startPoll(); pushEnsure(); lineStart();
+  if (S.pendingChat) goChat(S.pendingChat.address, S.pendingChat.reply); }   // opened from a notification's ↩ Reply / Open chat
 /* 📶 SMS phone status bar: is the office SMS phone receiving and sending? Asked every minute; shows nothing if the
    action is missing or the switch remind_line_bar is off. Red = a number that worked before just failed, or the queue is stuck. */
 let lineT = null;
@@ -859,6 +860,20 @@ function notify(rows){
   ring();
   if ('Notification' in window && Notification.permission === 'granted') {
     const r = rows[0], who = r.name || r.from || 'Unknown number';
+    // one text from a mobile number → show it through the service worker so it gets ↩ Reply / Open chat buttons
+    if (rows.length === 1 && /^09\d{9}$/.test(r.from || '') && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration('./remind-sw.js').then(reg => {
+        if (!reg) return plainNote(rows, r, who);
+        reg.showNotification(`${who} — Spawn Text`, { body:r.body || '', tag:'spawn-' + r.from, renotify:true, icon:'./remind-icon-192.png',
+          actions:[{ action:'reply', title:'↩ Reply' }, { action:'open', title:'Open chat' }], data:{ address:r.from, url:'./remind.html#chats' } });
+      }).catch(() => plainNote(rows, r, who));
+      return;
+    }
+    plainNote(rows, r, who);
+  }
+}
+function plainNote(rows, r, who){
+  {
     const n = new Notification(rows.length > 1 ? `${rows.length} new texts — Spawn Text` : `${who} — Spawn Text`, { body: rows.length > 1 ? rows.map(x => (x.name || x.from) + ': ' + (x.body || '')).join('\n').slice(0, 200) : (r.body || ''), tag:'spawn-text', renotify:true });
     // open the person's conversation in 💬 Chats (the old Messages cards only when Chats is not available)
     n.onclick = () => { window.focus(); S.q = ''; n.close();
@@ -867,6 +882,18 @@ function notify(rows){
       if (a && S.chats.some(c => c.address === a)) openChat(a); else render(); };
   }
 }
+// ↩ Reply / Open chat from a notification: open that person's chat (reply box ready). Works from the service worker
+// message (tab already open) and from the #chat=<number>&reply=1 link (tab opened by the notification, after the PIN).
+function goChat(address, reply){
+  if (!S.pin || !S.chats) { S.pendingChat = { address, reply }; return; }
+  S.pendingChat = null; S.tab = 'chats'; S.tabPicked = true; S.cq = '';
+  const done = () => { if (reply) { const ta = $('list').querySelector('.chat textarea'); if (ta) ta.focus(); } };
+  if (S.chats.some(c => c.address === address)) openChat(address).then(done); else { render(); toast('That conversation is not in the list yet — refresh'); }
+}
+{ const m = /^#chat=(09\d{9})(&reply=1)?$/.exec(location.hash); if (m) S.pendingChat = { address:m[1], reply:!!m[2] }; }
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
+  const d = e.data || {}; if (d.type === 'spawn-open-chat' && /^09\d{9}$/.test(d.address || '')) { window.focus(); goChat(d.address, !!d.reply); }
+});
 let lastInId = 0, pollT = null;
 function titleCount(){ const n = S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; }
 async function poll(){
