@@ -327,6 +327,7 @@ const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 1
   no_phone:'No number for this person yet.', bad_phone:'That is not a mobile number. Use 09XXXXXXXXX.', bad_date:'Pick a date from today on.',
   sending_off:'Automatic texting is OFF — turn it on to send replies.', empty_text:'Type a reply first.', not_found:'This text is gone — refresh.',
   no_subscriber:'This number is not matched to a subscriber — save their number first.',
+  empty_name:'Type their name first.',
   no_lineman:'That lineman is not on the list any more — refresh.' };
 async function rpc(fn, args){
   let res; try { res = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' }, body:JSON.stringify(args) }); }
@@ -390,7 +391,7 @@ async function load(pin, date){
   const r = await rpc('remind_board', { p_pin:pin, p_date:date });   // checks the PIN first
   // Auto texts breakdown: asked only after the PIN passed (a wrong PIN must count once), and optional —
   // if its database function is not there yet, the tab just stays hidden
-  const [a, ib, rp, lm, ch] = await Promise.all([
+  const [a, ib, rp, lm, ch, pp] = await Promise.all([
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:r.date }).catch(() => null),
     // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
     rpc('remind_inbox_v2', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null)),
@@ -399,8 +400,12 @@ async function load(pin, date){
     // Lineman list: v2 = names with optional number (sms flag); v1 = names with numbers only. Hidden if none set.
     rpc('remind_linemen_v2', { p_pin:pin }).catch(() => rpc('remind_linemen_v1', { p_pin:pin }).catch(() => null)),
     rpc('remind_chats_v3', { p_pin:pin, p_days:60 }).catch(() => rpc('remind_chats_v2', { p_pin:pin, p_days:60 })).catch(() => rpc('remind_chats_v1', { p_pin:pin, p_days:60 })).catch(() => null),   // v3 = oldest-waiting + labels; v2 = office number labelled   // 💬 Chats tab: the old Messages tab shows if missing
+    rpc('remind_people_v1', { p_pin:pin }).catch(() => null),   // 📇 saved names for numbers that are not subscribers (missing = no names)
   ]);
+  S.people = {}; for (const p of (pp && pp.rows) || []) S.people[p.address] = p;
   S.chats = ch ? (ch.rows || []) : null; if (!S.chats && S.tab === 'chats') S.tab = 'send';
+  // not linked to a subscriber but saved with 📇: show the saved name and what they are
+  if (S.chats) for (const c of S.chats) { const p = !c.sub && S.people[c.address]; if (p) { c.name = p.name; c.person = p; } }
   S.chatsV3 = !!(ch && ch.v >= 3);
   if (S.csort === undefined) { try { S.csort = localStorage.getItem('remind_csort') || 'newest'; } catch (x) { S.csort = 'newest'; } }
   if (S.chats && !S.tabPicked && S.tab === 'send') S.tab = 'chats';   // Chats opens first (unless a tab or #jobs was chosen)
@@ -655,7 +660,8 @@ const chatRows = () => {
   return rows;
 };
 // small category labels on a chat row (facts from remind_chats_v3; v2 gives only 🔧 💳 🆕)
-const chatTags = c => [c.hardship && '🤍', c.urgent && '🚨', c.lead && '🆕', c.repair && '🔧', c.vendo && '🏪', c.paid && '💰', c.to_check && '💳'].filter(Boolean).join('');
+const PKIND = { vendo:'🏪 Vendo owner', lead:'🆕 Install lead', staff:'🧰 Staff / lineman', unknown:'Other' };
+const chatTags = c => [c.person && ({ vendo:'🏪', lead:'🆕', staff:'🧰' })[c.person.kind], c.hardship && '🤍', c.urgent && '🚨', c.lead && '🆕', c.repair && '🔧', c.vendo && '🏪', c.paid && '💰', c.to_check && '💳'].filter(Boolean).join('');
 // Seen (this device): opening a chat clears its blue number, like Messenger. The text still "needs reply"
 // (small gray mark, Needs reply filter) until someone answers or taps ✓ Handled. A newer text brings the number back.
 const SEEN = 'spawn-text-seen';
@@ -696,7 +702,8 @@ function chatHtml(ch){
   return `<div class="chat" data-chat="${esc(ch.address)}">
     <div class="chh"><button type="button" class="back" data-cx="back" aria-label="Back to chats">‹</button>
       <span class="av" style="background:${avColor(ch.name || ch.address)}" aria-hidden="true">${esc((ch.name || '#').trim()[0].toUpperCase())}</span>
-      <div class="nm"><b>${esc(ch.name || ch.address)}</b><small>${ch.name ? esc(ch.area || '') + ' · ' + esc(ch.address) : 'not linked to a subscriber'}${ch.blocked ? ' · ⛔ blocked' : ''}</small></div>
+      <div class="nm"><b>${esc(ch.name || ch.address)}</b><small>${ch.person ? esc(PKIND[ch.person.kind] || 'saved contact') + (ch.person.place ? ' · ' + esc(ch.person.place) : '') + ' · ' + esc(ch.address)
+        : ch.name ? esc(ch.area || '') + ' · ' + esc(ch.address) : 'not saved yet — ＋ → 📇 Save number'}${ch.blocked ? ' · ⛔ blocked' : ''}</small></div>
       ${openIds.length ? `<button type="button" class="btn" data-cx="handled" title="Nothing more to answer: clears 'needs reply' for this person">✓ Handled${openIds.length > 1 ? ' (' + openIds.length + ')' : ''}</button>` : ''}
       <a class="btn" href="tel:${esc(ch.address)}">📞</a></div>
     <div class="cbody">${ch.loading ? '<div class="sent">Loading…</div>' : threadHtml({ rows, eng:true })}</div>
@@ -704,7 +711,7 @@ function chatHtml(ch){
       ${S.cmenu ? `<div class="cmenu">
         <div class="sent">Actions</div><div class="cchips">
         ${openIds.length ? `<button type="button" class="tpl" data-cx="handled">✅ Handled${openIds.length > 1 ? ' (' + openIds.length + ')' : ''}</button>` : ''}
-        ${ch.sub ? `<button type="button" class="tpl" data-cx="f" data-f="check">💳 To check</button><button type="button" class="tpl" data-cx="f" data-f="promise">📅 Promised</button>` : `<button type="button" class="tpl" data-cx="f" data-f="link">🔗 Link to subscriber</button>`}
+        ${ch.sub ? `<button type="button" class="tpl" data-cx="f" data-f="check">💳 To check</button><button type="button" class="tpl" data-cx="f" data-f="promise">📅 Promised</button>` : `<button type="button" class="tpl" data-cx="f" data-f="link">📇 Save number</button>`}
         ${S.repairs ? `<button type="button" class="tpl" data-cx="job">🔧 Job order</button>` : ''}
         ${ch.sub && ch.address ? `<a class="tpl" style="text-decoration:none" download="${esc((ch.name || 'Spawn subscriber').replace(/[^\w .-]/g, ''))}.vcf" href="${vcfHref([{ name:ch.name, area:ch.area, phone:ch.address }])}">📇 Save contact</a>` : ''}
         <button type="button" class="tpl" data-cx="f" data-f="more">🚫 Wrong number / stop</button></div>
@@ -712,8 +719,15 @@ function chatHtml(ch){
       </div>` : ''}
       ${f === 'check' ? `<div class="pform"><input type="text" inputmode="numeric" value="${esc(ref)}" placeholder="GCash ref no." aria-label="GCash reference number"><button type="button" class="btn" data-cx="csave">Pause 3 days</button></div>` : ''}
       ${f === 'promise' ? `<div class="pform"><input type="date" min="${S.today}" value="${gd}" aria-label="Promised pay date"><button type="button" class="btn" data-cx="psave">Save date</button></div>` : ''}
-      ${f === 'link' ? `<div class="pform"><input type="search" id="lq" placeholder="Search subscriber name…" aria-label="Find subscriber" value="${esc(S.lq || '')}" autocomplete="off"></div>
-        <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || (S.lnone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>` : ''}
+      ${f === 'link' ? `<div class="sent"><b>📇 Save number</b> — is this one of our subscribers? Search and tap the name:</div>
+        <div class="pform"><input type="search" id="lq" placeholder="Search subscriber name…" aria-label="Find subscriber" value="${esc(S.lq || '')}" autocomplete="off"></div>
+        <div class="lres">${(S.lres || []).map(s => `<button type="button" class="tpl" data-cx="lpick" data-sub="${s.id}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || (S.lnone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>
+        <div class="sent" style="margin-top:10px">Not a subscriber? Save who it is:</div>
+        <div class="pform" style="display:grid;gap:8px">
+          <input type="text" id="pnm" placeholder="Name" aria-label="Name" maxlength="120" value="${esc((ch.person && ch.person.name) || '')}">
+          <input type="text" id="ppl" placeholder="Place (optional)" aria-label="Place" maxlength="200" value="${esc((ch.person && ch.person.place) || '')}">
+          <div class="cchips">${Object.entries(PKIND).map(([k, l]) => `<button type="button" class="tpl${(S.pkind || (ch.person && ch.person.kind) || 'vendo') === k ? ' on' : ''}" data-pkind="${k}" aria-pressed="${(S.pkind || (ch.person && ch.person.kind) || 'vendo') === k}">${l}</button>`).join('')}</div>
+          <button type="button" class="btn" data-cx="psavep">Save</button></div>` : ''}
       ${f === 'more' ? `<div class="acts" style="margin:4px 0 8px"><button type="button" class="btn" data-cx="block" data-why="wrong_number">Wrong number</button><button type="button" class="btn" data-cx="block" data-why="stop">Stop texting them</button></div>` : ''}
       <div class="row"><button type="button" class="btn plus${S.cmenu ? ' on' : ''}" data-cx="menu" aria-label="Actions and ready answers" aria-expanded="${!!S.cmenu}">${S.cmenu ? '×' : '＋'}${openIds.length && !S.cmenu ? `<i>${openIds.length}</i>` : ''}</button><textarea rows="1" maxlength="480" aria-label="Reply" placeholder="Text message" enterkeyhint="send"></textarea><button type="button" class="btn send" data-cx="send">Send</button></div>
     </div></div>`;
@@ -722,7 +736,7 @@ async function openChat(address){
   const c = S.chats.find(x => x.address === address); if (!c) return;
   S.listY = window.scrollY;   // phone: ‹ back returns to the same spot in the list
   markSeen(address, c.last_in_id);   // opening = read: the blue number goes away
-  S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, rows:[], lastIn:c.last_in_id, loading:true }; S.cform = null; S.cmenu = false; S.lres = []; render();
+  S.chat = { address, sub:c.sub, name:c.name, area:c.area, blocked:c.blocked, person:c.person, rows:[], lastIn:c.last_in_id, loading:true }; S.pkind = null; S.cform = null; S.cmenu = false; S.lres = []; render();
   await refreshChat(); render(); scrollChatEnd();
 }
 function scrollChatEnd(){   // newest message in view: laptop scrolls the conversation pane, phone scrolls the page to the reply box
@@ -739,7 +753,7 @@ async function refreshChat(){
     await sugLoad(rows);
     S.chat.rows = rows; S.chat.lastIn = ins.length ? ins[ins.length - 1].id : S.chat.lastIn; S.chat.loading = false;
     if (!document.hidden) markSeen(S.chat.address, S.chat.lastIn);   // a text that arrives while this chat is on screen counts as read
-    const c = S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; }
+    const c = S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; S.chat.person = c.person; }
   } catch (x) { S.chat.loading = false; toast(x.message, 4000); }
 }
 $('list').addEventListener('click', async e => {
@@ -747,6 +761,7 @@ $('list').addEventListener('click', async e => {
   const row = e.target.closest('[data-ch]'); if (row) { openChat(row.dataset.ch); return; }
   const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; try { localStorage.setItem('spawn-text-cf', S.cf); } catch (x) {} render(); return; }   // filter remembered on this device
   const sb = e.target.closest('[data-csort]'); if (sb) { S.csort = sb.dataset.csort; try { localStorage.setItem('remind_csort', S.csort); } catch (x) {} render(); return; }
+  const pk = e.target.closest('[data-pkind]'); if (pk) { S.pkind = pk.dataset.pkind; const nm = $('pnm') && $('pnm').value, pl = $('ppl') && $('ppl').value; render(); if ($('pnm')) { $('pnm').value = nm; $('ppl').value = pl; } return; }
   const tp = e.target.closest('[data-ctpl]'); if (tp) { const txt = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = txt; ta.focus(); } return; }
   const eb = e.target.closest('[data-eng]'); if (eb) { S.engOpen = S.engOpen === +eb.dataset.eng ? null : +eb.dataset.eng; keepScroll(render); return; }
   const lb = e.target.closest('[data-elab]'); if (lb) {   // 🏷 teach the engine; tapping the saved one again removes it
@@ -802,7 +817,7 @@ $('list').addEventListener('click', async e => {
     try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); S.lres = j.rows || []; if (!S.lres.length) toast('No subscriber found'); render(); const i = $('list').querySelector('.pform input'); if (i) i.value = q; }
     catch (x) { toast(x.message, 4000); } return;
   }
-  if (!mid && a !== 'block' && a !== 'send' && !(a === 'psave' && ch.sub)) { toast('They have not texted yet — nothing to act on'); return; }
+  if (!mid && a !== 'block' && a !== 'send' && a !== 'psavep' && !(a === 'psave' && ch.sub)) { toast('They have not texted yet — nothing to act on'); return; }
   let text = '';
   if (a === 'send') { text = box.querySelector('textarea').value.trim(); if (!text) { toast('Type a reply first'); return; } }
   if (a === 'block' && !confirm(b.dataset.why === 'stop' ? 'Stop texting this number?' : 'Mark as wrong number? It is never texted again.')) return;
@@ -830,6 +845,12 @@ $('list').addEventListener('click', async e => {
       else await rpc('remind_promise_v1', { p_pin:S.pin, p_sub:ch.sub, p_date:d, p_note:'phone call / walk-in' })
         .catch(x => { throw new Error(/function|404/i.test(x.message) ? 'Promise without a text is not switched on yet' : x.message); });
       toast('Promise saved — quiet until ' + dLabel(d));
+    } else if (a === 'psavep') {   // 📇 not a subscriber: save who the number is
+      const nm = ($('pnm').value || '').trim(), pl = ($('ppl').value || '').trim(), k = S.pkind || (ch.person && ch.person.kind) || 'vendo';
+      if (!nm) { toast('Type their name first'); b.disabled = false; return; }
+      await rpc('remind_person_save_v2', { p_pin:S.pin, p_address:ch.address, p_name:nm, p_place:pl || null, p_kind:k })
+        .catch(x => { throw new Error(/function|404/i.test(x.message) ? 'Save number is not switched on yet' : x.message); });
+      S.pkind = null; toast('Saved — ' + nm + ' · ' + (PKIND[k] || 'contact'));
     } else if (a === 'lpick') {
       await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'link', p_msg_id:mid, p_sub:+b.dataset.sub }); toast('Linked — number saved to that subscriber');
     } else if (a === 'job') {
