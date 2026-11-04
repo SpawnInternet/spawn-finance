@@ -895,7 +895,8 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
   const d = e.data || {}; if (d.type === 'spawn-open-chat' && /^09\d{9}$/.test(d.address || '')) { window.focus(); goChat(d.address, !!d.reply); }
 });
 let lastInId = 0, pollT = null;
-function titleCount(){ const n = S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; }
+// tab title "(n) Spawn Text": same rule as the 💬 Chats count — new texts not opened yet on this device (all unanswered when Chats is not available)
+function titleCount(){ const n = S.chats ? S.chats.reduce((t, c) => t + (isNew(c) ? c.unread : 0), 0) : S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; }
 async function poll(){
   if (!S.pin || S.tab === 'import') return;
   try {
