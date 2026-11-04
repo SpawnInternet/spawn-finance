@@ -320,7 +320,7 @@ const dLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-PH', { wee
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const tLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' }) : '';
 const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null, linemen:[], lmOpen:null, q:'', thread:null, chats:null, chat:null, cq:'', cf:'all', cform:null, tabPicked:/^#(jobs|repairs)$/.test(location.hash), newText:false };
+const S = { pin:'', date:null, today:null, rows:[], stats:{}, tab:/^#(jobs|repairs)$/.test(location.hash) ? 'jobs' : 'send', user:'', open:null, auto:null, showTests:false, inbox:null, showHandled:false, ropen:null, repairs:null, rpView:'open', rpOpen:null, linemen:[], lmOpen:null, q:'', thread:null, chats:null, chat:null, cq:'', cf:(() => { try { return localStorage.getItem('spawn-text-cf') || 'all'; } catch (x) { return 'all'; } })(), cform:null, tabPicked:/^#(jobs|repairs)$/.test(location.hash), newText:false };
 
 function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
 const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 10 minutes.', not_on_list:'This person is no longer on the list — refresh.',
@@ -646,7 +646,7 @@ const avColor = s => AV[[...String(s || '')].reduce((n, c) => n + c.charCodeAt(0
 const whenLabel = ts => { const d = String(ts).slice(0, 10); return d === S.today ? tLabel(ts) : dLabel(d); };
 const chatRows = () => {
   const q = (S.cq || '').trim().toLowerCase();
-  const rows = S.chats.filter(c => S.cf === 'all' || (S.cf === 'unread' && c.unread) || (S.cf === 'repair' && c.repair) || (S.cf === 'check' && c.to_check) || (S.cf === 'lead' && c.lead)
+  const rows = S.chats.filter(c => S.cf === 'all' || (S.cf === 'new' && isNew(c)) || (S.cf === 'unread' && c.unread) || (S.cf === 'repair' && c.repair) || (S.cf === 'check' && c.to_check) || (S.cf === 'lead' && c.lead)
       || (S.cf === 'paid' && c.paid) || (S.cf === 'vendo' && c.vendo) || (S.cf === 'care' && (c.hardship || c.urgent)))
     .filter(c => !q || [c.name, c.address, c.area, c.last_body].join(' ').toLowerCase().includes(q));
   // ⏳ Oldest waiting first: unanswered chats by the age of their oldest open text (needs remind_chats_v3), then the rest newest first
@@ -673,7 +673,7 @@ function chatsHtml(){
       <textarea id="nttext" rows="3" maxlength="480" aria-label="Message" placeholder="Text message" enterkeyhint="send" style="box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px"></textarea>
       <div class="acts"><button type="button" class="btn send" data-cx="newsend">Send</button><button type="button" class="btn" data-cx="newcancel">Cancel</button></div></div>` : ''}
     <input class="q" id="cq" type="search" placeholder="Search name or number" aria-label="Search chats" value="${esc(S.cq || '')}">
-    <div class="cfil">${[['all', 'All'], ['unread', 'Needs reply'], ['repair', '🔧 Repairs'], ['check', '💳 To check']]
+    <div class="cfil">${[['all', 'All'], ['new', 'Unread' + (S.chats.filter(isNew).length ? ' ' + S.chats.filter(isNew).length : '')], ['unread', 'Needs reply'], ['repair', '🔧 Repairs'], ['check', '💳 To check']]
         .concat(S.chats.some(c => c.lead) ? [['lead', '🆕 Install']] : [])
         .concat(S.chatsV3 ? [['paid', '💰 Paid?'], ['vendo', '🏪 Vendo'], ['care', '🤍 Care']] : [])
         .map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}
@@ -745,7 +745,7 @@ async function refreshChat(){
 $('list').addEventListener('click', async e => {
   if (S.tab !== 'chats' || !S.chats) return;
   const row = e.target.closest('[data-ch]'); if (row) { openChat(row.dataset.ch); return; }
-  const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; render(); return; }
+  const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; try { localStorage.setItem('spawn-text-cf', S.cf); } catch (x) {} render(); return; }   // filter remembered on this device
   const sb = e.target.closest('[data-csort]'); if (sb) { S.csort = sb.dataset.csort; try { localStorage.setItem('remind_csort', S.csort); } catch (x) {} render(); return; }
   const tp = e.target.closest('[data-ctpl]'); if (tp) { const txt = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = txt; ta.focus(); } return; }
   const eb = e.target.closest('[data-eng]'); if (eb) { S.engOpen = S.engOpen === +eb.dataset.eng ? null : +eb.dataset.eng; keepScroll(render); return; }
@@ -810,7 +810,11 @@ $('list').addEventListener('click', async e => {
   try {
     if (a === 'send') {
       // with a text from them: reply answers their latest text (marks it handled); without: text anyone (remind_send_v1)
-      if (mid) await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:mid, p_action:'reply', p_text:text });
+      if (mid) {
+        await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:mid, p_action:'reply', p_text:text });
+        // a reply answers the whole conversation: older texts still waiting from this person are marked handled too
+        for (const id of ch.rows.filter(r => r.dir === 'in' && r.status === 'received' && r.id !== mid).map(r => r.id)) await rpc('remind_reply_act_v1', { p_pin:S.pin, p_msg_id:id, p_action:'handled' }).catch(() => null);
+      }
       else await rpc('remind_send_v1', { p_pin:S.pin, p_address:ch.address, p_text:text }).catch(x => { throw new Error(/function|404/i.test(x.message) ? 'Text anyone is not switched on yet' : x.message); });
       toast('Sent — goes out within a minute');
     } else if (a === 'handled') {
