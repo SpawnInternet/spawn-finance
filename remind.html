@@ -166,7 +166,9 @@ body.chats header .day{display:none}   /* the day arrows are for the reminder li
   .chatwrap .chat{height:78vh;min-height:0}
   .chatwrap .chat .cbody{flex:1 1 auto;min-height:0;overflow:auto;padding-right:4px}
   .chatwrap .chat .compose{position:static}
-  .chatwrap .chat .compose .cpanel{max-height:52vh;overflow:auto}   /* a long form (📇 Save number) scrolls inside, so its Save button is always reachable */
+  .chatwrap .chat .compose .cpanel{max-height:44vh;overflow:auto}   /* a long form (📇 Save number) scrolls inside; the chat above keeps room to read */
+  .chatwrap .chat .cbody{min-height:110px}
+  .chat .compose .cpanel [data-cx="psavep"]{position:sticky;bottom:0;z-index:1}   /* Save stays on screen even when many results push the form down */
   .chat .compose .pnp{grid-template-columns:1fr 1fr}   /* laptop: name and place side by side */
   .chat .compose .lres{max-height:84px;overflow:auto}   /* many search results scroll in their own box */
   .chat .chh .back{display:none}
@@ -666,10 +668,12 @@ const keepScroll = fn => {   // re-render without jumping: same spot in the conv
 const AV = ['#025AC6', '#0F8A6B', '#C77700', '#C8283C', '#6A4FC9', '#0E7C9A', '#B5541C'];
 const avColor = s => AV[[...String(s || '')].reduce((n, c) => n + c.charCodeAt(0), 0) % AV.length];
 const whenLabel = ts => { const d = String(ts).slice(0, 10); return d === S.today ? tLabel(ts) : dLabel(d); };
+// which chats a filter chip shows (also used for the count on each chip)
+const cfMatch = (c, k) => k === 'all' || (k === 'new' && isNew(c)) || (k === 'unread' && c.unread) || (k === 'repair' && c.repair) || (k === 'check' && c.to_check) || (k === 'lead' && c.lead)
+  || (k === 'paid' && c.paid) || (k === 'vendo' && c.vendo) || (k === 'care' && (c.hardship || c.urgent));
 const chatRows = () => {
   const q = (S.cq || '').trim().toLowerCase();
-  const rows = S.chats.filter(c => S.cf === 'all' || (S.cf === 'new' && isNew(c)) || (S.cf === 'unread' && c.unread) || (S.cf === 'repair' && c.repair) || (S.cf === 'check' && c.to_check) || (S.cf === 'lead' && c.lead)
-      || (S.cf === 'paid' && c.paid) || (S.cf === 'vendo' && c.vendo) || (S.cf === 'care' && (c.hardship || c.urgent)))
+  const rows = S.chats.filter(c => cfMatch(c, S.cf))
     .filter(c => !q || [c.name, c.address, c.area, c.last_body].join(' ').toLowerCase().includes(q));
   // ⏳ Oldest waiting first: unanswered chats by the age of their oldest open text (needs remind_chats_v3), then the rest newest first
   if (S.csort === 'oldest') rows.sort((a, b) => (a.oldest_open_at && b.oldest_open_at) ? String(a.oldest_open_at).localeCompare(String(b.oldest_open_at))
@@ -696,17 +700,18 @@ function chatsHtml(){
       <textarea id="nttext" rows="3" maxlength="480" aria-label="Message" placeholder="Text message" enterkeyhint="send" style="box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:15px"></textarea>
       <div class="acts"><button type="button" class="btn send" data-cx="newsend">Send</button><button type="button" class="btn" data-cx="newcancel">Cancel</button></div></div>` : ''}
     <input class="q" id="cq" type="search" placeholder="Search name or number" aria-label="Search chats" value="${esc(S.cq || '')}">
-    <div class="cfil">${[['all', 'All'], ['new', 'Unread' + (S.chats.filter(isNew).length ? ' ' + S.chats.filter(isNew).length : '')], ['unread', 'Needs reply'], ['repair', '🔧 Repairs'], ['check', '💳 To check']]
+    <div class="cfil">${[['all', 'All'], ['new', 'Unread'], ['unread', 'Needs reply'], ['repair', '🔧 Repairs'], ['check', '💳 To check']]
         .concat(S.chats.some(c => c.lead) ? [['lead', '🆕 Install']] : [])
         .concat(S.chatsV3 ? [['paid', '💰 Paid?'], ['vendo', '🏪 Vendo'], ['care', '🤍 Care']] : [])
-        .map(([k, l]) => `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}</button>`).join('')}
+        .map(([k, l]) => { const n = S.chats.filter(c => cfMatch(c, k)).length;   // every chip shows how many people it has
+          return `<button type="button" class="tpl${S.cf === k ? ' on' : ''}" data-cf="${k}" aria-pressed="${S.cf === k}">${l}${n ? ' ' + n : ''}</button>`; }).join('')}
       ${S.chatsV3 ? `<button type="button" class="tpl${S.csort === 'oldest' ? ' on' : ''}" data-csort="${S.csort === 'oldest' ? 'newest' : 'oldest'}" aria-pressed="${S.csort === 'oldest'}" title="Unanswered chats, longest waiting first">⏳ Oldest first</button>` : ''}</div>
     ${C.length ? C.map(c => `<button type="button" class="crow${isNew(c) ? ' unread' : ''}${open && open.address === c.address ? ' on' : ''}" data-ch="${esc(c.address)}">
         <span class="av" style="background:${c.office ? 'var(--ink-2)' : avColor(c.name || c.address)}">${c.office ? '📣' : esc((c.name || '#').trim()[0].toUpperCase())}</span>
         <span class="cm"><b>${esc(c.name || c.address)}${c.blocked ? ' ⛔' : ''} ${chatTags(c)}</b><small>${c.last_dir === 'out' ? (c.phone_reply ? '📱 ' : 'You: ') : ''}${esc(c.last_body || '')}${c.last_dir === 'out' && c.last_status === 'failed' ? ' ⚠️' : ''}</small></span>
         <span class="ct">${esc(whenLabel(c.last_at))}${isNew(c) ? `<span class="ub" title="${c.unread} new text${c.unread > 1 ? 's' : ''} — opening the chat clears this">${c.unread}</span>`
           : c.unread ? `<span class="nr" title="Seen, not answered yet — reply, or tap ✓ Handled">reply</span>` : ''}${S.csort === 'oldest' && c.unread ? `<small class="wait">${waitAge(c)}</small>` : ''}</span></button>`).join('')
-      : `<div class="empty"><b>${S.cq ? 'Nothing matches' : 'No conversations yet'}</b></div>`}
+      : `<div class="empty"><b>${S.cq ? 'Nothing matches' : S.cf !== 'all' ? 'No chats in this filter right now' : 'No conversations yet'}</b></div>`}
   </div>`;
   const wide = matchMedia('(min-width:900px)').matches;
   if (!open) return wide ? `<div class="chatwrap">${list}<div class="cempty">Pick a conversation</div></div>` : list;
@@ -745,7 +750,7 @@ function chatHtml(ch){
         <div class="sent">Tap the name to link this number to that subscriber.</div>`
         : `<div class="pform" style="display:grid;gap:8px">
           ${pk === 'vendo' && !S.vendoOff ? `<input type="search" id="vq" placeholder="Which vendo? Name, owner or code…" aria-label="Find vendo" value="${esc(S.vq || '')}" autocomplete="off">
-          <div class="lres">${(S.vres || []).map(v => `<button type="button" class="tpl" data-cx="vpick" data-vendo="${v.id}">🏪 ${esc(v.name || 'vendo')}${v.owner ? ' · ' + esc(v.owner) : ''}${v.area ? ' · ' + esc(v.area) : ''}</button>`).join('') || (S.vnone ? '<span class="sent">No vendo with that name</span>' : '')}</div>
+          <div class="lres">${(S.vres || []).map(v => `<button type="button" class="tpl" data-cx="vpick" data-vendo="${v.id}">🏪 ${esc(v.name || 'vendo')}${v.owner ? ' · ' + esc(v.owner) : ''}${v.area ? ' · ' + esc(v.area) : ''}${v.code ? ' · ' + esc(v.code) : ''}</button>`).join('') || (S.vnone ? '<span class="sent">No vendo with that name</span>' : '')}</div>
           <div class="sent">Tap the vendo to link this number to it — or type a name below and tap Save.</div>` : ''}
           <div class="pnp"><input type="text" id="pnm" placeholder="Name" aria-label="Name" maxlength="120" value="${esc(S.pnm != null ? S.pnm : (ch.person && ch.person.name) || '')}">
           <input type="text" id="ppl" placeholder="Place (optional)" aria-label="Place" maxlength="200" value="${esc(S.ppl != null ? S.ppl : (ch.person && ch.person.place) || '')}"></div>
@@ -807,7 +812,7 @@ $('list').addEventListener('click', async e => {
   const row = e.target.closest('[data-ch]'); if (row) { openChat(row.dataset.ch); return; }
   const fb = e.target.closest('[data-cf]'); if (fb) { S.cf = fb.dataset.cf; try { localStorage.setItem('spawn-text-cf', S.cf); } catch (x) {} render(); return; }   // filter remembered on this device
   const sb = e.target.closest('[data-csort]'); if (sb) { S.csort = sb.dataset.csort; try { localStorage.setItem('remind_csort', S.csort); } catch (x) {} render(); return; }
-  const pk = e.target.closest('[data-pkind]'); if (pk) { S.pkind = pk.dataset.pkind; const nm = $('pnm') && $('pnm').value, pl = $('ppl') && $('ppl').value; render(); if ($('pnm')) { $('pnm').value = nm; $('ppl').value = pl; } return; }
+  const pk = e.target.closest('[data-pkind]'); if (pk) { S.pkind = pk.dataset.pkind; render(); const i = $('vq') || $('lq') || $('pnm'); if (i) i.focus(); return; }   // typed name/place are kept in S.pnm / S.ppl; the cursor goes to that choice's first box
   const tp = e.target.closest('[data-ctpl]'); if (tp) { const txt = TPL[tp.dataset.ctpl].replace('{date}', dLabel(guessDate(S.chat.rows.filter(r => r.dir === 'in').map(r => r.body).join(' ')))); S.cmenu = false; render(); const ta = $('list').querySelector('.chat textarea'); if (ta) { ta.value = txt; ta.focus(); } return; }
   const eb = e.target.closest('[data-eng]'); if (eb) { S.engOpen = S.engOpen === +eb.dataset.eng ? null : +eb.dataset.eng; keepScroll(render); return; }
   const lb = e.target.closest('[data-elab]'); if (lb) {   // 🏷 teach the engine; tapping the saved one again removes it
@@ -854,7 +859,7 @@ $('list').addEventListener('click', async e => {
   }
   if (!S.chat) return;
   const a = b.dataset.cx, ch = S.chat, mid = ch.lastIn, box = b.closest('.compose');
-  if (a === 'menu') { S.cmenu = !S.cmenu; if (!S.cmenu) S.cform = null; render(); return; }
+  if (a === 'menu') { S.cmenu = !S.cmenu; S.cform = null; render(); return; }   // menu and a form are never open together (the chat stays readable)
   if (a === 'back' && history.state && history.state.sv && history.state.chat) { history.back(); return; }   // same as the phone Back button
   if (a === 'back') { S.chat = null; S.cmenu = false; render(); window.scrollTo(0, S.listY || 0); return; }
   if (a === 'f') { S.cform = S.cform === b.dataset.f ? null : b.dataset.f; S.cmenu = false; S.lq = ''; S.lres = []; S.lnone = false; render(); const i = $('list').querySelector('.pform input'); if (i) i.focus(); return; }
@@ -917,14 +922,16 @@ $('list').addEventListener('click', async e => {
 let lqT = null;
 async function linkSearch(q){ try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); if ((S.lq || '').trim() !== q) return; S.lres = j.rows || []; S.lnone = !S.lres.length; render(); const i = $('lq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } catch (x) { toast(x.message, 4000); } }
 let vqT = null;
+// a cleared search box removes its old results at once (a stale result could link the number to the wrong one)
+function redrawKeep(id){ render(); const i = $(id); if (i) { i.focus(); try { i.setSelectionRange(i.value.length, i.value.length); } catch (x) {} } }
 async function vendoSearch(q){
   try { const j = await rpc('remind_vendo_search_v1', { p_pin:S.pin, p_q:q }); if ((S.vq || '').trim() !== q) return;
     S.vres = j.rows || []; S.vnone = !S.vres.length; render(); const i = $('vq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
   catch (x) { if (/function|404|schema cache/i.test(x.message)) { S.vendoOff = true; render(); } else toast(x.message, 4000); }   // not installed yet: the vendo box hides
 }
 $('list').addEventListener('input', e => { if (e.target.id === 'pnm') S.pnm = e.target.value; if (e.target.id === 'ppl') S.ppl = e.target.value;   // typed name/place survive a refresh (a new text re-draws the page)
-  if (e.target.id === 'vq') { S.vq = e.target.value; clearTimeout(vqT); const q = S.vq.trim(); if (q.length < 2) { S.vres = []; S.vnone = false; return; } vqT = setTimeout(() => vendoSearch(q), 350); }
-  if (e.target.id === 'lq') { S.lq = e.target.value; clearTimeout(lqT); const q = S.lq.trim(); if (q.length < 2) { S.lres = []; S.lnone = false; return; } lqT = setTimeout(() => linkSearch(q), 350); } });
+  if (e.target.id === 'vq') { S.vq = e.target.value; clearTimeout(vqT); const q = S.vq.trim(); if (q.length < 2) { const had = (S.vres || []).length || S.vnone; S.vres = []; S.vnone = false; if (had) redrawKeep('vq'); return; } vqT = setTimeout(() => vendoSearch(q), 350); }
+  if (e.target.id === 'lq') { S.lq = e.target.value; clearTimeout(lqT); const q = S.lq.trim(); if (q.length < 2) { const had = (S.lres || []).length || S.lnone; S.lres = []; S.lnone = false; if (had) redrawKeep('lq'); return; } lqT = setTimeout(() => linkSearch(q), 350); } });
 $('list').addEventListener('keydown', e => { if (e.target.id === 'lq' && e.key === 'Enter') { e.preventDefault(); clearTimeout(lqT); const q = (S.lq || '').trim(); if (q.length >= 2) linkSearch(q); } });
 $('list').addEventListener('input', e => { if (e.target.id === 'cq') { S.cq = e.target.value; const pos = e.target.selectionStart; render(); const i = $('cq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } } });
 // Enter sends (laptop and phone, like Messenger); Shift+Enter = new line. (✏️ New text already sends on Enter via its form.)
@@ -1003,7 +1010,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
 });
 let lastInId = 0, pollT = null;
 // tab title "(n) Spawn Text": same rule as the 💬 Chats count — new texts not opened yet on this device (all unanswered when Chats is not available)
-function titleCount(){ const n = S.chats ? S.chats.reduce((t, c) => t + (isNew(c) ? c.unread : 0), 0) : S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; }
+function titleCount(){ const n = S.chats ? S.chats.filter(isNew).length : S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; }
 async function poll(){
   if (!S.pin || S.tab === 'import') return;
   try {
@@ -1306,7 +1313,7 @@ function render(){
   $('prev').disabled = d <= addDays(t, -14);
   $('next').disabled = d >= addDays(t, 7);
   const T = [];
-  if (S.chats) T.push(['chats', '💬 Chats', S.chats.reduce((n, c) => n + (isNew(c) ? c.unread : 0), 0)]);   // new (not yet opened) texts   // first: the office lives here
+  if (S.chats) T.push(['chats', '💬 Chats', S.chats.filter(isNew).length]);   // people with new (not yet opened) texts = the Unread chip   // first: the office lives here
   T.push(['send', "Today's list", L.send.length], ['nonum', 'No number', L.nonum.length], ['done', 'Done', L.done.length]);
   if (S.imp) T.push(['import', 'Contacts', S.imp.rows.filter(r => r.bucket !== 'none').length]);
   if (!S.chats && S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
@@ -1377,7 +1384,13 @@ function render(){
   const sent = Number(S.stats.sent_14d || 0), paid = Number(S.stats.paid_14d || 0), all = sent + paid;
   if (S.tab !== 'import' && S.tab !== 'jobs' && S.tab !== 'chats') h += `<div class="meter"><b>Last 14 days:</b> ${sent} texted · ${paid} were already paid${all ? ` (${Math.round(paid / all * 100)}%)` : ''}.<br>
     When “already paid” stays rare, the list is accurate enough to send by itself.${all ? `<div class="bar"><i style="width:${Math.round(sent / all * 100)}%"></i></div>` : ''}</div>`;
+  // an open conversation keeps its place when the page re-draws (new text, refresh): at the bottom it stays at the newest
+  // message; scrolled up it stays where it was; a chat drawn fresh starts at the newest (it used to jump to the oldest)
+  const ob = box.querySelector('.chat .cbody'), oaddr = ob && ob.closest('[data-chat]') && ob.closest('[data-chat]').dataset.chat;
+  const atEnd = !ob || ob.scrollHeight - ob.scrollTop - ob.clientHeight < 40, oldTop = ob ? ob.scrollTop : 0;
   box.innerHTML = h;
+  const nb = box.querySelector('.chat .cbody');
+  if (nb && matchMedia('(min-width:900px)').matches) nb.scrollTop = (atEnd || oaddr !== (S.chat && S.chat.address)) ? nb.scrollHeight : oldTop;
 }
 
 $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; const to = b.dataset.tab, moved = to !== S.tab; S.tab = to; if (moved) navPush(); S.tabPicked = true; S.open = null; render(); window.scrollTo({ top:0 }); });
