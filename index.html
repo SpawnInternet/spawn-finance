@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v3.4 · 2026-11-05 · Count / Handover has a Deposit tab: name, amount, bank (saved as a bank deposit on the page date) · v3.3 · 2026-11-05 · ＋ Add from BASHANG fills in BASHANG's OR / GCash ref and a note (BASHANG date, received by); the list shows them · v3.2 · 2026-11-05 · 📒 BASHANG search on the logbook page also finds payments from the 14 days before (late discovery), added on the page you are on · v3.1 · 2026-11-04 · 🤝 Turnover count under Write a line: handed by → received by + amount counted vs this page's book; difference written as Drawer over/short on the page date · v3.0 · 2026-10-15 · tap "Carried from before" to see the earlier days' lines · bookmark = newest line in the book · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v3.5 · 2026-11-05 · ✏️ Edit a hand-written line (amount, name, what, category) with PIN; old line kept as voided "Edited" · v3.4 · 2026-11-05 · Count / Handover has a Deposit tab: name, amount, bank (saved as a bank deposit on the page date) · v3.3 · 2026-11-05 · ＋ Add from BASHANG fills in BASHANG's OR / GCash ref and a note (BASHANG date, received by); the list shows them · v3.2 · 2026-11-05 · 📒 BASHANG search on the logbook page also finds payments from the 14 days before (late discovery), added on the page you are on · v3.1 · 2026-11-04 · 🤝 Turnover count under Write a line: handed by → received by + amount counted vs this page's book; difference written as Drawer over/short on the page date · v3.0 · 2026-10-15 · tap "Carried from before" to see the earlier days' lines · bookmark = newest line in the book · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -623,6 +623,9 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 .ps-h em{font-style:normal;font-weight:700;color:#5b7bbf;letter-spacing:0;overflow:hidden;text-overflow:ellipsis}
 .ps-h .ps-sum{margin-left:auto;flex:none;display:inline-block;height:auto;line-height:1.3;align-self:center;padding:3px 10px;border-radius:999px;background:#fff;color:#025ac6;letter-spacing:0;font-size:12px;box-shadow:0 0 0 1px #d6e0f2}
 .ps{display:flex;align-items:center;gap:10px;height:40px}
+.edbox{margin:14px 0 6px;padding:12px 12px 2px;border-radius:12px;background:#f4f7fb;box-shadow:inset 0 0 0 1px #e2e8f0}
+.edbox .edh{font-weight:800;font-size:13px;margin-bottom:8px;color:#334155}
+#dt-edit{margin-bottom:8px}
 .bo-s{display:flex;gap:8px;align-items:center;height:40px}
 .bo-s input{flex:1;min-width:0;height:32px;border:1.5px solid #d6c27a;border-radius:9px;padding:0 10px;font:600 13px Inter,system-ui,sans-serif;background:#fff}
 .bo-s button{flex:none;height:32px;padding:0 12px;border-radius:9px;border:1.5px solid #d6c27a;background:#fff;font:800 12px Inter,system-ui,sans-serif;color:#7a5306;cursor:pointer}
@@ -1850,6 +1853,7 @@ function wireSheet(){
   if ($('rs-adjust')) $('rs-adjust').onclick = adjustFromCount;
   if ($('rs-done')) $('rs-done').onclick = closeSheet;
   if ($('dt-void')) $('dt-void').onclick = doVoid;
+  if ($('dt-edit')) $('dt-edit').onclick = doEdit;
 }
 
 function busy(btn, on, label){ btn.disabled = on; if (on) { btn.dataset.l = btn.textContent; btn.innerHTML = '<span class="spin"></span> Saving'; } else btn.textContent = label || btn.dataset.l; }
@@ -2125,11 +2129,35 @@ function openDetail(type, id){
   if (e && e.payment_id) html += `<button class="go alt" type="button" id="dt-proof">🖼 View GCash screenshot</button>`;
   if (e && e.payment_id && !e.voided_at && !locked) html += `<div class="note">This line is part of a payment. Voiding it voids the whole payment, including any GCash side.</div>`;
   const canVoid = !rec.voided_at && !locked && !(c && c.kind === 'closing') && !(e && e.kind === 'opening' && !S.user.is_owner);
-  if (canVoid) html += `<div class="f"><label for="f-reason">Reason for voiding</label><input id="f-reason" autocomplete="off" placeholder="e.g. Double entry, wrong amount"></div>${VPIN}
-    <button class="go danger" type="button" id="dt-void">Void this line</button><div class="msg" id="sh-msg" role="alert"></div>`;
+  // v3.5: hand-written lines can be edited (amount, name, what, category) — PIN, and the old line is kept as voided "Edited"
+  const editable = canVoid && e && EDITABLE.includes(e.kind) && !e.payment_id && !e.deposit_id && !e.recon_id;
+  if (editable) {
+    const cats = [...new Set([...((S.look && S.look.categories) || []).filter(x => !/^cash\s*advance$/i.test(x) && x !== OTH), e.category].filter(Boolean))];
+    html += `<div class="edbox"><div class="edh">✏️ Edit this line</div>
+      <div class="two">${money('f-eamt', 'Amount', String(Number(e.amount)))}<div class="f"><label for="f-eparty">Name</label><input id="f-eparty" autocomplete="off" list="dl-parties" value="${esc(e.party || '')}"></div></div>${dlist('dl-parties', (S.look && S.look.parties) || [])}
+      <div class="f"><label for="f-ememo">What</label><input id="f-ememo" autocomplete="off" value="${esc(e.memo || '')}"></div>
+      ${e.kind === 'expense' ? `<div class="f"><label for="f-ecat">Category</label><select id="f-ecat">${cats.map(x => `<option ${x === e.category ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>` : ''}</div>`;
+  }
+  if (canVoid) html += `<div class="f"><label for="f-reason">Reason ${editable ? '<small style="font-weight:600;color:var(--muted)">(needed to void; optional for an edit)</small>' : 'for voiding'}</label><input id="f-reason" autocomplete="off" placeholder="e.g. Double entry, wrong amount"></div>${editable ? VPIN.replace('to confirm the void', 'to confirm the edit or void') : VPIN}
+    ${editable ? '<button class="go" type="button" id="dt-edit">💾 Save changes</button>' : ''}<button class="go danger" type="button" id="dt-void">Void this line</button><div class="msg" id="sh-msg" role="alert"></div>`;
   else if (locked) html += `<div class="note">This day is closed, so this line can't be changed. Fix it with an adjustment on today.</div>`;
   openSheet('detail', { title, html, ref:{ type, id, rec } });
   if ($('dt-proof')) $('dt-proof').onclick = () => gView('fp:' + e.payment_id, 'Screenshot · ' + (e.party || ''));
+}
+const EDITABLE = ['expense', 'advance', 'co', 'other_in', 'other_out', 'sukli_out', 'repay'];
+async function doEdit(){
+  const F = S.form, btn = $('dt-edit'), { id } = F.ref;
+  try {
+    const el = $('f-vpin'), p = el ? el.value.trim() : '';
+    if (p !== String(S.pin || '')) { if (el) { el.value = ''; el.focus(); } throw new Error(p ? 'Wrong PIN — nothing was changed.' : 'Type your PIN to confirm the edit.'); }
+    const amt = num(v('f-eamt'));
+    if (!(amt > 0)) throw new Error('Type the amount.');
+    if (!v('f-ememo')) throw new Error('Type what it is for.');
+    busy(btn, true);
+    const r = await rpc('fin_cash_edit_v1', { p_pin:S.pin, p_id:id, p_amount:amt, p_party:v('f-eparty') || null, p_memo:v('f-ememo'),
+      p_category:$('f-ecat') ? $('f-ecat').value : null, p_reason:v('f-reason') || null });
+    toast(r && r.unchanged ? 'Nothing was changed.' : 'Line updated. The old one is kept as voided "Edited".'); closeSheet(); await refresh();
+  } catch (e) { say(e.message); busy(btn, false); }
 }
 const VPIN = `<div class="f"><label for="f-vpin">Your PIN to confirm the void</label><input id="f-vpin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="• • • •"></div>`;
 function vpinOk(){
