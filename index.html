@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v3.3 · 2026-11-05 · ＋ Add from BASHANG fills in BASHANG's OR / GCash ref and a note (BASHANG date, received by); the list shows them · v3.2 · 2026-11-05 · 📒 BASHANG search on the logbook page also finds payments from the 14 days before (late discovery), added on the page you are on · v3.1 · 2026-11-04 · 🤝 Turnover count under Write a line: handed by → received by + amount counted vs this page's book; difference written as Drawer over/short on the page date · v3.0 · 2026-10-15 · tap "Carried from before" to see the earlier days' lines · bookmark = newest line in the book · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v3.4 · 2026-11-05 · Count / Handover has a Deposit tab: name, amount, bank (saved as a bank deposit on the page date) · v3.3 · 2026-11-05 · ＋ Add from BASHANG fills in BASHANG's OR / GCash ref and a note (BASHANG date, received by); the list shows them · v3.2 · 2026-11-05 · 📒 BASHANG search on the logbook page also finds payments from the 14 days before (late discovery), added on the page you are on · v3.1 · 2026-11-04 · 🤝 Turnover count under Write a line: handed by → received by + amount counted vs this page's book; difference written as Drawer over/short on the page date · v3.0 · 2026-10-15 · tap "Carried from before" to see the earlier days' lines · bookmark = newest line in the book · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1505,7 +1505,16 @@ function renderSheet(){
     title = F.result ? 'Count saved' : 'Count / Handover';
     if (F.result) { h = countResult(F.result); }
     else {
-      h += seg([['count','Count'],['handover','Handover']], F.mode);
+      h += seg([['count','Count'],['handover','Handover'],['deposit','Deposit']], F.mode);
+      // v3.4: Deposit tab — who deposited, how much, which bank (same save as the Bank deposit form)
+      if (F.mode === 'deposit') {
+        const banks = [...new Set([...(L.banks || []), ...BANK_DEFAULTS])];
+        h += `<div class="note">Cash taken to the bank. Saved on <b>${esc(dLabel(workDate()))}</b>.</div>`;
+        h += text('f-by', 'Name (who deposited)', F.by || S.user.name, 'list="dl-parties"') + dlist('dl-parties', L.parties);
+        h += money('f-amt', 'Amount deposited', F.amt ?? '');
+        h += text('f-bank', 'Bank', F.bank || (L.banks || [])[0] || '', 'list="dl-banks"') + dlist('dl-banks', banks);
+        h += actions('Save deposit');
+      } else {
       h += `<div class="note">Count good cash only.${S.gc ? ` GCash (${pesoN(S.gc.closing_balance)}) is in its own wallet.` : ''} Old coins (bugi) are not cash: record them with <b>Bugi found</b> and keep them in the bugi bag.</div>`;
       if (F.mode === 'handover') {
         h += `<div class="f"><label>Hand cash to</label><div class="chips" id="to-chips">${(L.accounts || []).filter(a => a !== S.user.name).map(a =>
@@ -1515,6 +1524,7 @@ function renderSheet(){
       h += `<div class="calc" id="calc"></div>`;
       h += text('f-memo', 'Note (optional)', F.memo || '');
       h += actions(F.mode === 'handover' ? 'Save handover' : 'Save count');
+      }
     }
   }
   else if (F.kind === 'deposit') {
@@ -2022,6 +2032,14 @@ async function submit(btn, next){
     else if (F.kind === 'advance') {
       r = await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:F.mode, p_amount:num(v('f-amt')), p_entry_date:workDate(), p_detail:{ party:v('f-party'), memo:v('f-memo') || null } });
       toast(F.mode === 'repay' ? 'Repayment saved.' : F.mode === 'co' ? 'c/o saved.' : 'Cash advance saved.');
+    }
+    else if (F.kind === 'count' && F.mode === 'deposit') {
+      if (!v('f-by')) throw new Error('Type the name of who deposited.');
+      if (!(num(v('f-amt')) > 0)) throw new Error('Type the amount deposited.');
+      if (!v('f-bank')) throw new Error('Type or pick the bank.');
+      r = await rpc('fin_deposit_add', { p_pin:S.pin, p_client_id:F.cid, p_deposit_date:workDate(), p_amount:num(v('f-amt')), p_bank:v('f-bank'), p_reference_no:null,
+        p_covers_from:null, p_covers_to:null, p_deposited_by:v('f-by') });
+      toast('Deposit saved.');
     }
     else if (F.kind === 'count') {
       if (F.mode === 'handover' && !F.to) throw new Error(ERR.handed_to_unknown);
