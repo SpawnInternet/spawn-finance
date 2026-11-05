@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- SPAWN Finance v3.2 · 2026-11-05 · 📒 BASHANG search on the logbook page also finds payments from the 14 days before (late discovery), added on the page you are on · v3.1 · 2026-11-04 · 🤝 Turnover count under Write a line: handed by → received by + amount counted vs this page's book; difference written as Drawer over/short on the page date · v3.0 · 2026-10-15 · tap "Carried from before" to see the earlier days' lines · bookmark = newest line in the book · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
+<!-- SPAWN Finance v3.3 · 2026-11-05 · ＋ Add from BASHANG fills in BASHANG's OR / GCash ref and a note (BASHANG date, received by); the list shows them · v3.2 · 2026-11-05 · 📒 BASHANG search on the logbook page also finds payments from the 14 days before (late discovery), added on the page you are on · v3.1 · 2026-11-04 · 🤝 Turnover count under Write a line: handed by → received by + amount counted vs this page's book; difference written as Drawer over/short on the page date · v3.0 · 2026-10-15 · tap "Carried from before" to see the earlier days' lines · bookmark = newest line in the book · day history under each logbook page (Harvest, subscribers, collector expenses, cash sheet, expense books, deposits, parts; read only) · v2.9 · 2026-10-14 · shorts: own minus line (office covers), 📉 Shorts list, charge/paid back · v2.8 · waiting items shown on the logbook page itself (Add / Count); on a past page the harvest due is only up to that day · · signed in 5 hours; payment-sheet cash added to the book once (reconcile) · v2.6 · plain font on the logbook page (no cursive) · v2.5 · keyboard everywhere (↑↓ between boxes in forms; notebook ←→ day, ↑↓ lines, W/H, Esc), laptop layout · v2.4 · Back button everywhere: header ‹ Back, Back to the logbook on tabs, phone Back closes one step · v2.3 · polish: binding strip, warmer paper, pulsing waiting chip, softer shadows · v2.2 · compact top (no big cards), balance written on the page · v2.1 prettier notebook: greeting + balance card, waiting card, plain-words lines, guide · · The notebook: logbook page like the office logbook, tabs (Collect/GCash/Deposit/Parts/Approve/More), Write a line, Count & hand over, bookmark; tiles kept behind the 📒/▦ switch -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -3375,7 +3375,7 @@ function nbBoPaper(d, H){
   el.innerHTML = `<div class="ps-wrap bo-wrap"><div class="ps-h">📒 IN BASHANG · NOT IN THE SHEET<span class="ps-sum">${bo.length} · ${peso(tot)}</span></div>
     <div class="bo-s"><input id="bo-q" autocomplete="off" placeholder="Search a name to add it (${bo.length} today · older days too)…" value="${esc(NB.boQ || '')}"><button type="button" id="bo-all">${all ? 'hide' : 'show all'}</button></div>`
     + shown.map((o, i) => { const x = o.x; return `<div class="ps"><span class="av">${esc(psInit(x.name))}</span>
-        <span class="nm"><b>${esc(clean(x))}</b><small>${o.old ? `<i>paid ${esc(dLabel(x.paid))}</i> · ` : ''}for ${esc(ymLabel(x.ym))} · ${x.gcash ? 'GCash' : 'Cash'}${x.area ? ' · ' + esc(x.area) : ''}</small></span>
+        <span class="nm"><b>${esc(clean(x))}</b><small>${o.old ? `<i>paid ${esc(dLabel(x.paid))}</i> · ` : ''}for ${esc(ymLabel(x.ym))} · ${x.gcash ? 'GCash' : 'Cash'}${x.or ? ` · OR <i>${esc(x.or)}</i>` : ''}${x.rcv ? ' · ' + esc(x.rcv) : ''}${x.area ? ' · ' + esc(x.area) : ''}</small></span>
         <span class="am">${peso(x.amount)}</span><button type="button" data-pbo="${i}">＋ Add</button></div>`; }).join('')
     + (busy ? '<div class="ps"><span class="nm"><small>Searching the 14 days before…</small></span></div>' : '')
     + (q && oc && oc.err ? `<div class="ps"><span class="nm"><small>Could not search the older days: ${esc(oc.err)}</small></span></div>` : '')
@@ -3393,9 +3393,15 @@ async function addFromBashang(x){
   await pickSub(x.sub_id);
   const F = S.form; if (!F || !F.sub || F.sub.id !== x.sub_id) return;
   F.sel = [x.ym]; F.bill = String(Number(x.amount)); F.billEdited = true;
+  // v3.3: what BASHANG already has is filled in — OR / GCash ref, and a note with its date and who received it
+  if (x.or && !F.orPend) F.or = String(x.or);
+  const late = x.paid && x.paid !== workDate();
+  const bn = ['BASHANG', x.paid ? 'paid ' + dLabel(x.paid) : '', x.rcv ? 'received by ' + x.rcv : ''].filter(Boolean).join(' · ');
+  if (!F.memo && (x.paid || x.rcv)) F.memo = bn;
   renderSheet(); if ($('f-bill')) { $('f-bill').value = F.bill; liveCalc(); }
-  toast(`${x.name} · ${ymLabel(x.ym)} · ${peso(x.amount)}${x.paid ? ' · paid ' + dLabel(x.paid) + ', added on this page' : ''} — type the OR no.${x.gcash ? ' (GCash ref)' : ''} and save`, 5000);
-  const o = $('f-or'); if (o) o.focus({ preventScroll:true });
+  toast(`${x.name} · ${ymLabel(x.ym)} · ${peso(x.amount)}${late ? ' · paid ' + dLabel(x.paid) + ', added on this page' : ''} — `
+    + (x.or ? `OR ${x.or} filled in from BASHANG · check and save` : `type the OR no.${x.gcash ? ' (GCash ref)' : ''} and save`), 5000);
+  const o = $(x.or ? 'f-bill' : 'f-or'); if (o) o.focus({ preventScroll:true });
 }
 function nbHistKeep(box, d){
   box.querySelectorAll('[data-hbo]').forEach(b => b.onclick = ev => { ev.preventDefault(); ev.stopPropagation();
