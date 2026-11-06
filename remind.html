@@ -1447,7 +1447,7 @@ function smsHref(r){ return `sms:${r.phone}${IOS ? '&' : '?'}body=${encodeURICom
 const SKIND = { reminder:'⏰ Reminders', auto:'🤖 Auto replies', alert:'📣 Alerts to staff', office:'💬 Office replies' };
 const STPL = { due_soon:'due soon', due_today:'due today', late:'late', utang:'utang', auto_gcash:'GCash reply', auto_repair:'repair reply',
   auto_noted:'noted reply', thanks:'thank-you', summary:'summary', jobs_digest:'jobs digest', job_alert:'job alert', jobs_alert:'jobs alert',
-  line_alert:'SMS line alert', pay_alert:'payment alert', pay_guard:'payment check', phone:'typed on the office phone', reply:'reply', manual:'new text' };
+  line_alert:'SMS line alert', pay_alert:'payment alert', gcash_missing:'GCash not found alert', auto_gcash_ok:'GCash thank-you', pay_guard:'payment check', phone:'typed on the office phone', reply:'reply', manual:'new text' };
 const phTime = at => new Date(at).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', timeZone:'Asia/Manila' });
 const sentMatch = (r, k) => k === 'all' || (k === 'system' ? r.kind !== 'office' : k === 'failed' ? r.status === 'failed' : r.kind === k);
 async function loadSent(){
