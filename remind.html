@@ -438,7 +438,7 @@ async function load(pin, date){
     peopleP,
     rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null),   // Checks tab: hidden if missing
     rpc('remind_gcash_check_v1', { p_pin:pin }).catch(() => null),   // 💳 To check: is each texted ref in the GCash statements? (missing or switched off = no badges)
-    rpc('remind_gcash_auto_list_v2', { p_pin:pin }).catch(x => x.pin ? null : rpc('remind_gcash_auto_list_v1', { p_pin:pin })).catch(() => null),   // 🤖 GCash auto-confirm list; v2 = + confirmed / text status (missing or switched off = no section)
+    rpc('remind_gcash_auto_list_v3', { p_pin:pin }).catch(x => x.pin ? null : rpc('remind_gcash_auto_list_v2', { p_pin:pin })).catch(x => x && x.pin ? null : rpc('remind_gcash_auto_list_v1', { p_pin:pin })).catch(() => null),   // 🤖 GCash auto-confirm list; v2 = + confirmed / text status; v3 = + payment (stage B). Missing or switched off = no section
     r0 || boardP,
     chatP,
   ]);
@@ -1185,6 +1185,13 @@ function gcAutoRow(a){
       ? '✓ Confirmed by the system · ' + ({ delivered:'texted (delivered):', sent:'texted (sent):', queued:'text waiting to send (8 AM–6 PM):', sending:'text sending now:', failed:'⚠ text failed:' }[a.sms_status] || 'no text (no working number):')
       : a.check === 'open' ? 'Would confirm and text:' : 'Office already closed this check · would have texted:',
     text: a.text || '',
+    pay: !a.pay_note ? ''
+      : a.payment_voided ? `💰 System payment stepped aside: ${a.void_reason || 'voided'}`
+      : /^would add: /.test(a.pay_note) ? `💰 Would add the payment: ${a.pay_note.slice(11)} (watching)`
+      : /^added: /.test(a.pay_note) ? `💰 Payment added: ${a.pay_note.slice(7)} · GCash (system)`
+      : /^already in the books/.test(a.pay_note) ? '💰 Already in the books — no system payment'
+      : /^office decides: /.test(a.pay_note) ? `💰 Office decides: ${a.pay_note.slice(16)} — no system payment`
+      : `💰 ${a.pay_note}`,
   };
 }
 // gcAuto:end
@@ -1200,7 +1207,7 @@ function checksHtml(){
     const A = S.gcauto.rows || [], watch = S.gcauto.mode === 'watch';
     h += `<div class="sec"><b>🤖 GCash auto-confirm</b><small>${A.length} · ${watch ? 'watching only — nothing is confirmed or texted yet' : 'confirmed by the system when the GCash ref, amount and date all fit'} · last 30 days</small></div>`;
     h += A.length ? A.map(a => { const r = gcAutoRow(a); return `<div class="dl hasgc" data-csub="${a.sub}"><div class="t"><b>${esc(r.title)}</b><small>${esc(r.line)}${a.area ? ' · ' + esc(a.area) : ''}</small></div>
-      <div class="gcb ${a.in_books ? 'ok' : 'warn'}">${esc(r.books)}</div><div class="gcq"><small>${esc(r.would)}</small>“${esc(r.text)}”</div></div>`; }).join('')
+      <div class="gcb ${a.in_books ? 'ok' : 'warn'}">${esc(r.books)}</div>${r.pay ? `<div class="gcb ${/^💰 Payment added/.test(r.pay) ? 'ok' : 'wait'}">${esc(r.pay)}</div>` : ''}<div class="gcq"><small>${esc(r.would)}</small>“${esc(r.text)}”</div></div>`; }).join('')
       : `<div class="note">Nothing yet. A texted GCash ref that is found with the right amount shows here.</div>`;
   }
   h += `<div class="sec"><b>📵 Not working</b><small>${O.failed.length} · texts that did not reach the number (last 14 days)</small></div>`;
