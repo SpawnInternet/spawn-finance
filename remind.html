@@ -161,6 +161,37 @@ body.chats header .day,body.senttab header .day{display:none}   /* the day arrow
 .sday{margin:14px 2px 6px;font-weight:700;font-size:13px;color:var(--muted)}
 .srow .shead{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.srow .smeta{display:block;color:var(--muted);font-size:12.5px;margin:2px 0 6px}
 .srow[data-sopen]{cursor:pointer}.srow.sfail{box-shadow:0 0 0 1.5px var(--utang) inset}
+/* 📊 Month tab */
+.mhead{display:flex;align-items:center;gap:10px;margin:2px 0 10px}
+.mnav{width:42px;height:42px;border-radius:50%;background:var(--card);color:var(--blue);font-size:24px;font-weight:700;line-height:1;box-shadow:0 1px 0 var(--line),0 0 0 1px var(--line) inset;flex:none}
+.mnav:disabled{opacity:.35}
+.mtitle{flex:1;text-align:center}.mtitle b{display:block;font-size:19px;letter-spacing:-.01em}.mtitle small{color:var(--muted);font-size:13px}
+.mcard{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px;box-shadow:0 1px 0 var(--line)}
+.mbig{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:10px}
+.mbig b{display:block;font-size:30px;line-height:1.05;letter-spacing:-.02em;color:var(--done)}.mbig small{color:var(--muted);font-size:13px}
+.mcash{text-align:right}.mcash b{font-size:19px;color:var(--ink)}
+.mbar{display:flex;height:10px;border-radius:999px;overflow:hidden;background:var(--line);margin-bottom:14px}
+.mbar i{display:block;height:100%}.mbar i.ok{background:var(--done)}.mbar i.info{background:var(--blue)}.mbar i.bad{background:var(--utang)}
+.mtiles{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.mt{border-radius:14px;padding:9px 4px 8px;text-align:center;background:var(--paper)}
+.mt b{display:block;font-size:20px;line-height:1.1}.mt small{display:block;font-size:11.5px;font-weight:600;color:var(--ink-2);line-height:1.2;margin-top:2px}
+.mt.ok b{color:var(--done)}.mt.bad b{color:var(--utang)}.mt.warn b{color:var(--late)}.mt.info b{color:var(--blue)}.mt.calm b{color:var(--muted)}
+@media (max-width:420px){.mtiles{grid-template-columns:repeat(6,1fr)}.mt{grid-column:span 2}.mt:nth-child(n+4){grid-column:span 3}.mbig b{font-size:26px}}
+.mfind{display:flex;gap:8px;align-items:flex-start}.mfind .q{flex:1}
+.mfind select{height:42px;border-radius:12px;padding:0 10px;font:inherit;font-size:14px;background:var(--paper);color:var(--ink);border:0;box-shadow:0 0 0 1px var(--line) inset;max-width:42%}
+.mcount{font-size:13px;color:var(--muted);font-weight:600;margin:2px 2px 8px}
+.mrow{border-left:4px solid var(--line);padding:12px 14px 11px}
+.mrow.m-ok{border-left-color:var(--done)}.mrow.m-bad{border-left-color:var(--utang)}.mrow.m-warn{border-left-color:var(--late)}.mrow.m-info{border-left-color:var(--blue)}
+.mrow[data-mopen]{cursor:pointer}.mrow[data-mopen]:active{transform:scale(.995)}
+.mtop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.mname b{display:block;font-size:15.5px}.mname small{color:var(--muted);font-size:12.5px}
+.mpill{font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap;flex:none}
+.mpill.ok{background:var(--done-l);color:var(--done)}.mpill.bad{background:var(--utang-l);color:var(--utang)}.mpill.warn{background:var(--late-l);color:var(--late)}
+.mpill.info{background:var(--blue-l);color:var(--blue)}.mpill.calm{background:var(--paper);color:var(--muted)}
+.minfo{margin-top:6px;font-size:13px;color:var(--ink-2)}.minfo span{display:inline}
+.minfo span:not(:last-child)::after{content:' · ';color:var(--muted)}
+.mold{margin-top:7px;font-size:12.5px;font-weight:600;color:var(--utang);background:var(--utang-l);border-radius:9px;padding:4px 9px;display:inline-block}
+body.monthtab header .day{display:none}
 .sst{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}.sst.ok{color:#1a7f4b}.sst.bad{color:var(--utang)}.serr{display:block;color:var(--utang);font-size:12px;margin-top:4px}
 .chat .compose .cpanel{max-height:62vh;overflow:auto}   /* phone: a long form never pushes the reply row off the screen */
 .cchips{display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 2px}.cchips .tpl{white-space:nowrap}
@@ -467,7 +498,7 @@ async function load(pin, date){
 }
 function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); navBase(); render(); bell(); startPoll(); pushEnsure(); lineStart();
   if (S.pendingChat) goChat(S.pendingChat.address, S.pendingChat.reply);
-  setTimeout(prefetchChats, 800); }   // opened from a notification's ↩ Reply / Open chat
+  setTimeout(prefetchChats, 800); setTimeout(() => loadMonth(true), 1500); }   // opened from a notification's ↩ Reply / Open chat
 /* 📶 SMS phone status bar: is the office SMS phone receiving and sending? Asked every minute; shows nothing if the
    action is missing or the switch remind_line_bar is off. Red = a number that worked before just failed, or the queue is stuck. */
 let lineT = null;
@@ -1456,6 +1487,138 @@ $('list').addEventListener('click', e => {
 });
 $('list').addEventListener('input', e => { if (S.tab === 'sent' && e.target.id === 'sq') { S.sentQ = e.target.value; render(); } });
 $('list').addEventListener('change', e => { if (S.tab === 'sent' && (e.target.id === 'sfrom' || e.target.id === 'sto')) { S.sentFrom = ($('sfrom') || {}).value || null; S.sentTo = ($('sto') || {}).value || null; } });
+/* 📊 Month: the whole month at once — every billed subscriber with paid / not paid, texts, promises and utang
+   (remind_month_v1, read-only). Asked when the tab is opened and once quietly after login; ‹ › changes the month. */
+// monthView:start
+const MST = {
+  paid:     { label:'✓ Paid',        cls:'ok' },
+  partial:  { label:'◐ Paid part',   cls:'warn' },
+  check:    { label:'💳 To check',   cls:'info' },
+  promised: { label:'🤝 Promised',   cls:'info' },
+  late:     { label:'⚠ Late',        cls:'bad' },
+  today:    { label:'⏰ Due today',  cls:'warn' },
+  unpaid:   { label:'✗ Not paid',    cls:'bad' },
+  soon:     { label:'Not yet due',   cls:'calm' },
+  free:     { label:'Nothing due',   cls:'calm' },
+};
+const MFIL = [['all', 'All'], ['notpaid', 'Not paid'], ['late', '⚠ Late'], ['promised', '🤝 Promised / To check'], ['paid', '✓ Paid'],
+  ['utang', 'Old utang'], ['soon', 'Not yet due'], ['nonum', '📵 No number']];
+const SRC = { bashang:'BASHANG', 'bashang+log':'BASHANG', 'bashang+app':'BASHANG + app', app:'Spawn Collect', log:'payment log' };
+const RWHY = { due_soon:'due soon', due_today:'due today', late:'late', utang:'utang', reply:'reply', note:'note' };
+function mStatus(r, month, today){
+  const ym = String(month).slice(0, 7), tm = String(today).slice(0, 7);
+  if (r.paid) return Number(r.paid.balance) > 0 ? 'partial' : 'paid';
+  if (!(Number(r.rate) > 0)) return 'free';
+  if (r.promise && r.promise.check) return 'check';
+  if (r.promise) return 'promised';
+  if (ym < tm) return 'unpaid';
+  if (ym > tm || r.due > today) return 'soon';
+  return r.due === today ? 'today' : 'late';
+}
+function mMatch(r, st, k){
+  if (k === 'all') return true;
+  if (k === 'notpaid') return st === 'late' || st === 'today' || st === 'unpaid' || st === 'partial';
+  if (k === 'late') return st === 'late' || st === 'unpaid';
+  if (k === 'promised') return st === 'promised' || st === 'check';
+  if (k === 'paid') return st === 'paid' || st === 'partial';
+  if (k === 'utang') return !!(r.older && r.older.n > 0);
+  if (k === 'soon') return st === 'soon';
+  if (k === 'nonum') return !r.phone;
+  return true;
+}
+function mSummary(rows, month, today){
+  const n = {}, out = { expected:0, collected:0, n };
+  for (const k in MST) n[k] = 0;
+  for (const r of rows) {
+    const st = mStatus(r, month, today); n[st]++;
+    out.expected += Number(r.rate) || 0;
+    if (r.paid) out.collected += Math.min(Number(r.paid.amount) || 0, Number(r.rate) || Number(r.paid.amount) || 0);
+  }
+  out.billed = rows.length - n.free;
+  out.pct = out.billed ? Math.round(100 * (n.paid + n.partial) / out.billed) : 0;
+  return out;
+}
+function mLine(r, st, today){
+  const bits = [];
+  if (r.paid) {
+    bits.push(`Paid ${r.paid.date ? dLabel(r.paid.date) : ''} · ${peso(r.paid.amount)}${Number(r.paid.balance) > 0 ? ` · ${peso(r.paid.balance)} left` : ''}`
+      + (r.paid.by ? ` · ${r.paid.by}` : SRC[r.paid.src] ? ` · ${SRC[r.paid.src]}` : ''));
+  } else if (st === 'promised' || st === 'check') {
+    bits.push(st === 'check' ? 'GCash ref texted — office to check' : `Promised to pay ${r.promise.date ? dLabel(r.promise.date) : ''}`);
+  } else if (st === 'late') {
+    const days = Math.round((new Date(today + 'T12:00:00Z') - new Date(r.due + 'T12:00:00Z')) / 864e5);
+    bits.push(`${days} day${days === 1 ? '' : 's'} late`);
+  }
+  if (r.texts) bits.push(`Texted ${r.texts.n}× · last ${dLabel(phDay(r.texts.last))}${r.texts.last_intent && RWHY[r.texts.last_intent] ? ' (' + RWHY[r.texts.last_intent] + ')' : ''}`);
+  else if (st !== 'paid' && st !== 'free' && st !== 'soon') bits.push(r.phone ? 'Not texted yet' : 'No number — cannot text');
+  if (r.failed > 0) bits.push(`📵 ${r.failed} text${r.failed === 1 ? '' : 's'} failed`);
+  if (r.gcash) bits.push(`🤖 GCash ₱${Number(r.gcash.amount || 0).toLocaleString('en-PH')} …${r.gcash.ref4}${r.gcash.confirmed ? ' confirmed by the system' : ''}`);
+  return bits;
+}
+function mMonthLabel(m){ return new Date(String(m).slice(0, 7) + '-15T12:00:00Z').toLocaleDateString('en-PH', { month:'long', year:'numeric', timeZone:'UTC' }); }
+function mShift(m, n){ const x = new Date(String(m).slice(0, 7) + '-15T12:00:00Z'); x.setUTCMonth(x.getUTCMonth() + n); return x.toISOString().slice(0, 7) + '-01'; }
+// monthView:end
+async function loadMonth(quiet){
+  if (!S.pin || S.monthLoading) return;
+  S.monthLoading = true; S.monthTried = true; if (!quiet) render();
+  try {
+    const m = await rpc('remind_month_v1', { p_pin:S.pin, p_month:S.monthAt || null });
+    if (m && m.ok && m.on) { S.month = m; S.monthAt = m.month; S.monthMs = Date.now(); }
+    else if (m && m.ok && !m.on) { S.monthOff = true; if (S.tab === 'month') { S.tab = 'chats'; toast('📊 Month is not switched on yet'); } }
+    else if (!quiet) toast((m && m.error) || 'Could not load the month', 4000);
+  } catch (x) {
+    if (/function|404|schema cache/i.test(x.message)) { S.monthOff = true; if (S.tab === 'month') { S.tab = 'chats'; if (!quiet) toast('📊 Month is not installed yet'); } }
+    else if (!quiet) toast(x.message, 4000);
+  } finally { S.monthLoading = false; render(); }
+}
+function monthHtml(){
+  if (!S.month && !S.monthLoading && !S.monthTried) setTimeout(loadMonth, 0);
+  else if (S.month && !S.monthLoading && Date.now() - (S.monthMs || 0) > 120000) setTimeout(() => loadMonth(true), 0);   // older than 2 min: refresh quietly
+  if (!S.month) return S.monthLoading ? '<div class="empty"><b>Loading the month…</b>Every subscriber, paid or not.</div>' : '<div class="empty"><b>Could not load</b><button type="button" class="btn" id="mretry">Try again</button></div>';
+  const M = S.month, rows = M.rows || [], t = M.today, m0 = String(t).slice(0, 7) + '-01', k = S.monthFil || 'notpaid', q = (S.monthQ || '').trim().toLowerCase(), ar = S.monthArea || '';
+  const sum = mSummary(rows, M.month, t), n = sum.n;
+  const areas = [...new Set(rows.map(r => r.area || '').filter(Boolean).map(a => a.toUpperCase()))].sort();
+  let h = `<div class="mhead">
+      <button type="button" class="mnav" data-mnav="-1" aria-label="Previous month"${M.month <= mShift(m0, -12) ? ' disabled' : ''}>‹</button>
+      <div class="mtitle"><b>${esc(mMonthLabel(M.month))}</b><small>${M.month === m0 ? 'This month · up to ' + esc(dLabel(t)) : M.month < m0 ? 'Past month' : 'Next month — a look ahead'}${S.monthLoading ? ' · loading…' : ''}</small></div>
+      <button type="button" class="mnav" data-mnav="1" aria-label="Next month"${M.month >= mShift(m0, 1) ? ' disabled' : ''}>›</button>
+    </div>
+    <div class="mcard">
+      <div class="mbig"><div><b>${sum.pct}%</b><small>paid · ${n.paid + n.partial} of ${sum.billed}</small></div><div class="mcash"><b>${peso(sum.collected)}</b><small>of ${peso(sum.expected)} this month</small></div></div>
+      <div class="mbar" role="img" aria-label="${sum.pct}% paid"><i class="ok" style="width:${sum.billed ? 100 * (n.paid + n.partial) / sum.billed : 0}%"></i><i class="info" style="width:${sum.billed ? 100 * (n.promised + n.check) / sum.billed : 0}%"></i><i class="bad" style="width:${sum.billed ? 100 * (n.late + n.today + n.unpaid) / sum.billed : 0}%"></i></div>
+      <div class="mtiles">
+        <button type="button" class="mt ok" data-mf="paid"><b>${n.paid + n.partial}</b><small>Paid</small></button>
+        <button type="button" class="mt bad" data-mf="late"><b>${n.late + n.unpaid}</b><small>${M.month < m0 ? 'Not paid' : 'Late'}</small></button>
+        <button type="button" class="mt warn" data-mf="notpaid"><b>${n.today}</b><small>Due today</small></button>
+        <button type="button" class="mt info" data-mf="promised"><b>${n.promised + n.check}</b><small>Promised / check</small></button>
+        <button type="button" class="mt calm" data-mf="soon"><b>${n.soon}</b><small>Not yet due</small></button>
+      </div>
+    </div>`;
+  h += `<div class="cfil">${MFIL.map(([kk, l]) => `<button type="button" class="tpl${k === kk ? ' on' : ''}" data-mf="${kk}" aria-pressed="${k === kk}">${l} ${rows.filter(r => mMatch(r, mStatus(r, M.month, t), kk)).length}</button>`).join('')}</div>`;
+  h += `<div class="mfind"><input class="q" id="monq" type="search" placeholder="Search name" aria-label="Search subscriber in this month" value="${esc(S.monthQ || '')}" autocomplete="off">
+    <select id="monarea" aria-label="Area"><option value="">All areas</option>${areas.map(a => `<option${a === ar ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select></div>`;
+  const list = rows.map(r => ({ r, st:mStatus(r, M.month, t) }))
+    .filter(x => mMatch(x.r, x.st, k) && (!ar || String(x.r.area || '').toUpperCase() === ar) && (!q || String(x.r.name || '').toLowerCase().includes(q)));
+  if (!list.length) return h + `<div class="empty"><b>Nobody here</b>${k === 'notpaid' || k === 'late' ? 'Everyone in this list has paid or promised. 🎉' : 'Try another filter or area.'}</div>`;
+  h += `<div class="mcount">${list.length} subscriber${list.length === 1 ? '' : 's'}</div>`;
+  return h + list.map(({ r, st }) => {
+    const s = MST[st], chat = S.chats && S.chats.find(c => c.sub === r.sub);
+    return `<article class="item mrow m-${s.cls}"${chat ? ` data-mopen="${esc(chat.address)}" role="button" tabindex="0"` : ''}>
+      <div class="mtop"><div class="mname"><b>${esc(r.name)}</b><small>${esc(r.area || '')} · due ${esc(dLabel(r.due))} · ${peso(r.rate)}</small></div><span class="mpill ${s.cls}">${s.label}</span></div>
+      <div class="minfo">${mLine(r, st, t).map(b => `<span>${esc(b)}</span>`).join('')}</div>
+      ${r.older && r.older.n > 0 ? `<div class="mold">Old utang: ${esc(r.older.months)} · ${peso(r.older.total)}</div>` : ''}
+    </article>`;
+  }).join('');
+}
+$('list').addEventListener('click', e => {
+  if (S.tab !== 'month') return;
+  const f = e.target.closest('[data-mf]'); if (f) { S.monthFil = f.dataset.mf; render(); return; }
+  const nv = e.target.closest('[data-mnav]'); if (nv && !nv.disabled && S.month) { S.monthAt = mShift(S.month.month, +nv.dataset.mnav); loadMonth(); return; }
+  if (e.target.closest('#mretry')) { loadMonth(); return; }
+  const op = e.target.closest('[data-mopen]'); if (op) goChat(op.dataset.mopen, false);
+});
+$('list').addEventListener('input', e => { if (S.tab === 'month' && e.target.id === 'monq') { S.monthQ = e.target.value; render(); } });   // render() keeps the focus and cursor
+$('list').addEventListener('change', e => { if (S.tab === 'month' && e.target.id === 'monarea') { S.monthArea = e.target.value; render(); } });
 // laptop Chats: list + conversation exactly fill the window below the header, whatever its height (two rows of tabs,
 // a help box, the status bar), so the reply bar is never cut off at the bottom
 function chatFit(){
@@ -1466,7 +1629,7 @@ function chatFit(){
 }
 window.addEventListener('resize', () => { if (S.tab === 'chats') chatFit(); });
 function render(){
-  titleCount(); document.body.classList.toggle('chats', S.tab === 'chats'); document.body.classList.toggle('senttab', S.tab === 'sent'); document.body.classList.toggle('inchat', S.tab === 'chats' && !!S.chat);
+  titleCount(); document.body.classList.toggle('chats', S.tab === 'chats'); document.body.classList.toggle('senttab', S.tab === 'sent'); document.body.classList.toggle('monthtab', S.tab === 'month'); document.body.classList.toggle('inchat', S.tab === 'chats' && !!S.chat);
   const L = lists(), d = S.date, t = S.today;
   $('uname').textContent = S.user || '';
   $('dlabel').textContent = d === t ? 'Today' : dLabel(d);
@@ -1480,6 +1643,7 @@ function render(){
   if (!S.chats && S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
   if (S.repairs) T.push(['jobs', '🔧 Job orders', jobCards().filter(c => c.open).length]);
   if (S.ops) T.push(['checks', 'To check', S.ops.to_check.length + S.ops.failed.length]);
+  if (!S.monthOff) { const ms = S.month && mSummary(S.month.rows || [], S.month.month, S.month.today); T.push(['month', '📊 Month', ms ? ms.n.late + ms.n.unpaid || '' : '']); }   // the whole month at once (remind_month_v1); hidden if not installed / off
   if (S.auto) T.push(['auto', 'Sent & coming', autoRows().length]);
   if (!S.sentOff) { const nf = S.sent ? (S.sent.rows || []).filter(r => r.status === 'failed').length : 0; T.push(['sent', '📤 Sent', nf ? '⚠' + nf : '']); }   // everything the system sent (remind_sent_list_v1); hidden if not installed
   $('tabs').innerHTML = T.map(([k, l, n]) => `<button type="button" class="${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-pressed="${S.tab === k}">${l}<em>${n}</em></button>`).join('');
@@ -1497,6 +1661,7 @@ function render(){
     replies: 'Mga text gikan sa subscribers. <b>Reply</b> (naay ready answers), <b>Promised</b>, <b>To check</b> (GCash ref), <b>Handled</b> kung human na.',
     jobs: '🔧 Mga reklamo nga guba / walay internet = posible nga job order. <b>📞 Call</b>, <b>📤 Spawn Notes</b> (share sa Messenger GC), <b>🔧 Lineman</b> (job order sa Spawn Jobs para sa lineman), <b>💬 Reply</b>, dayon <b>✅ Done</b> kung naayo na.',
     checks: '💳 GCash ref nga i-verify: makita na sa libro? → <b>Confirmed</b> (o automatic). 📵 Number nga dili mo-work → <b>Block number</b>.',
+    month: '📊 Tibuok bulan: kinsa na ang bayad, kinsa wala pa, pila na ka text, ug kinsa ang nisaad. Pindota ang filter (<b>Not paid</b>, <b>Late</b>…) o ‹ › para sa laing bulan. Pindota ang tawo para maablihan ang chat.',
     sent: '📤 Tanan nga gi-send: reminders, automatic replies, alerts sa staff, ug office replies. ⚠️ <b>Failed</b> = wala naabot — i-text usab o pangayo og bag-ong number. Pindota ang tawo para maablihan ang chat.',
   };
   let h = HOW[S.tab] && !(S.tab === 'chats' && S.chat) ? `<div class="how">${HOW[S.tab]}</div>` : '';   // no tip over an open conversation
@@ -1539,6 +1704,7 @@ function render(){
   if (S.tab === 'checks' && S.ops) h += checksHtml();
   if (S.tab === 'jobs' && S.repairs) h += jobsHtml();
   if (S.tab === 'sent') h += sentHtml();
+  if (S.tab === 'month') h += monthHtml();
   if (S.tab === 'done') {
     h += L.done.length ? L.done.map(r => `<div class="dl" data-key="${esc(r.key)}"><span class="ck ${r.paid ? 'p' : ''}">${r.paid ? '₱' : r.sent ? '✓' : '⏳'}</span>
         <div class="t"><b>${esc(r.name)}</b><small>${r.paid ? `Marked already paid by ${esc(r.paid.by)} · ${tLabel(r.paid.at)}` : r.sent ? `${r.sent.by ? `Texted by ${esc(r.sent.by)}` : 'Auto-texted'} · ${tLabel(r.sent.at)}` : /^TO CHECK/.test(r.promise.note || '') ? `💳 To check (${esc((r.promise.note.match(/ref ([^·]+)/) || [])[1] || 'GCash ref')}) — paused until ${esc(dLabel(r.promise.date))}` : `Promised to pay ${esc(dLabel(r.promise.date))}${r.promise.note ? ` · ${esc(r.promise.note)}` : ''}`}</small></div>
