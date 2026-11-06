@@ -1653,6 +1653,9 @@ function gcPick(rows, k, upto){
   if (k === 'notfound') return rows.filter(g => g.status === 'broken');
   return [];
 }
+// 📷 Add GCash payment (from a Facebook screenshot): the ref must be 6–13 digits; the note keeps amount + where it came from
+function gpRef(v){ const d = String(v || '').replace(/\D/g, ''); return d.length >= 6 && d.length <= 13 ? d : null; }
+function gpNote(ref, amount){ const a = Number(String(amount || '').replace(/[^\d.]/g, '')); return ref + (a > 0 ? ' · P' + a.toLocaleString('en-PH', { maximumFractionDigits:2 }) : '') + ' · from a screenshot'; }
 // gcList:end
 function gcTodoHtml(){
   const O = S.ops; if (!O) return '';
@@ -1661,6 +1664,44 @@ function gcTodoHtml(){
       <button type="button" data-cact="check_ok" title="Payment found and recorded">Confirmed</button><button type="button" data-cact="check_fail" title="Not found in GCash — reminders resume">Not found</button>${gb ? `<div class="gcb ${gb.cls}">${esc(gb.text)}</div>` : ''}</div>`; }).join('')
     : `<div class="note">Nothing to check. 🎉</div>`;
 }
+function gpFormHtml(){
+  const P = S.gpPick, open = P && S.ops && S.ops.to_check.some(c => c.sub === P.id);
+  if (!S.gpOpen) return `<button type="button" class="imp" id="gpopen"><span class="ic">📷</span><span><b>Add GCash payment</b><small>A customer sent a GCash screenshot on Facebook? Add the ref here — it is checked like a texted one and their reminders pause.</small></span></button>`;
+  return `<article class="item gpform"><b>📷 Add GCash payment</b><small style="display:block;color:var(--muted)">From a screenshot: find the customer, type the 13-digit ref (and the amount), Add.</small>
+    ${P ? `<div class="sent" style="margin-top:8px">For <b>${esc(P.name)}</b> <button type="button" class="linkbtn" id="gpchange">change</button></div>${open ? '<div class="note" style="padding:6px 0 0">⚠ They already have an open To check — adding replaces it.</div>' : ''}`
+        : `<div class="nform"><input type="search" id="gpq" placeholder="Search name (2+ letters)" aria-label="Search the customer" value="${esc(S.gpQ || '')}" autocomplete="off"></div>
+           <div class="lres">${(S.gpRes || []).map(x => `<button type="button" class="tpl" data-gppick="${x.id}" data-gpname="${esc(x.name)}">${esc(x.name)}${x.area ? ' · ' + esc(x.area) : ''}</button>`).join('') || (S.gpNone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>`}
+    ${P ? `<div class="nform"><input type="text" inputmode="numeric" id="gpref" placeholder="GCash ref (13 digits)" aria-label="GCash reference number" autocomplete="off"><input type="text" inputmode="decimal" id="gpamt" placeholder="Amount (optional)" aria-label="Amount paid" style="max-width:9em"></div>
+      <div class="acts" style="margin-top:8px"><button type="button" class="btn send" id="gpsave">Add to To check</button><button type="button" class="btn" id="gpclose">Cancel</button></div>` : `<div class="acts" style="margin-top:8px"><button type="button" class="btn" id="gpclose">Cancel</button></div>`}
+  </article>`;
+}
+let gpT = null;
+async function gpSearch(q){
+  try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); if ((S.gpQ || '').trim() !== q) return;
+    S.gpRes = j.rows || []; S.gpNone = !S.gpRes.length; render(); }
+  catch (x) { toast(x.message, 4000); }
+}
+$('list').addEventListener('input', e => {
+  if (S.tab !== 'gcash' || e.target.id !== 'gpq') return;
+  S.gpQ = e.target.value; clearTimeout(gpT); const q = S.gpQ.trim();
+  if (q.length < 2) { S.gpRes = []; S.gpNone = false; return; }
+  gpT = setTimeout(() => gpSearch(q), 350);
+});
+$('list').addEventListener('click', async e => {
+  if (S.tab !== 'gcash') return;
+  if (e.target.closest('#gpopen')) { S.gpOpen = true; render(); const i = $('gpq'); if (i) i.focus(); return; }
+  if (e.target.closest('#gpclose')) { S.gpOpen = false; S.gpPick = null; S.gpQ = ''; S.gpRes = []; S.gpNone = false; render(); return; }
+  if (e.target.closest('#gpchange')) { S.gpPick = null; render(); return; }
+  const pk = e.target.closest('[data-gppick]'); if (pk) { S.gpPick = { id:+pk.dataset.gppick, name:pk.dataset.gpname }; render(); const i = $('gpref'); if (i) i.focus(); return; }
+  const sv = e.target.closest('#gpsave'); if (!sv || !S.gpPick) return;
+  const ref = gpRef(($('gpref') || {}).value); if (!ref) { toast('Type the GCash ref — 6 to 13 digits (the full 13 is best)'); return; }
+  sv.disabled = true;
+  try {
+    await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'to_check', p_sub:S.gpPick.id, p_text:gpNote(ref, ($('gpamt') || {}).value) });
+    toast(`Added for ${S.gpPick.name} — it is checked against GCash and their reminders pause`, 4000);
+    S.gpOpen = false; S.gpPick = null; S.gpQ = ''; S.gpRes = []; S.gpNone = false; S.gcf = 'todo'; await reload();
+  } catch (x) { toast(x.message, 4000); sv.disabled = false; }
+});
 function gcAutoHtml(){
   if (!S.gcauto) return `<div class="note">The system list is not switched on.</div>`;
   const A = S.gcauto.rows || [], watch = S.gcauto.mode === 'watch';
@@ -1675,7 +1716,7 @@ function gcashHtml(){
   let h = `<div class="gchead"><b>💳 GCash</b><small>${upto ? 'GCash statements up to ' + esc(dLabel(upto)) : 'no GCash statement read yet'} · last ${G.days || 60} days</small></div>`;
   h += `<div class="cfil">${[['confirmed', `✅ Confirmed ${c.confirmed}`], ['todo', `💳 To check ${c.todo}`], ['system', `🤖 By the system ${S.gcauto ? (S.gcauto.rows || []).length : c.system}`], ['odd', `⚠ Needs a look ${c.odd}`], ['notfound', `✗ Not found ${c.notfound}`]]
     .map(([kk, l]) => `<button type="button" class="tpl${k === kk ? ' on' : ''}${kk === 'todo' && c.todo ? ' gchot' : ''}" data-gcf="${kk}" aria-pressed="${k === kk}">${l}</button>`).join('')}</div>`;
-  if (k === 'todo') return h + `<div class="note">GCash refs customers texted. Reminders are paused meanwhile.</div>` + gcTodoHtml();
+  if (k === 'todo') return h + gpFormHtml() + `<div class="note">GCash refs customers texted or the office added. Reminders are paused meanwhile.</div>` + gcTodoHtml();
   if (k === 'system') return h + gcAutoHtml();
   h += `<input class="q" id="gcq" type="search" placeholder="Search name" aria-label="Search GCash payments" value="${esc(S.gcq || '')}" autocomplete="off">`;
   const list = gcPick(rows, k, upto).filter(g => !q || String(g.name || '').toLowerCase().includes(q))
