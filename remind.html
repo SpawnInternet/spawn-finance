@@ -1155,7 +1155,7 @@ function gcFind(G, c){
   const digits = String(d || '').replace(/\D/g, '');
   return G.rows.find(g => g.sub === c.sub && (g.given || '') === (digits.length >= 6 ? digits : '')) || null;
 }
-function gcBadge(g, upto){
+function gcBadge(g, upto, textedAt){
   const upTo = upto ? ` · statements up to ${dLabel(upto)}` : '';
   if (g.match === 'several') return { cls:'warn', text:`⚠ Several GCash payments end in ${g.given} — ask for the full 13-digit ref` };
   if (!g.given) return { cls:'warn', text:'⚠ No GCash ref written — ask for the 13-digit ref' };
@@ -1165,6 +1165,8 @@ function gcBadge(g, upto){
   const from = g.from_theirs ? ' · from their number' : g.from_last4 ? ` · from …${g.from_last4}` : '';
   const how = g.match === 'last_digits' ? ` · matched by the last ${g.given.length} digits` : '';
   if (!g.fits) return { cls:'warn', text:`⚠ In GCash: ${peso(g.amount)} — monthly is ${peso(g.due)}${when}${from}${how}` };
+  const early = textedAt && g.at ? Math.floor((new Date(textedAt) - new Date(g.at)) / 864e5) : 0;
+  if (early > 7) return { cls:'warn', text:`⚠ In GCash: ${peso(g.amount)}${when}${from}${how} — paid ${early} days before they texted; check it is not an older payment` };
   return { cls:'ok', text:`✓ In GCash: ${peso(g.amount)}${when}${from}${how}` };
 }
 // gcBadge:end
@@ -1173,7 +1175,7 @@ function checksHtml(){
   const O = S.ops; let h = '';
   const ref = n => (String(n || '').match(/ref ([^·]+)/) || [])[1] || '?';
   h += `<div class="sec"><b>💳 To check</b><small>${O.to_check.length} · GCash refs to verify — reminders paused meanwhile${S.gcash && S.gcash.upto ? ` · GCash statements up to ${esc(dLabel(S.gcash.upto))}` : ''}</small></div>`;
-  h += O.to_check.length ? O.to_check.map(c => { const g = gcFind(S.gcash, c), gb = g && gcBadge(g, S.gcash.upto); return `<div class="dl${gb ? ' hasgc' : ''}" data-csub="${c.sub}"><div class="t"><b>${esc(c.name)}</b><small>ref ${esc(ref(c.note).trim())} · paused until ${esc(dLabel(c.until))}${c.area ? ' · ' + esc(c.area) : ''}</small></div>
+  h += O.to_check.length ? O.to_check.map(c => { const g = gcFind(S.gcash, c), gb = g && gcBadge(g, S.gcash.upto, c.at); return `<div class="dl${gb ? ' hasgc' : ''}" data-csub="${c.sub}"><div class="t"><b>${esc(c.name)}</b><small>ref ${esc(ref(c.note).trim())} · paused until ${esc(dLabel(c.until))}${c.area ? ' · ' + esc(c.area) : ''}</small></div>
       <button type="button" data-cact="check_ok" title="Payment found and recorded">Confirmed</button><button type="button" data-cact="check_fail" title="Not found in GCash — reminders resume">Not found</button>${gb ? `<div class="gcb ${gb.cls}">${esc(gb.text)}</div>` : ''}</div>`; }).join('')
     : `<div class="note">Nothing to check.</div>`;
   h += `<div class="sec"><b>📵 Not working</b><small>${O.failed.length} · texts that did not reach the number (last 14 days)</small></div>`;
