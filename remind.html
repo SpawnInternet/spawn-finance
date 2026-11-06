@@ -205,6 +205,7 @@ body.chats header .day,body.senttab header .day{display:none}   /* the day arrow
 .dl .ck{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;flex:none;background:var(--done-l);color:var(--done)}
 .dl .ck.p{background:var(--blue-l);color:var(--blue)}
 .dl.hasgc{flex-wrap:wrap}.dl.hasgc .gcb{flex-basis:100%}
+.gcq{flex-basis:100%;font-size:13.5px;color:var(--ink-2);font-style:italic}.gcq small{display:block;font-style:normal;color:var(--muted);font-size:12px;margin-bottom:2px}
 .gcb{font-size:13px;font-weight:600;padding:5px 9px;border-radius:9px;line-height:1.35}   /* 💳 GCash check badge */
 .gcb.ok{background:#e3f5e8;color:#11632f}.gcb.warn{background:#fff3d6;color:#7a4b00}.gcb.no{background:#fde4e1;color:#9b1c10}.gcb.wait{background:var(--line);color:var(--ink-2)}
 @media (prefers-color-scheme:dark){.gcb.ok{background:#173d24;color:#9fe0b2}.gcb.warn{background:#3d2f10;color:#f3cf7a}.gcb.no{background:#43201c;color:#f5a99f}}
@@ -425,7 +426,7 @@ async function load(pin, date){
   // fast: first wave = Today's list + Chats (+ the open chat); the rest is asked only after the PIN passed again, so a PIN
   // that stopped working costs at most a few wrong tries (rpc then blocks the remembered PIN for 15 s)
   if (fast) await Promise.all([boardP, chatsP, peopleP, chatP]);
-  const [a, ib, rp, lm, ch, pp, ops, gc, r] = await Promise.all([
+  const [a, ib, rp, lm, ch, pp, ops, gc, ga, r] = await Promise.all([
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:day }).catch(() => null),
     // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
     rpc('remind_inbox_v2', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null)),
@@ -437,6 +438,7 @@ async function load(pin, date){
     peopleP,
     rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null),   // Checks tab: hidden if missing
     rpc('remind_gcash_check_v1', { p_pin:pin }).catch(() => null),   // 💳 To check: is each texted ref in the GCash statements? (missing or switched off = no badges)
+    rpc('remind_gcash_auto_list_v1', { p_pin:pin }).catch(() => null),   // 🤖 GCash auto-confirm list (missing or switched off = no section)
     r0 || boardP,
     chatP,
   ]);
@@ -453,6 +455,7 @@ async function load(pin, date){
   S.linemen = lm ? (lm.linemen || (lm.names || []).map(name => ({ name, sms:true }))) : [];
   S.ops = ops;
   S.gcash = gc && gc.ok && gc.on ? gc : null;
+  S.gcauto = ga && ga.ok && ga.on ? ga : null;
   if (!S.ops && S.tab === 'checks') S.tab = 'send';
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
   S.auto = a; if (!a && S.tab === 'auto') S.tab = 'send';
@@ -1170,6 +1173,19 @@ function gcBadge(g, upto, textedAt){
   return { cls:'ok', text:`✓ In GCash: ${peso(g.amount)}${when}${from}${how}` };
 }
 // gcBadge:end
+// gcAuto:start
+// 🤖 GCash auto-confirm list (remind_gcash_auto_list_v1): in watch mode, what it would confirm and the text it would send
+function gcAutoRow(a){
+  const ph = a.paid_at ? ` · paid ${dLabel(phDay(a.paid_at))} ${tLabel(a.paid_at)}` : '';
+  return {
+    title: a.name || '',
+    line: `${peso(a.amount)} (${a.months} month${a.months === 1 ? '' : 's'})${ph} · ref …${String(a.ref || '').slice(-4)}`,
+    books: a.in_books ? '✅ Already in BASHANG' : '📝 Not in BASHANG yet',
+    would: a.check === 'open' ? 'Would confirm and text:' : 'Office already closed this check · would have texted:',
+    text: a.text || '',
+  };
+}
+// gcAuto:end
 // Checks tab: GCash refs to verify, numbers that failed, blocked numbers
 function checksHtml(){
   const O = S.ops; let h = '';
@@ -1178,6 +1194,13 @@ function checksHtml(){
   h += O.to_check.length ? O.to_check.map(c => { const g = gcFind(S.gcash, c), gb = g && gcBadge(g, S.gcash.upto, c.at); return `<div class="dl${gb ? ' hasgc' : ''}" data-csub="${c.sub}"><div class="t"><b>${esc(c.name)}</b><small>ref ${esc(ref(c.note).trim())} · paused until ${esc(dLabel(c.until))}${c.area ? ' · ' + esc(c.area) : ''}</small></div>
       <button type="button" data-cact="check_ok" title="Payment found and recorded">Confirmed</button><button type="button" data-cact="check_fail" title="Not found in GCash — reminders resume">Not found</button>${gb ? `<div class="gcb ${gb.cls}">${esc(gb.text)}</div>` : ''}</div>`; }).join('')
     : `<div class="note">Nothing to check.</div>`;
+  if (S.gcauto) {
+    const A = S.gcauto.rows || [], watch = S.gcauto.mode === 'watch';
+    h += `<div class="sec"><b>🤖 GCash auto-confirm</b><small>${A.length} · ${watch ? 'watching only — nothing is confirmed or texted yet' : 'confirmed by the system'} · last 30 days</small></div>`;
+    h += A.length ? A.map(a => { const r = gcAutoRow(a); return `<div class="dl hasgc" data-csub="${a.sub}"><div class="t"><b>${esc(r.title)}</b><small>${esc(r.line)}${a.area ? ' · ' + esc(a.area) : ''}</small></div>
+      <div class="gcb ${a.in_books ? 'ok' : 'warn'}">${esc(r.books)}</div><div class="gcq"><small>${esc(r.would)}</small>“${esc(r.text)}”</div></div>`; }).join('')
+      : `<div class="note">Nothing yet. A texted GCash ref that is found with the right amount shows here.</div>`;
+  }
   h += `<div class="sec"><b>📵 Not working</b><small>${O.failed.length} · texts that did not reach the number (last 14 days)</small></div>`;
   h += O.failed.length ? O.failed.map(f => `<div class="dl" data-csub="${f.sub || ''}"><div class="t"><b>${esc(f.name || f.address)}</b><small>${esc(f.address)} · ${esc(dLabel(String(f.at).slice(0, 10)))} ${tLabel(f.at)} · ${esc(f.error || 'failed')}</small></div>
       ${f.sub ? '<button type="button" data-cact="block" data-why="not_working" title="Stop using this number; they move to No number">Block number</button>' : ''}</div>`).join('')
