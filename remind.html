@@ -204,6 +204,10 @@ body.chats header .day,body.senttab header .day{display:none}   /* the day arrow
 .dl{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);border-radius:14px;margin-bottom:8px;box-shadow:0 1px 0 var(--line)}
 .dl .ck{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;flex:none;background:var(--done-l);color:var(--done)}
 .dl .ck.p{background:var(--blue-l);color:var(--blue)}
+.dl.hasgc{flex-wrap:wrap}.dl.hasgc .gcb{flex-basis:100%}
+.gcb{font-size:13px;font-weight:600;padding:5px 9px;border-radius:9px;line-height:1.35}   /* 💳 GCash check badge */
+.gcb.ok{background:#e3f5e8;color:#11632f}.gcb.warn{background:#fff3d6;color:#7a4b00}.gcb.no{background:#fde4e1;color:#9b1c10}.gcb.wait{background:var(--line);color:var(--ink-2)}
+@media (prefers-color-scheme:dark){.gcb.ok{background:#173d24;color:#9fe0b2}.gcb.warn{background:#3d2f10;color:#f3cf7a}.gcb.no{background:#43201c;color:#f5a99f}}
 .dl .t{flex:1;min-width:0}.dl .t b{display:block;font-weight:700}.dl .t small{color:var(--muted);font-size:13px}
 .dl button{color:var(--blue);font-weight:700;font-size:13.5px;padding:6px}
 
@@ -421,7 +425,7 @@ async function load(pin, date){
   // fast: first wave = Today's list + Chats (+ the open chat); the rest is asked only after the PIN passed again, so a PIN
   // that stopped working costs at most a few wrong tries (rpc then blocks the remembered PIN for 15 s)
   if (fast) await Promise.all([boardP, chatsP, peopleP, chatP]);
-  const [a, ib, rp, lm, ch, pp, ops, r] = await Promise.all([
+  const [a, ib, rp, lm, ch, pp, ops, gc, r] = await Promise.all([
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:day }).catch(() => null),
     // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
     rpc('remind_inbox_v2', { p_pin:pin, p_days:14 }).catch(() => rpc('remind_inbox_v1', { p_pin:pin, p_days:14 }).catch(() => null)),
@@ -432,6 +436,7 @@ async function load(pin, date){
     chatsP,
     peopleP,
     rpc('remind_ops_list_v1', { p_pin:pin }).catch(() => null),   // Checks tab: hidden if missing
+    rpc('remind_gcash_check_v1', { p_pin:pin }).catch(() => null),   // 💳 To check: is each texted ref in the GCash statements? (missing or switched off = no badges)
     r0 || boardP,
     chatP,
   ]);
@@ -447,6 +452,7 @@ async function load(pin, date){
   else if (S.chat) { const c = S.chats && S.chats.find(x => x.address === S.chat.address); if (c) { S.chat.sub = c.sub; S.chat.name = c.name; S.chat.area = c.area; S.chat.blocked = c.blocked; S.chat.person = c.person; } }
   S.linemen = lm ? (lm.linemen || (lm.names || []).map(name => ({ name, sms:true }))) : [];
   S.ops = ops;
+  S.gcash = gc && gc.ok && gc.on ? gc : null;
   if (!S.ops && S.tab === 'checks') S.tab = 'send';
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
   S.auto = a; if (!a && S.tab === 'auto') S.tab = 'send';
@@ -1141,13 +1147,34 @@ function repliesHtml(){
     </article>`;
   }).join('');
 }
+// gcBadge:start
+// 💳 To check: is the texted ref in the GCash statements? (remind_gcash_check_v1; read-only, the office decides)
+function gcFind(G, c){
+  if (!G || !G.rows) return null;
+  const d = (String(c.note || '').match(/ref ([^·]+)/) || [])[1];
+  const digits = String(d || '').replace(/\D/g, '');
+  return G.rows.find(g => g.sub === c.sub && (g.given || '') === (digits.length >= 6 ? digits : '')) || null;
+}
+function gcBadge(g, upto){
+  const upTo = upto ? ` · statements up to ${dLabel(upto)}` : '';
+  if (g.match === 'several') return { cls:'warn', text:`⚠ Several GCash payments end in ${g.given} — ask for the full 13-digit ref` };
+  if (!g.given) return { cls:'warn', text:'⚠ No GCash ref written — ask for the 13-digit ref' };
+  if (!g.found) return g.covered ? { cls:'no', text:`✗ Not in GCash${upTo}` } : { cls:'wait', text:`⏳ Not in GCash yet${upTo} (ask the GCash owner for a new statement)` };
+  const when = g.at ? ` · ${dLabel(phDay(g.at))} ${tLabel(g.at)}` : '';
+  if (g.direction !== 'in') return { cls:'warn', text:`⚠ This ref is money sent OUT of GCash (${peso(g.amount)}${when})` };
+  const from = g.from_theirs ? ' · from their number' : g.from_last4 ? ` · from …${g.from_last4}` : '';
+  const how = g.match === 'last_digits' ? ` · matched by the last ${g.given.length} digits` : '';
+  if (!g.fits) return { cls:'warn', text:`⚠ In GCash: ${peso(g.amount)} — monthly is ${peso(g.due)}${when}${from}${how}` };
+  return { cls:'ok', text:`✓ In GCash: ${peso(g.amount)}${when}${from}${how}` };
+}
+// gcBadge:end
 // Checks tab: GCash refs to verify, numbers that failed, blocked numbers
 function checksHtml(){
   const O = S.ops; let h = '';
   const ref = n => (String(n || '').match(/ref ([^·]+)/) || [])[1] || '?';
-  h += `<div class="sec"><b>💳 To check</b><small>${O.to_check.length} · GCash refs to verify — reminders paused meanwhile</small></div>`;
-  h += O.to_check.length ? O.to_check.map(c => `<div class="dl" data-csub="${c.sub}"><div class="t"><b>${esc(c.name)}</b><small>ref ${esc(ref(c.note).trim())} · paused until ${esc(dLabel(c.until))}${c.area ? ' · ' + esc(c.area) : ''}</small></div>
-      <button type="button" data-cact="check_ok" title="Payment found and recorded">Confirmed</button><button type="button" data-cact="check_fail" title="Not found in GCash — reminders resume">Not found</button></div>`).join('')
+  h += `<div class="sec"><b>💳 To check</b><small>${O.to_check.length} · GCash refs to verify — reminders paused meanwhile${S.gcash && S.gcash.upto ? ` · GCash statements up to ${esc(dLabel(S.gcash.upto))}` : ''}</small></div>`;
+  h += O.to_check.length ? O.to_check.map(c => { const g = gcFind(S.gcash, c), gb = g && gcBadge(g, S.gcash.upto); return `<div class="dl${gb ? ' hasgc' : ''}" data-csub="${c.sub}"><div class="t"><b>${esc(c.name)}</b><small>ref ${esc(ref(c.note).trim())} · paused until ${esc(dLabel(c.until))}${c.area ? ' · ' + esc(c.area) : ''}</small></div>
+      <button type="button" data-cact="check_ok" title="Payment found and recorded">Confirmed</button><button type="button" data-cact="check_fail" title="Not found in GCash — reminders resume">Not found</button>${gb ? `<div class="gcb ${gb.cls}">${esc(gb.text)}</div>` : ''}</div>`; }).join('')
     : `<div class="note">Nothing to check.</div>`;
   h += `<div class="sec"><b>📵 Not working</b><small>${O.failed.length} · texts that did not reach the number (last 14 days)</small></div>`;
   h += O.failed.length ? O.failed.map(f => `<div class="dl" data-csub="${f.sub || ''}"><div class="t"><b>${esc(f.name || f.address)}</b><small>${esc(f.address)} · ${esc(dLabel(String(f.at).slice(0, 10)))} ${tLabel(f.at)} · ${esc(f.error || 'failed')}</small></div>
