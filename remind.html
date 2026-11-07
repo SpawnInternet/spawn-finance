@@ -1184,7 +1184,7 @@ function gcBadge(g, upto, textedAt){
   const upTo = upto ? ` · statements up to ${dLabel(upto)}` : '';
   if (g.match === 'several') return { cls:'warn', text:`⚠ Several GCash payments end in ${g.given} — ask for the full 13-digit ref` };
   if (!g.given) return { cls:'warn', text:'⚠ No GCash ref written — ask for the 13-digit ref' };
-  if (!g.found) return g.covered ? { cls:'no', text:`✗ Not in GCash${upTo}` } : { cls:'wait', text:`⏳ Not in GCash yet${upTo} (ask the GCash owner for a new statement)` };
+  if (!g.found) return g.covered ? { cls:'no', text:`✗ Not in GCash${upTo}` } : { cls:'wait', text:`📄 No export file yet for that day${upTo}` };
   const when = g.at ? ` · ${dLabel(phDay(g.at))} ${tLabel(g.at)}` : '';
   if (g.direction !== 'in') return { cls:'warn', text:`⚠ This ref is money sent OUT of GCash (${peso(g.amount)}${when})` };
   const from = g.from_theirs ? ' · from their number' : g.from_last4 ? ` · from …${g.from_last4}` : '';
