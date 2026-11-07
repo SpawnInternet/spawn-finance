@@ -530,7 +530,7 @@ async function lineLoad(){
   el.innerHTML = h; el.className = 'linebar ' + (j.level || '');
   if (S.tab === 'chats') chatFit();   // the bar changes the header height: the laptop chat re-fits so the reply bar stays on screen
 }
-async function reload(){ try { await load(S.pin, S.date); render(); prefetchChats(); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
+async function reload(){ try { await load(S.pin, S.date); render(); prefetchChats(); if (!S.month && !S.monthOff && !S.monthLoading && Date.now() - (S.monthMs || 0) > 120000) loadMonth(true); } catch (e) { if (/PIN/.test(e.message)) lock(e.message); else toast(e.message, 4000); } }
 
 /* ── lists ── */
 const promised = r => !!(r.promise && r.promise.date >= S.date);   // open promise, date not yet passed
@@ -1506,7 +1506,7 @@ const MST = {
   soon:     { label:'Not yet due',   cls:'calm' },
   free:     { label:'Nothing due',   cls:'calm' },
 };
-const MFIL = [['all', 'All'], ['notpaid', 'Not paid'], ['late', '⚠ Late'], ['promised', '🤝 Promised / To check'], ['paid', '✓ Paid'],
+const MFIL = [['all', 'All'], ['notpaid', 'Not paid'], ['late', '⚠ Late'], ['today', '⏰ Due today'], ['promised', '🤝 Promised / To check'], ['paid', '✓ Paid'],
   ['utang', 'Old utang'], ['soon', 'Not yet due'], ['nonum', '📵 No number']];
 const SRC = { bashang:'BASHANG', 'bashang+log':'BASHANG', 'bashang+app':'BASHANG + app', app:'Spawn Collect', log:'payment log' };
 const RWHY = { due_soon:'due soon', due_today:'due today', late:'late', utang:'utang', reply:'reply', note:'note' };
@@ -1524,6 +1524,7 @@ function mMatch(r, st, k){
   if (k === 'all') return true;
   if (k === 'notpaid') return st === 'late' || st === 'today' || st === 'unpaid' || st === 'partial';
   if (k === 'late') return st === 'late' || st === 'unpaid';
+  if (k === 'today') return st === 'today';
   if (k === 'promised') return st === 'promised' || st === 'check';
   if (k === 'paid') return st === 'paid' || st === 'partial';
   if (k === 'utang') return !!(r.older && r.older.n > 0);
@@ -1565,16 +1566,22 @@ function mShift(m, n){ const x = new Date(String(m).slice(0, 7) + '-15T12:00:00Z
 // monthView:end
 async function loadMonth(quiet){
   if (!S.pin || S.monthLoading) return;
-  S.monthLoading = true; S.monthTried = true; if (!quiet) render();
+  S.monthLoading = true; S.monthTried = true; S.monthMs = Date.now(); if (!quiet) render();   // monthMs = last try: a failed refresh waits 2 min
+  const want = S.monthAt || null;
   try {
-    const m = await rpc('remind_month_v1', { p_pin:S.pin, p_month:S.monthAt || null });
-    if (m && m.ok && m.on) { S.month = m; S.monthAt = m.month; S.monthMs = Date.now(); }
+    const m = await rpc('remind_month_v1', { p_pin:S.pin, p_month:want });
+    if (m && m.ok && m.on) { S.month = m; if ((S.monthAt || null) === want) S.monthAt = m.month; S.monthMs = Date.now(); }   // a ‹ › tap during the load wins
     else if (m && m.ok && !m.on) { S.monthOff = true; if (S.tab === 'month') { S.tab = 'chats'; toast('📊 Month is not switched on yet'); } }
     else if (!quiet) toast((m && m.error) || 'Could not load the month', 4000);
   } catch (x) {
     if (/function|404|schema cache/i.test(x.message)) { S.monthOff = true; if (S.tab === 'month') { S.tab = 'chats'; if (!quiet) toast('📊 Month is not installed yet'); } }
     else if (!quiet) toast(x.message, 4000);
-  } finally { S.monthLoading = false; render(); }
+  } finally {
+    S.monthLoading = false;
+    // ‹ › tapped while this load ran: load the month they picked (once per pick)
+    if (S.month && S.monthAt && S.monthAt !== S.month.month && S.monthRetry !== S.monthAt) { S.monthRetry = S.monthAt; setTimeout(loadMonth, 0); }
+    render();
+  }
 }
 function monthHtml(){
   if (!S.month && !S.monthLoading && !S.monthTried) setTimeout(loadMonth, 0);
@@ -1594,7 +1601,7 @@ function monthHtml(){
       <div class="mtiles">
         <button type="button" class="mt ok" data-mf="paid"><b>${n.paid + n.partial}</b><small>Paid</small></button>
         <button type="button" class="mt bad" data-mf="late"><b>${n.late + n.unpaid}</b><small>${M.month < m0 ? 'Not paid' : 'Late'}</small></button>
-        <button type="button" class="mt warn" data-mf="notpaid"><b>${n.today}</b><small>Due today</small></button>
+        <button type="button" class="mt warn" data-mf="today"><b>${n.today}</b><small>Due today</small></button>
         <button type="button" class="mt info" data-mf="promised"><b>${n.promised + n.check}</b><small>Promised / check</small></button>
         <button type="button" class="mt calm" data-mf="soon"><b>${n.soon}</b><small>Not yet due</small></button>
       </div>
@@ -1637,7 +1644,7 @@ function gcWho(g){
   return `confirmed${on}${g.by ? ' by ' + g.by : ''}`;
 }
 // a confirmed ref whose GCash proof is not a clean ✓ = worth a second look
-function gcOdd(g, upto){ return g.status === 'kept' && gcBadge(g, upto, g.texted_at).cls !== 'ok'; }
+function gcOdd(g, upto){ if (g.status !== 'kept') return false; const c = gcBadge(g, upto, g.texted_at).cls; return c !== 'ok' && c !== 'wait'; }   // ⏳ waiting for a newer statement is not a problem
 function gcCounts(rows, upto){
   const c = { confirmed:0, todo:0, odd:0, notfound:0, system:0 };
   for (const g of rows) {
@@ -1671,7 +1678,7 @@ function gpFormHtml(){
     ${P ? `<div class="sent" style="margin-top:8px">For <b>${esc(P.name)}</b> <button type="button" class="linkbtn" id="gpchange">change</button></div>${open ? '<div class="note" style="padding:6px 0 0">⚠ They already have an open To check — adding replaces it.</div>' : ''}`
         : `<div class="nform"><input type="search" id="gpq" placeholder="Search name (2+ letters)" aria-label="Search the customer" value="${esc(S.gpQ || '')}" autocomplete="off"></div>
            <div class="lres">${(S.gpRes || []).map(x => `<button type="button" class="tpl" data-gppick="${x.id}" data-gpname="${esc(x.name)}">${esc(x.name)}${x.area ? ' · ' + esc(x.area) : ''}</button>`).join('') || (S.gpNone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>`}
-    ${P ? `<div class="nform"><input type="text" inputmode="numeric" id="gpref" placeholder="GCash ref (13 digits)" aria-label="GCash reference number" autocomplete="off"><input type="text" inputmode="decimal" id="gpamt" placeholder="Amount (optional)" aria-label="Amount paid" style="max-width:9em"></div>
+    ${P ? `<div class="nform"><input type="text" inputmode="numeric" id="gpref" placeholder="GCash ref (13 digits)" aria-label="GCash reference number" autocomplete="off" value="${esc(S.gpRefV || '')}"><input type="text" inputmode="decimal" id="gpamt" placeholder="Amount (optional)" aria-label="Amount paid" style="max-width:9em" value="${esc(S.gpAmtV || '')}"></div>
       <div class="acts" style="margin-top:8px"><button type="button" class="btn send" id="gpsave">Add to To check</button><button type="button" class="btn" id="gpclose">Cancel</button></div>` : `<div class="acts" style="margin-top:8px"><button type="button" class="btn" id="gpclose">Cancel</button></div>`}
   </article>`;
 }
@@ -1682,16 +1689,18 @@ async function gpSearch(q){
   catch (x) { toast(x.message, 4000); }
 }
 $('list').addEventListener('input', e => {
+  if (S.tab === 'gcash' && e.target.id === 'gpref') { S.gpRefV = e.target.value; return; }   // kept across refreshes
+  if (S.tab === 'gcash' && e.target.id === 'gpamt') { S.gpAmtV = e.target.value; return; }
   if (S.tab !== 'gcash' || e.target.id !== 'gpq') return;
   S.gpQ = e.target.value; clearTimeout(gpT); const q = S.gpQ.trim();
-  if (q.length < 2) { S.gpRes = []; S.gpNone = false; return; }
+  if (q.length < 2) { const had = (S.gpRes || []).length || S.gpNone; S.gpRes = []; S.gpNone = false; if (had) redrawKeep('gpq'); return; }
   gpT = setTimeout(() => gpSearch(q), 350);
 });
 $('list').addEventListener('click', async e => {
   if (S.tab !== 'gcash') return;
   if (e.target.closest('#gpopen')) { S.gpOpen = true; render(); const i = $('gpq'); if (i) i.focus(); return; }
-  if (e.target.closest('#gpclose')) { S.gpOpen = false; S.gpPick = null; S.gpQ = ''; S.gpRes = []; S.gpNone = false; render(); return; }
-  if (e.target.closest('#gpchange')) { S.gpPick = null; render(); return; }
+  if (e.target.closest('#gpclose')) { S.gpOpen = false; S.gpPick = null; S.gpQ = ''; S.gpRes = []; S.gpNone = false; S.gpRefV = ''; S.gpAmtV = ''; render(); return; }
+  if (e.target.closest('#gpchange')) { S.gpPick = null; S.gpRefV = ''; S.gpAmtV = ''; render(); return; }
   const pk = e.target.closest('[data-gppick]'); if (pk) { S.gpPick = { id:+pk.dataset.gppick, name:pk.dataset.gpname }; render(); const i = $('gpref'); if (i) i.focus(); return; }
   const sv = e.target.closest('#gpsave'); if (!sv || !S.gpPick) return;
   const ref = gpRef(($('gpref') || {}).value); if (!ref) { toast('Type the GCash ref — 6 to 13 digits (the full 13 is best)'); return; }
@@ -1699,7 +1708,7 @@ $('list').addEventListener('click', async e => {
   try {
     await rpc('remind_ops_v1', { p_pin:S.pin, p_action:'to_check', p_sub:S.gpPick.id, p_text:gpNote(ref, ($('gpamt') || {}).value) });
     toast(`Added for ${S.gpPick.name} — it is checked against GCash and their reminders pause`, 4000);
-    S.gpOpen = false; S.gpPick = null; S.gpQ = ''; S.gpRes = []; S.gpNone = false; S.gcf = 'todo'; await reload();
+    S.gpOpen = false; S.gpPick = null; S.gpQ = ''; S.gpRes = []; S.gpNone = false; S.gpRefV = ''; S.gpAmtV = ''; S.gcf = 'todo'; await reload();
   } catch (x) { toast(x.message, 4000); sv.disabled = false; }
 });
 function gcAutoHtml(){
@@ -1763,7 +1772,7 @@ function render(){
   if (!S.chats && S.inbox) T.push(['replies', 'Messages', S.inbox.open]);
   if (S.repairs) T.push(['jobs', '🔧 Job orders', jobCards().filter(c => c.open).length]);
   if (S.ops) T.push(S.gcv2 ? ['checks', '📵 Numbers', S.ops.failed.length || ''] : ['checks', 'To check', S.ops.to_check.length + S.ops.failed.length]);   // with the 💳 GCash tab, only the number lists stay here
-  if (!S.monthOff) { const ms = S.month && mSummary(S.month.rows || [], S.month.month, S.month.today); T.push(['month', '📊 Month', ms ? ms.n.late + ms.n.unpaid || '' : '']); }   // the whole month at once (remind_month_v1); hidden if not installed / off
+  if (S.month && !S.monthOff) { const cur = String(S.month.month).slice(0, 7) === String(S.month.today).slice(0, 7), ms = cur && mSummary(S.month.rows || [], S.month.month, S.month.today); T.push(['month', '📊 Month', ms ? ms.n.late + ms.n.unpaid || '' : '']); }   // shows once remind_month_v1 answered (hidden while off); badge = this month only   // the whole month at once (remind_month_v1); hidden if not installed / off
   if (S.auto) T.push(['auto', 'Sent & coming', autoRows().length]);
   if (!S.sentOff) { const nf = S.sent ? (S.sent.rows || []).filter(r => r.status === 'failed').length : 0; T.push(['sent', '📤 Sent', nf ? '⚠' + nf : '']); }   // everything the system sent (remind_sent_list_v1); hidden if not installed
   $('tabs').innerHTML = T.map(([k, l, n]) => `<button type="button" class="${S.tab === k ? 'on' : ''}" data-tab="${k}" aria-pressed="${S.tab === k}">${l}<em>${n}</em></button>`).join('');
@@ -1809,7 +1818,7 @@ function render(){
         <div class="nform"><input type="search" id="anq" placeholder="Search name (2+ letters)" aria-label="Search subscriber name" value="${esc(S.anq || '')}" autocomplete="off"></div>
         ${S.anpick ? '' : `<div class="lres">${(S.anres || []).map(s => `<button type="button" class="tpl" data-anpick="${s.id}" data-anname="${esc(s.name)}">${esc(s.name)}${s.area ? ' · ' + esc(s.area) : ''}${s.status !== 'active' ? ' (' + esc(s.status) + ')' : ''}</button>`).join('') || (S.annone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>`}
         ${S.anpick ? `<div class="sent" style="margin-top:8px">Number for <b>${esc(S.anpick.name)}</b> <button type="button" class="linkbtn" id="ancancel">change</button></div>
-        <div class="nform"><input type="tel" inputmode="tel" id="annum" placeholder="09XX XXX XXXX" aria-label="Mobile number for ${esc(S.anpick.name)}"><button type="button" class="btn" id="ansave">Save number</button></div>` : ''}
+        <div class="nform"><input type="tel" inputmode="tel" id="annum" placeholder="09XX XXX XXXX" aria-label="Mobile number for ${esc(S.anpick.name)}" value="${esc(S.annumV || '')}"><button type="button" class="btn" id="ansave">Save number</button></div>` : ''}
       </article>`;
     h += L.nonum.length ? L.nonum.map(r => `<article class="item" data-key="${esc(r.key)}">${head(r)}
         <div class="nform"><input type="tel" inputmode="tel" placeholder="09XX XXX XXXX" aria-label="Mobile number for ${esc(r.name)}"><button type="button" class="btn" data-act="phone">Save number</button></div>
@@ -1901,6 +1910,7 @@ async function anSearch(q){
   catch (x) { toast(x.message, 4000); }
 }
 $('list').addEventListener('input', e => {
+  if (e.target.id === 'annum') { S.annumV = e.target.value; return; }   // kept across refreshes
   if (e.target.id !== 'anq') return;
   S.anq = e.target.value; S.anpick = null; clearTimeout(anT); const q = S.anq.trim();
   if (q.length < 2) { S.anres = []; S.annone = false; return; }
@@ -1915,7 +1925,7 @@ $('list').addEventListener('click', async e => {
   sv.disabled = true;
   try { const j = await rpc('remind_set_phone', { p_pin:S.pin, p_sub:S.anpick.id, p_phone:v });
     toast(`Saved ${j.phone} for ${S.anpick.name} — reminders and replies can reach them now`, 4000);
-    S.anpick = null; S.anq = ''; S.anres = []; S.annone = false; await reload(); }
+    S.anpick = null; S.anq = ''; S.anres = []; S.annone = false; S.annumV = ''; await reload(); }
   catch (x) { toast(x.message, 4000); sv.disabled = false; }
 });
 $('list').addEventListener('keydown', e => {
