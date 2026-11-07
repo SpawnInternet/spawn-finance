@@ -500,6 +500,7 @@ async function load(pin, date){
 }
 function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); navBase(); render(); bell(); startPoll(); pushEnsure(); lineStart();
   if (S.pendingChat) goChat(S.pendingChat.address, S.pendingChat.reply);
+  if (S.pendingSub) openSub(S.pendingSub);   // asked by Vendo Monitor before the PIN was typed
   setTimeout(prefetchChats, 800); setTimeout(() => loadMonth(true), 1500); }   // opened from a notification's ↩ Reply / Open chat
 /* 📶 SMS phone status bar: is the office SMS phone receiving and sending? Asked every minute; shows nothing if the
    action is missing or the switch remind_line_bar is off. Red = a number that worked before just failed, or the queue is stuck. */
@@ -1091,14 +1092,32 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
   const d = e.data || {}; if (d.type === 'spawn-open-chat' && /^09\d{9}$/.test(d.address || '')) { window.focus(); goChat(d.address, !!d.reply); }
 });
 let lastInId = 0, pollT = null;
+/* Inside Vendo Monitor (2026-11-07): when this page runs in Vendo Monitor's 💬 Spawn Text tab (same site), new texts are
+   handed to Vendo Monitor, which pops them up on whatever tab is open; Vendo Monitor can ask this page to open a chat.
+   Outside Vendo Monitor nothing changes. */
+const EMBED = (() => { try { return window.parent !== window && window.parent.location.origin === location.origin; } catch (x) { return false; } })();
+const toParent = m => { if (!EMBED) return; try { window.parent.postMessage(m, location.origin); } catch (x) {} };
+function openSub(sub){
+  if (!S.pin || !S.chats) { S.pendingSub = sub; return; }
+  S.pendingSub = null;
+  const c = S.chats.find(x => x.sub === sub);
+  if (c) goChat(c.address, false); else toParent({ type:'spawntext:nochat', sub });
+}
+window.addEventListener('message', e => {
+  if (!EMBED || e.origin !== location.origin || e.source !== window.parent) return;
+  const d = e.data || {};
+  if (d.type === 'spawntext:open' && /^09\d{9}$/.test(d.address || '')) goChat(d.address, false);
+  else if (d.type === 'spawntext:openSub' && Number(d.sub) > 0) openSub(Number(d.sub));
+});
+toParent({ type:'spawntext:ready' });
 // tab title "(n) Spawn Text": same rule as the 💬 Chats count — new texts not opened yet on this device (all unanswered when Chats is not available)
-function titleCount(){ const n = S.chats ? S.chats.filter(isNew).length : S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; }
+function titleCount(){ const n = S.chats ? S.chats.filter(isNew).length : S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; if (EMBED && n !== titleCount.last) { titleCount.last = n; toParent({ type:'spawntext:unread', n }); } }
 async function poll(){
   if (!S.pin || S.tab === 'import') return;
   try {
     const j = await rpc('remind_inbox_v2', { p_pin:S.pin, p_days:1 }).catch(() => rpc('remind_inbox_v1', { p_pin:S.pin, p_days:1 }));
     const fresh = (j.rows || []).filter(r => r.id > lastInId && r.status === 'received');
-    if (fresh.length && lastInId) { try { notify(fresh); } catch (x) {} await reload(); }   // a failing pop-up must never stop the refresh
+    if (fresh.length && lastInId) { try { if (EMBED) toParent({ type:'spawntext:new', rows:fresh.slice(0, 10).map(r => ({ from:r.from || '', name:r.name || '', body:String(r.body || '').slice(0, 140) })) }); else notify(fresh); } catch (x) {} await reload(); }   // a failing pop-up must never stop the refresh
     lastInId = Math.max(lastInId, ...(j.rows || []).map(r => r.id));
   } catch (x) { if (/PIN/.test(x.message)) lock(x.message); }
 }
