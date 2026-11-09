@@ -490,6 +490,7 @@ async function load(pin, date){
 function show(){ $('lock').classList.add('hide'); $('app').classList.remove('hide'); navBase(); render(); bell(); startPoll(); pushEnsure(); lineStart();
   if (S.pendingChat) goChat(S.pendingChat.address, S.pendingChat.reply);
   if (S.pendingSub) openSub(S.pendingSub);   // asked by Vendo Monitor before the PIN was typed
+  if (S.pendingReview) openReview();
   setTimeout(prefetchChats, 800); }   // opened from a notification's ↩ Reply / Open chat
 /* 📶 SMS phone status bar: is the office SMS phone receiving and sending? Asked every minute; shows nothing if the
    action is missing or the switch remind_line_bar is off. Red = a number that worked before just failed, or the queue is stuck. */
@@ -1097,7 +1098,14 @@ window.addEventListener('message', e => {
   const d = e.data || {};
   if (d.type === 'spawntext:open' && /^09\d{9}$/.test(d.address || '')) goChat(d.address, false);
   else if (d.type === 'spawntext:openSub' && Number(d.sub) > 0) openSub(Number(d.sub));
+  else if (d.type === 'spawntext:openReview') openReview();   // Vendo Monitor's 🔍 GCash review → "Decide in Spawn Text"
 });
+function openReview(){
+  if (!S.pin) { S.pendingReview = true; return; }   // asked before the PIN was typed: opens right after it
+  S.pendingReview = false;
+  if (!S.gcv2 || !S.gcrev) { toast('The GCash review is not switched on here yet.', 4000); return; }
+  S.tab = 'gcash'; S.gcf = 'review'; S.grf = 'open'; S.tabPicked = true; render(); window.scrollTo({ top:0 }); grLoad();
+}
 toParent({ type:'spawntext:ready' });
 // tab title "(n) Spawn Text": same rule as the 💬 Chats count — new texts not opened yet on this device (all unanswered when Chats is not available)
 function titleCount(){ const n = S.chats ? S.chats.filter(isNew).length : S.inbox ? S.inbox.open : 0; document.title = (n ? `(${n}) ` : '') + 'Spawn Text'; if (EMBED && n !== titleCount.last) { titleCount.last = n; toParent({ type:'spawntext:unread', n }); } }
