@@ -212,6 +212,16 @@ body.gcashtab header .day{display:none}
 .gcb{font-size:13px;font-weight:600;padding:5px 9px;border-radius:9px;line-height:1.35}   /* 💳 GCash check badge */
 .gcb.ok{background:#e3f5e8;color:#11632f}.gcb.warn{background:#fff3d6;color:#7a4b00}.gcb.no{background:#fde4e1;color:#9b1c10}.gcb.wait{background:var(--line);color:var(--ink-2)}
 @media (prefers-color-scheme:dark){.gcb.ok{background:#173d24;color:#9fe0b2}.gcb.warn{background:#3d2f10;color:#f3cf7a}.gcb.no{background:#43201c;color:#f5a99f}}
+/* 🔍 GCash review (gcash_review_v1): every GCash item since the start date, one colour each */
+.grsum{background:var(--card);border-radius:14px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 0 var(--line)}
+.grsum .grbig{font-size:17px}.grsum small{display:block;color:var(--muted);font-size:13px;margin-top:4px}
+.tpl.grred:not(.on){background:var(--utang-l);color:var(--utang)}
+.item.gr{border-left:5px solid var(--line)}.item.gr.red,.item.gr.fraud{border-left-color:var(--utang)}.item.gr.grey{border-left-color:var(--muted)}
+.item.gr.yellow{border-left-color:var(--late)}.item.gr.done,.item.gr.ok{border-left-color:var(--done)}
+.gr .grh{display:flex;gap:8px;align-items:baseline}.gr .grh b{font-size:15px}
+.gr .grw{display:block;color:var(--ink-2);font-size:13px;margin:2px 0 6px}
+.gr .grm{font-size:14px;font-weight:600}.gr .grwho{font-size:13.5px;margin-top:4px}.gr .grmark{font-size:13px;margin-top:6px;color:var(--ink-2)}
+.gr .acts{margin-top:10px}.gr .acts .btn{height:38px}.btn.danger{color:var(--utang)}
 .dl .t{flex:1;min-width:0}.dl .t b{display:block;font-weight:700}.dl .t small{color:var(--muted);font-size:13px}
 .dl button{color:var(--blue);font-weight:700;font-size:13.5px;padding:6px}
 
@@ -350,7 +360,9 @@ const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 1
   sending_off:'Automatic texting is OFF — turn it on to send replies.', empty_text:'Type a reply first.', not_found:'This text is gone — refresh.',
   no_subscriber:'This number is not matched to a subscriber — save their number first.',
   empty_name:'Type their name first.', no_vendo:'That vendo is not active any more — search again.',
-  no_lineman:'That lineman is not on the list any more — refresh.' };
+  no_lineman:'That lineman is not on the list any more — refresh.',
+  owner_only:'Only Wendell can clear a red item or undo a fraud mark.', note_needed:'Write a short note first.', review_off:'GCash review is switched off.',
+  already_ok:'This one already matches GCash — refresh.', gcash_items_only:'"Not a customer" is only for GCash money that came in.', bad_decision:'Not a choice here.' };
 async function rpc(fn, args){
   // the remembered PIN just failed: no more calls with it for 15 s (fallbacks and parallel calls would each count as a
   // wrong PIN — 8 in 10 min lock the whole office). Typing at the PIN pad is not blocked (that PIN is not S.pin yet).
@@ -429,6 +441,11 @@ async function load(pin, date){
   // fast: first wave = Today's list + Chats (+ the open chat); the rest is asked only after the PIN passed again, so a PIN
   // that stopped working costs at most a few wrong tries (rpc then blocks the remembered PIN for 15 s)
   if (fast) await Promise.all([boardP, chatsP, peopleP, chatP]);
+  // 🔍 GCash review: asked once after login (for the chip) and again on each reload while it is open; it is slower
+  // (~0.7 s) so it runs alongside the rest; otherwise every 10 min (a switch turned on shows up without logging in again).
+  // Missing or switched off = no chip. undefined = not asked this time.
+  const revP = S.gcrev === undefined || (S.tab === 'gcash' && S.gcf === 'review') || !(Date.now() - (S.gcrevAt || 0) < 600000)
+    ? rpc('gcash_review_v1', { p_pin:pin }).then(x => x && x.ok && x.on ? x : null).catch(x => x.pin ? undefined : null) : Promise.resolve(undefined);
   const [a, ib, rp, lm, ch, pp, ops, gc, ga, r] = await Promise.all([
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:day }).catch(() => null),
     // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
@@ -459,6 +476,8 @@ async function load(pin, date){
   S.ops = ops;
   S.gcash = gc && gc.ok && gc.on ? gc : null; S.gcv2 = !!(S.gcash && S.gcash.v === 2 && S.ops); if (!S.gcv2 && S.tab === 'gcash') S.tab = 'checks';
   S.gcauto = ga && ga.ok && ga.on ? ga : null;
+  { const rv = await revP; if (rv !== undefined) { S.gcrev = rv; S.gcrevAt = Date.now(); } }
+  if (S.gcf === 'review' && !S.gcrev) S.gcf = 'confirmed';
   if (!S.ops && S.tab === 'checks') S.tab = 'send';
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
   S.auto = a; if (!a && S.tab === 'auto') S.tab = 'send';
@@ -1570,12 +1589,133 @@ function gcAutoHtml(){
       <div class="gcb ${a.in_books ? 'ok' : 'warn'}">${esc(r.books)}</div>${r.pay ? `<div class="gcb ${/^💰 Payment added/.test(r.pay) ? 'ok' : /^💰 (Office decides|error)/.test(r.pay) ? 'warn' : 'wait'}">${esc(r.pay)}</div>` : ''}<div class="gcq"><small>${esc(r.would)}</small>“${esc(r.text)}”</div></div>`; }).join('')
       : `<div class="note">Nothing yet. A texted GCash ref that is found with the right amount shows here.</div>`);
 }
+/* 🔍 GCash review (gcash_review_v1 / gcash_review_mark_v1, switch gcash_review): systematic GCash checking starts on
+   gcash_review_from (Nov 1, 2026). Every GCash payment in and every GCash ref on record since then has a colour until it is
+   accounted for — matched, or a person's decision with a note. Only the owner PIN clears a 🔴 or undoes a 🚩 (the database
+   checks it too). */
+// gcReview:start
+const GR_REASON = {
+  not_on_record: ['GCash money in — not on record', 'Find who paid and record it (BASHANG, or 📷 Add GCash payment). Not a subscriber payment? → Not a customer.'],
+  texted_not_recorded: ['Texted to Spawn Text — not recorded yet', 'The customer texted this ref and it is in GCash, but it is not in the book yet.'],
+  recorded_more: ['Recorded MORE than GCash received', 'The records say more money than GCash shows for this ref.'],
+  gcash_more: ['GCash received MORE than recorded', 'More money came in than the records show — record the rest or explain.'],
+  ref_typo: ['Ref is 1–2 digits off a GCash payment', 'Probably a typing mistake — fix the ref in BASHANG.'],
+  ref_incomplete: ['Ref incomplete — cannot be matched', 'Only part of the ref is on record. Get the full 13-digit ref.'],
+  bank_ref: ['Bank transfer ref — check by hand', 'Bank refs are not GCash refs; check the amount and date.'],
+  future_date: ['Paid date is in the future', 'Fix the paid date in BASHANG.'],
+  after_export: ['Paid after the last GCash export', 'Settles by itself when the next export is read.'],
+  ref_not_in_gcash: ['Ref on record is NOT in GCash', 'A full 13-digit ref that GCash never received. Ask for the screenshot.'],
+  texted_ref_not_in_gcash: ['Customer texted a ref that is NOT in GCash', 'Ask the customer for the screenshot.'],
+  ref_is_money_out: ['Ref is money OUT of GCash, not a payment in', 'This ref is a payment the GCash account made — not money received.'],
+  old_ref: ['Ref is from an older GCash payment', 'The GCash payment is from before the start date. Check it is not used twice.'],
+  old_ref_recorded_more: ['Older GCash ref, recorded MORE than it paid', 'Possible reuse of an old payment.'],
+  split: ['One GCash payment for several accounts', 'Matches: the accounts add up to the GCash amount.'],
+  matched: ['Matches GCash', ''],
+};
+const GR_STATE = { red:['🔴', 'Possible fraud'], grey:['⚪', 'Not on record'], yellow:['🟡', 'Needs a look'], wait:['⏳', 'Waiting for export'], fraud:['🚩', 'Marked fraud'], done:['✅', 'Cleared'], ok:['✅', 'Matches'] };
+const GR_DEC = { fixed:'Fixed', explained:'Explained', not_customer:'Not a customer', fraud:'🚩 Fraud', undo:'Undo' };
+const GR_OPEN = /^(red|grey|yellow|wait)$/;
+function grCounts(items){
+  const c = { open:0, red:0, grey:0, yellow:0, wait:0, fraud:0, done:0, ok:0 };
+  for (const i of items || []) { c[i.state] = (c[i.state] || 0) + 1; if (GR_OPEN.test(i.state)) c.open++; }
+  return c;
+}
+function grPick(items, k){ return (items || []).filter(i => k === 'open' ? GR_OPEN.test(i.state) : i.state === k); }
+// the buttons a person may press (gcash_review_mark_v1 checks the same rule): only the owner clears a red item or undoes a
+// fraud mark; anyone may flag fraud; "Not a customer" only for GCash money that came in
+function grActions(it, owner){
+  if (!it || it.state === 'ok') return [];
+  const red = it.color === 'red', m = it.mark && it.mark.decision;
+  if (m === 'fraud') return owner ? ['undo'] : [];
+  if (m) return (red && !owner) ? ['fraud'] : ['undo', 'fraud'];
+  if (red) return owner ? ['explained', 'fixed', 'fraud'] : ['fraud'];
+  if (it.state === 'wait') return ['explained', 'fraud'];
+  return [...(it.side === 'gcash' ? ['not_customer'] : []), 'fixed', 'explained', 'fraud'];
+}
+const grNeedsNote = d => d === 'explained' || d === 'not_customer' || d === 'fraud';
+const grLast4 = v => v ? '…' + String(v).slice(-4) : '';
+const grMonth = d => new Date(String(d).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-PH', { month:'short', year:'numeric', timeZone:'UTC' });
+function grView(it){
+  const [title, why] = GR_REASON[it.reason] || [it.reason, ''];
+  const [icon, stateLabel] = GR_STATE[it.state] || ['•', it.state];
+  const money = it.side === 'gcash'
+    ? `GCash ${peso(it.gcash)}` + (it.recorded != null ? ` · recorded ${peso(it.recorded)}` : '')
+    : `Recorded ${peso(it.recorded)}` + (it.gcash != null ? ` · GCash ${peso(it.gcash)}` : '');
+  const when = it.side === 'gcash' && it.at ? `${dLabel(phDay(it.at))} ${tLabel(it.at)}` : it.paid ? `paid ${dLabel(it.paid)}` : '';
+  const ref = it.side === 'gcash' ? (it.ref ? 'ref ' + grLast4(it.ref) : '') : (it.given ? 'ref on record ' + grLast4(it.given) : '');
+  const extra = [it.months && it.months.length ? 'for ' + it.months.map(grMonth).join(', ') : '', it.by ? 'recorded by ' + it.by : '',
+                 it.side === 'gcash' && it.from4 ? 'from …' + it.from4 : ''].filter(Boolean).join(' · ');
+  const subs = (it.subs || []).map(s => s.name + (s.area ? ' (' + s.area + ')' : ''));
+  const sug = (it.suggest || []).map(s => `${s.name}${s.area ? ' (' + s.area + ')' : ''} — ${s.why}`);
+  const who = subs.length ? subs.join(' + ') : sug.length ? '' : (it.kind === 'bank' ? 'Bank transfer — sender not shown' : 'Unknown sender');
+  const mark = it.mark ? `${GR_DEC[it.mark.decision] || it.mark.decision} by ${it.mark.by}${it.mark.note ? ' — “' + it.mark.note + '”' : ''}` : '';
+  return { icon, stateLabel, title, why, money, when, ref, extra, who, sug, mark };
+}
+// gcReview:end
+async function grLoad(){
+  if (!S.pin) return;
+  S.grBusy = true; render();
+  try { const j = await rpc('gcash_review_v1', { p_pin:S.pin }); S.gcrev = j && j.ok && j.on ? j : null; S.gcrevAt = Date.now(); if (!S.gcrev) S.gcf = 'confirmed'; }
+  catch (x) { if (/PIN/.test(x.message)) { lock(x.message); return; } toast(x.message, 4000); }
+  S.grBusy = false; render();
+}
+function grHtml(){
+  const R = S.gcrev; if (!R) return `<div class="note">GCash review is not switched on.</div>`;
+  const items = R.items || [], c = grCounts(items), C = R.counts || {}, k = S.grf || 'open', owner = !!R.owner;
+  let h = `<div class="grsum"><div class="grbig"><b>${C.accounted || 0}</b> of <b>${C.items || 0}</b> accounted for${c.open ? ` · <b>${c.open}</b> open` : ' ✓'}${c.red ? ` · <b style="color:var(--utang)">🔴 ${c.red}</b>` : ''}${c.fraud ? ` · 🚩 ${c.fraud}` : ''}</div>
+    <small>${esc(R.started || '')} GCash in since ${esc(dLabel(R.from))}: ${C.gcash_in || 0} payments, ${peso(C.gcash_in_amount)} — ${C.gcash_on_record || 0} on record. Statements up to ${R.upto ? esc(dLabel(R.upto)) : '—'}.${S.grBusy ? ' · refreshing…' : ''}</small>
+    <button type="button" class="linkbtn" id="grrefresh">↻ Refresh</button></div>`;
+  const chips = [['open', `Open ${c.open}`], ['red', `🔴 Possible fraud ${c.red}`], ['grey', `⚪ Not on record ${c.grey}`], ['yellow', `🟡 Needs a look ${c.yellow}`],
+                 ['wait', `⏳ Waiting ${c.wait}`], ['fraud', `🚩 Fraud ${c.fraud}`], ['done', `✅ Cleared ${c.done}`], ['ok', `Matches ${c.ok}`]]
+    .filter(([kk]) => kk === 'open' || kk === 'red' || kk === k || c[kk]);
+  h += `<div class="cfil">${chips.map(([kk, l]) => `<button type="button" class="tpl${k === kk ? ' on' : ''}${kk === 'red' && c.red ? ' grred' : ''}" data-grf="${kk}" aria-pressed="${k === kk}">${l}</button>`).join('')}</div>`;
+  const list = grPick(items, k);
+  if (!list.length) return h + `<div class="empty"><b>${k === 'open' ? 'Everything is accounted for ✓' : k === 'red' ? 'No possible fraud ✓' : 'Nothing here'}</b></div>`;
+  return h + list.map(it => {
+    const v = grView(it), acts = grActions(it, owner), O = S.grOpen && S.grOpen.key === it.key ? S.grOpen : null;
+    const chat = S.chats && (it.subs || []).length && S.chats.find(x => x.sub === it.subs[0].id);
+    return `<article class="item gr ${esc(it.state)}" data-grkey="${esc(it.key)}">
+      <div class="grh"><span>${v.icon}</span><b>${esc(v.title)}</b></div>
+      ${v.why ? `<small class="grw">${esc(v.why)}</small>` : ''}
+      <div class="grm">${esc(v.money)}${v.when ? ' · ' + esc(v.when) : ''}${v.ref ? ' · ' + esc(v.ref) : ''}</div>
+      ${v.extra ? `<small class="grw" style="margin:2px 0 0">${esc(v.extra)}</small>` : ''}
+      ${v.who ? `<div class="grwho">${esc(v.who)}${chat ? ` <button type="button" class="linkbtn" data-gopen="${esc(chat.address)}">💬 Chat</button>` : ''}</div>` : ''}
+      ${v.sug.map(s => `<div class="grwho">💡 Likely: ${esc(s)}</div>`).join('')}
+      ${v.mark ? `<div class="grmark">${it.state === 'fraud' ? '🚩' : '✔'} ${esc(v.mark)}</div>` : ''}
+      ${it.color === 'red' && !owner && !it.mark ? `<div class="grmark">Only Wendell can clear this one. You can flag it 🚩 Fraud.</div>` : ''}
+      ${O ? `<div class="nform"><input type="text" id="grnote" placeholder="${O.d === 'not_customer' ? 'Who sent it? (e.g. owner top-up)' : O.d === 'fraud' ? 'What looks wrong?' : 'What happened?'}" aria-label="Note" maxlength="300" autocomplete="off" value="${esc(S.grNoteV || '')}"><button type="button" class="btn" data-grsave="1">Save ${esc(GR_DEC[O.d])}</button></div>` : ''}
+      ${acts.length ? `<div class="acts">${acts.map(d => `<button type="button" class="btn${d === 'fraud' ? ' danger' : ''}" data-gra="${d}">${esc(GR_DEC[d])}</button>`).join('')}</div>` : ''}
+    </article>`;
+  }).join('');
+}
+async function grMark(key, d, note){
+  try {
+    await rpc('gcash_review_mark_v1', { p_pin:S.pin, p_key:key, p_decision:d, p_note:note || null });
+    toast(d === 'undo' ? 'Undone' : `Saved: ${GR_DEC[d]}`); S.grOpen = null; S.grNoteV = ''; await grLoad();
+  } catch (x) { toast(x.message === ERR.not_found ? 'This item changed — refresh.' : x.message, 4000); if (/PIN/.test(x.message)) lock(x.message); }
+}
+$('list').addEventListener('click', e => {
+  if (S.tab !== 'gcash' || S.gcf !== 'review') return;
+  if (e.target.closest('#grrefresh')) { grLoad(); return; }
+  const f = e.target.closest('[data-grf]'); if (f) { S.grf = f.dataset.grf; S.grOpen = null; render(); return; }
+  const card = e.target.closest('[data-grkey]'); if (!card) return;
+  const key = card.dataset.grkey;
+  const a = e.target.closest('[data-gra]');
+  if (a) { const d = a.dataset.gra;
+    if (grNeedsNote(d)) { S.grOpen = { key, d }; S.grNoteV = ''; render(); const i = $('grnote'); if (i) i.focus(); return; }
+    a.disabled = true; grMark(key, d); return; }
+  const sv = e.target.closest('[data-grsave]');
+  if (sv && S.grOpen) { const n = (($('grnote') || {}).value || '').trim(); if (n.length < 3) { toast(ERR.note_needed); return; } sv.disabled = true; grMark(key, S.grOpen.d, n); }
+});
+$('list').addEventListener('input', e => { if (S.tab === 'gcash' && e.target.id === 'grnote') S.grNoteV = e.target.value; });
 function gcashHtml(){
   const G = S.gcash, rows = (G && G.rows) || [], upto = G && G.upto, c = gcCounts(rows, upto);
   const k = S.gcf || 'confirmed', q = (S.gcq || '').trim().toLowerCase();
   let h = `<div class="gchead"><b>💳 GCash</b><small>${upto ? 'GCash statements up to ' + esc(dLabel(upto)) : 'no GCash statement read yet'} · last ${G.days || 60} days</small></div>`;
-  h += `<div class="cfil">${[['confirmed', `✅ Confirmed ${c.confirmed}`], ['todo', `💳 To check ${c.todo}`], ['system', `🤖 By the system ${S.gcauto ? (S.gcauto.rows || []).length : c.system}`], ['odd', `⚠ Needs a look ${c.odd}`], ['notfound', `✗ Not found ${c.notfound}`]]
-    .map(([kk, l]) => `<button type="button" class="tpl${k === kk ? ' on' : ''}${kk === 'todo' && c.todo ? ' gchot' : ''}" data-gcf="${kk}" aria-pressed="${k === kk}">${l}</button>`).join('')}</div>`;
+  const rc = S.gcrev ? grCounts(S.gcrev.items) : null;   // 🔍 Review chip only when gcash_review is on
+  h += `<div class="cfil">${[...(rc ? [['review', `🔍 Review ${rc.open}${rc.red ? ' · 🔴' + rc.red : ''}`]] : []), ['confirmed', `✅ Confirmed ${c.confirmed}`], ['todo', `💳 To check ${c.todo}`], ['system', `🤖 By the system ${S.gcauto ? (S.gcauto.rows || []).length : c.system}`], ['odd', `⚠ Needs a look ${c.odd}`], ['notfound', `✗ Not found ${c.notfound}`]]
+    .map(([kk, l]) => `<button type="button" class="tpl${k === kk ? ' on' : ''}${kk === 'todo' && c.todo ? ' gchot' : ''}${kk === 'review' && rc.red ? ' grred' : kk === 'review' && rc.open ? ' gchot' : ''}" data-gcf="${kk}" aria-pressed="${k === kk}">${l}</button>`).join('')}</div>`;
+  if (k === 'review') return h + `<div class="note">Matag GCash sukad ${esc(dLabel(S.gcrev.from))} kinahanglan ma-account: ✅ match, o naay desisyon (<b>Fixed</b> / <b>Explained</b> / <b>Not a customer</b> / <b>🚩 Fraud</b>). 🔴 = si Wendell ra ang maka-clear.</div>` + grHtml();
   if (k === 'todo') return h + gpFormHtml() + `<div class="note">GCash refs customers texted or the office added. Reminders are paused meanwhile.</div>` + gcTodoHtml();
   if (k === 'system') return h + gcAutoHtml();
   h += `<input class="q" id="gcq" type="search" placeholder="Search name" aria-label="Search GCash payments" value="${esc(S.gcq || '')}" autocomplete="off">`;
@@ -1593,7 +1733,7 @@ function gcashHtml(){
 }
 $('list').addEventListener('click', e => {
   if (S.tab !== 'gcash') return;
-  const f = e.target.closest('[data-gcf]'); if (f) { S.gcf = f.dataset.gcf; render(); return; }
+  const f = e.target.closest('[data-gcf]'); if (f) { S.gcf = f.dataset.gcf; render(); if (S.gcf === 'review') grLoad(); return; }   // 🔍 Review: fresh numbers each time it is opened
   if (e.target.closest('[data-cact]')) return;   // Confirmed / Not found buttons: the To check handler does it
   const op = e.target.closest('[data-gopen]'); if (op) goChat(op.dataset.gopen, false);
 });
