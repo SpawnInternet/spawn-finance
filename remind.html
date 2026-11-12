@@ -362,7 +362,9 @@ const ERR = { bad_pin:'Wrong PIN.', too_many_attempts:'Too many tries — wait 1
   empty_name:'Type their name first.', no_vendo:'That vendo is not active any more — search again.',
   no_lineman:'That lineman is not on the list any more — refresh.',
   owner_only:'Only Wendell can clear a red item or undo a fraud mark.', note_needed:'Write a short note first.', review_off:'GCash review is switched off.',
-  already_ok:'This one already matches GCash — refresh.', gcash_items_only:'"Not a customer" is only for GCash money that came in.', bad_decision:'Not a choice here.' };
+  already_ok:'This one already matches GCash — refresh.', gcash_items_only:'"Not a customer" is only for GCash money that came in.', bad_decision:'Not a choice here.',
+  screen_off:'Exceptions are switched off.', subscriber_needed:'Pick the subscriber first.', not_a_conflict:'This one is already settled — refresh.',
+  no_sender_number:'No sender number on this payment — it cannot be learned.', no_such_subscriber:'That subscriber is gone — search again.', no_such_read:'This receipt is gone — refresh.', bad_list:'Not a choice here.', bad_request:'Not a choice here.' };
 async function rpc(fn, args){
   // the remembered PIN just failed: no more calls with it for 15 s (fallbacks and parallel calls would each count as a
   // wrong PIN — 8 in 10 min lock the whole office). Typing at the PIN pad is not blocked (that PIN is not S.pin yet).
@@ -446,6 +448,9 @@ async function load(pin, date){
   // Missing or switched off = no chip. undefined = not asked this time.
   const revP = S.gcrev === undefined || (S.tab === 'gcash' && S.gcf === 'review') || !(Date.now() - (S.gcrevAt || 0) < 600000)
     ? rpc('gcash_review_v1', { p_pin:pin }).then(x => x && x.ok && x.on ? x : null).catch(x => x.pin ? undefined : null) : Promise.resolve(undefined);
+  // ⚠ Exceptions (pay_exceptions_v1, switch pay_exceptions): unnamed receipts, name conflicts, unclaimed GCash money, checks. Same timing as the review.
+  const excP = S.exc === undefined || (S.tab === 'gcash' && S.gcf === 'exc') || !(Date.now() - (S.excAt || 0) < 600000)
+    ? rpc('pay_exceptions_v1', { p_pin:pin }).then(x => x && x.ok && x.on ? x : null).catch(x => x.pin ? undefined : null) : Promise.resolve(undefined);
   const [a, ib, rp, lm, ch, pp, ops, gc, ga, r] = await Promise.all([
     rpc('remind_auto_log_v1', { p_pin:pin, p_date:day }).catch(() => null),
     // Messages tab: v2 adds auto-link suggestions; v1 if v2 is not there yet; hidden if neither
@@ -478,6 +483,8 @@ async function load(pin, date){
   S.gcauto = ga && ga.ok && ga.on ? ga : null;
   { const rv = await revP; if (rv !== undefined) { S.gcrev = rv; S.gcrevAt = Date.now(); } }
   if (S.gcf === 'review' && !S.gcrev) S.gcf = 'confirmed';
+  { const ev = await excP; if (ev !== undefined) { S.exc = ev; S.excAt = Date.now(); } }   // ⚠ Exceptions: same rule as the review
+  if (S.gcf === 'exc' && !S.exc) S.gcf = 'confirmed';
   if (!S.ops && S.tab === 'checks') S.tab = 'send';
   S.rows = r.rows || []; S.stats = r.stats || {}; S.date = r.date; S.today = r.today; S.user = r.user;
   S.auto = a; if (!a && S.tab === 'auto') S.tab = 'send';
@@ -1716,14 +1723,114 @@ $('list').addEventListener('click', e => {
   if (sv && S.grOpen) { const n = (($('grnote') || {}).value || '').trim(); if (n.length < 3) { toast(ERR.note_needed); return; } sv.disabled = true; grMark(key, S.grOpen.d, n); }
 });
 $('list').addEventListener('input', e => { if (S.tab === 'gcash' && e.target.id === 'grnote') S.grNoteV = e.target.value; });
+/* ⚠ Exceptions (pay_exceptions_v1 / pay_exception_v1, switch pay_exceptions): the four lists a person must answer —
+   receipts nobody has named, a staff bubble that disagrees with the name on record, GCash money nobody claims, and claims
+   the export disputes. One tap each; the lists re-load after every tap (rows leave by themselves when the book catches up).
+   Rules carried from docs/pay-chain-design.md: "book is right" never learns the bubble name; unclaimed money has three answers
+   (confirm / never guess this number / undo); a weak guess is only a suggestion. */
+// exceptions:start
+const EX_LISTS = [['unnamed', '📷 Unnamed', 'Receipts nobody has named yet'], ['conflict', '⚡ Conflicts', 'The staff bubble says one name, the record says another'],
+                  ['unclaimed', '💸 Unclaimed', 'GCash money in that no book row, app record, text or receipt claims'], ['check', '⚠ Checks', 'Claims the GCash export disputes — decided in 🔍 Review']];
+const EX_GUESS = { override:'✔ answered', blocked:'⛔ never guess this number', learned_strong:'💡 paid before for', phone:'📱 this is the number of', learned_weak:'💭 maybe (paid once for)',
+                   shared:'👥 this number pays for several people', ambiguous_phone:'👥 several subscribers have this number', unknown_phone:'❓ number not on file', no_sender:'❓ no sender shown (bank transfer)' };
+const EX_MATCH = { confirmed:'✅ in GCash', amount_diff:'⚠ amount differs', money_out:'🔴 money out', near_match:'≈ near match', wait:'⏳ waiting for export', not_found:'✗ not in GCash', no_ref:'✗ no ref read', not_receipt:'not a receipt', error:'error' };
+const excOpen = c => (c.unnamed || 0) + (c.conflict || 0) + (c.unclaimed || 0);
+const exDay = ts => ts ? dLabel(phDay(ts)) + ' ' + tLabel(ts) : '';
+const exMonths = (a, b) => a ? 'for ' + grMonth(a) + (b && b !== a ? ' – ' + grMonth(b) : '') : '';
+async function excLoad(){
+  if (!S.pin) return;
+  S.exBusy = true; render();
+  try { const j = await rpc('pay_exceptions_v1', { p_pin:S.pin }); S.exc = j && j.ok && j.on ? j : null; S.excAt = Date.now(); if (!S.exc) S.gcf = 'confirmed'; }
+  catch (x) { if (/PIN/.test(x.message)) { lock(x.message); return; } toast(x.message, 4000); }
+  S.exBusy = false; render();
+}
+function exPicker(key){   // search box + results, for "another name"
+  const O = S.exOpen && S.exOpen.key === key ? S.exOpen : null; if (!O) return '';
+  return `<div class="nform"><input type="search" id="exq" placeholder="Search name (2+ letters)" aria-label="Search the subscriber" value="${esc(S.exQ || '')}" autocomplete="off"></div>
+    <div class="lres">${(S.exRes || []).map(x => `<button type="button" class="tpl" data-expick="${x.id}" data-exname="${esc(x.name)}">${esc(x.name)}${x.area ? ' · ' + esc(x.area) : ''}</button>`).join('') || (S.exNone ? '<span class="sent">No subscriber with that name</span>' : '')}</div>
+    <div class="acts" style="margin-top:6px"><button type="button" class="btn" data-exclose="1">Cancel</button></div>`;
+}
+function excHtml(){
+  const X = S.exc; if (!X) return `<div class="note">Exceptions are not switched on.</div>`;
+  const C = X.counts || {}, k = EX_LISTS.some(l => l[0] === S.exf) ? S.exf : 'unnamed';
+  let h = `<div class="grsum"><div class="grbig"><b>${excOpen(C)}</b> to answer · <b>${C.check || 0}</b> for review${S.exBusy ? ' · refreshing…' : ''}</div>
+    <small>Since ${esc(dLabel(X.from))}. Every tap is saved with your name. Receipts and money leave this list by themselves once the record catches up.</small>
+    <button type="button" class="linkbtn" id="exrefresh">↻ Refresh</button></div>`;
+  h += `<div class="cfil">${EX_LISTS.map(([kk, l]) => `<button type="button" class="tpl${k === kk ? ' on' : ''}" data-exf="${kk}" aria-pressed="${k === kk}">${l} ${C[kk] || 0}</button>`).join('')}</div>`;
+  h += `<div class="note">${esc(EX_LISTS.find(l => l[0] === k)[2])}</div>`;
+  const rows = X[k] || [];
+  if (!rows.length) return h + `<div class="empty"><b>Nothing here ✓</b></div>`;
+  if (k === 'unnamed') return h + rows.map(r => `<article class="item gr grey" data-exkey="${esc(r.id)}" data-exlist="unnamed">
+      <div class="grh"><span>📷</span><b>${peso(r.amount)} · ${esc(exDay(r.at))}</b></div>
+      <div class="grm">${esc(EX_MATCH[r.match] || r.match || '')}${r.ref ? ' · ref ' + esc(grLast4(r.ref)) : ''} · posted by ${esc(r.poster || '?')}${r.low_conf ? ' · ⚠ hard to read' : ''}</div>
+      ${r.bubble ? `<small class="grw">Bubble: “${esc(r.bubble)}” ${esc(exMonths(r.month_from, r.month_to))}</small>` : `<small class="grw">No name bubble next to this photo.</small>`}
+      ${(r.candidates || []).length ? `<div class="acts">${r.candidates.map(c => `<button type="button" class="btn send" data-exact="set" data-exsub="${c.id}" data-exname="${esc(c.name)}">✔ ${esc(c.name)}${c.area ? ' · ' + esc(c.area) : ''} ${Math.round(c.score * 100)}%</button>`).join('')}</div>` : ''}
+      ${exPicker(String(r.id)) || `<div class="acts"><button type="button" class="btn" data-exsearch="1">🔎 Another name</button><button type="button" class="btn" data-exact="none">Nobody / skip</button></div>`}
+    </article>`).join('');
+  if (k === 'conflict') return h + rows.map(r => `<article class="item gr yellow" data-exkey="${esc(r.id)}" data-exlist="conflict">
+      <div class="grh"><span>⚡</span><b>${peso(r.amount)} · ${esc(exDay(r.at))}</b></div>
+      <div class="grm">${esc(EX_MATCH[r.match] || r.match || '')}${r.ref ? ' · ref ' + esc(grLast4(r.ref)) : ''} · posted by ${esc(r.poster || '?')}</div>
+      <div class="grwho">On record: <b>${esc(r.current_name || '?')}</b> <small>(from ${esc(r.current_source === 'ref' ? 'the book / ref' : r.current_source || '?')})</small></div>
+      <div class="grwho">Bubble says: <b>${esc(r.bubble_name || r.name_text || '?')}</b> <small>“${esc(r.bubble || '')}” ${esc(exMonths(r.month_from, r.month_to))}${r.bubble_score ? ' · ' + Math.round(r.bubble_score * 100) + '%' : ''}</small></div>
+      ${exPicker(String(r.id)) || `<div class="acts"><button type="button" class="btn send" data-exact="book" data-exsub="${r.current_id}">✔ Record is right</button>${r.bubble_id ? `<button type="button" class="btn" data-exact="bubble" data-exsub="${r.bubble_id}" data-exname="${esc(r.bubble_name)}">Bubble is right → ${esc(r.bubble_name)}</button>` : ''}<button type="button" class="btn" data-exsearch="1">🔎 Another name</button></div>`}
+    </article>`).join('');
+  if (k === 'unclaimed') return h + rows.map(r => { const g = EX_GUESS[r.status] || r.status, answered = r.status === 'override' || r.status === 'blocked';
+    return `<article class="item gr ${answered ? 'done' : r.status === 'learned_strong' || r.status === 'phone' ? 'wait' : 'grey'}" data-exkey="${esc(r.ref)}" data-exlist="unclaimed">
+      <div class="grh"><span>💸</span><b>${peso(r.amount)} · ${esc(exDay(r.at))}</b></div>
+      <div class="grm">GCash in · ref ${esc(grLast4(r.ref))}${r.last4 ? ' · from …' + esc(r.last4) : ''}</div>
+      <div class="grwho">${esc(g)}${r.guess_name ? ' <b>' + esc(r.guess_name) + '</b>' + (r.guess_area ? ' (' + esc(r.guess_area) + ')' : '') : ''}${r.map_payments ? ` <small>· ${r.map_payments} payment${r.map_payments > 1 ? 's' : ''} in ${r.map_months} month${r.map_months > 1 ? 's' : ''}</small>` : ''}${r.override_by ? ` <small>· by ${esc(r.override_by)}</small>` : ''}</div>
+      ${exPicker(r.ref) || `<div class="acts">${answered ? `<button type="button" class="btn" data-exact="undo">↩ Undo</button>` : `${r.guess_id ? `<button type="button" class="btn send" data-exact="confirm" data-exsub="${r.guess_id}" data-exname="${esc(r.guess_name)}">✔ Yes, ${esc(r.guess_name)}</button>` : ''}${r.last4 ? `<button type="button" class="btn" data-exsearch="1">🔎 Who sent it?</button><button type="button" class="btn danger" data-exact="block">⛔ Never guess this number</button>` : ''}`}</div>`}
+    </article>`; }).join('');
+  return h + rows.map(r => `<article class="item gr yellow" data-exkey="${esc(r.key)}" data-exlist="check">
+      <div class="grh"><span>⚠</span><b>${esc(EX_MATCH[r.verdict] || r.verdict)}</b></div>
+      <div class="grm">${r.claimed != null ? 'claimed ' + peso(r.claimed) : ''}${r.gcash != null ? ' · GCash ' + peso(r.gcash) : ''} · ${esc(r.source)} · ${esc(exDay(r.at))}${r.ref ? ' · ref ' + esc(grLast4(r.ref)) : r.given ? ' · ref on record ' + esc(grLast4(r.given)) : ''}</div>
+      <div class="grwho">${r.name ? '<b>' + esc(r.name) + '</b>' : 'No subscriber'} ${esc(exMonths(r.month_from, r.month_to))}</div>
+      ${S.gcrev ? `<div class="acts"><button type="button" class="btn" data-exreview="1">Decide in 🔍 Review</button></div>` : ''}
+    </article>`).join('');
+}
+async function excAct(list, key, action, sub, name){
+  try {
+    await rpc('pay_exception_v1', { p_pin:S.pin, p_list:list, p_key:String(key), p_subscriber_id:sub || null, p_action:action, p_note:null });
+    toast(action === 'undo' ? 'Undone' : action === 'block' ? 'Saved: never guess this number' : action === 'none' ? 'Skipped' : action === 'book' ? 'Saved: record is right' : `Saved: ${name || 'answered'}`);
+    S.exOpen = null; S.exQ = ''; S.exRes = []; S.exNone = false; await excLoad();
+  } catch (x) { toast(x.message, 4000); if (/PIN/.test(x.message)) lock(x.message); else render(); }
+}
+let exT = null;
+async function exSearch(q){
+  try { const j = await rpc('remind_sub_search_v1', { p_pin:S.pin, p_q:q }); if ((S.exQ || '').trim() !== q) return; S.exRes = j.rows || []; S.exNone = !S.exRes.length; redrawKeep('exq'); }
+  catch (x) { toast(x.message, 4000); }
+}
+$('list').addEventListener('input', e => {
+  if (S.tab !== 'gcash' || S.gcf !== 'exc' || e.target.id !== 'exq') return;
+  S.exQ = e.target.value; clearTimeout(exT); const q = S.exQ.trim();
+  if (q.length < 2) { const had = (S.exRes || []).length || S.exNone; S.exRes = []; S.exNone = false; if (had) redrawKeep('exq'); return; }
+  exT = setTimeout(() => exSearch(q), 350);
+});
+$('list').addEventListener('click', e => {
+  if (S.tab !== 'gcash' || S.gcf !== 'exc') return;
+  if (e.target.closest('#exrefresh')) { excLoad(); return; }
+  const f = e.target.closest('[data-exf]'); if (f) { S.exf = f.dataset.exf; S.exOpen = null; render(); return; }
+  if (e.target.closest('[data-exreview]')) { S.gcf = 'review'; S.grf = 'open'; render(); grLoad(); return; }
+  const card = e.target.closest('[data-exkey]'); if (!card) return;
+  const key = card.dataset.exkey, list = card.dataset.exlist;
+  if (e.target.closest('[data-exsearch]')) { S.exOpen = { list, key }; S.exQ = ''; S.exRes = []; S.exNone = false; render(); const i = $('exq'); if (i) i.focus(); return; }
+  if (e.target.closest('[data-exclose]')) { S.exOpen = null; S.exQ = ''; S.exRes = []; S.exNone = false; render(); return; }
+  const pk = e.target.closest('[data-expick]');
+  if (pk) { pk.disabled = true; excAct(list, key, list === 'unclaimed' ? 'confirm' : list === 'conflict' ? 'bubble' : 'set', +pk.dataset.expick, pk.dataset.exname); return; }
+  const a = e.target.closest('[data-exact]');
+  if (a) { a.disabled = true; excAct(list, key, a.dataset.exact, a.dataset.exsub ? +a.dataset.exsub : null, a.dataset.exname); }
+});
+// exceptions:end
 function gcashHtml(){
   const G = S.gcash, rows = (G && G.rows) || [], upto = G && G.upto, c = gcCounts(rows, upto);
   const k = S.gcf || 'confirmed', q = (S.gcq || '').trim().toLowerCase();
   let h = `<div class="gchead"><b>💳 GCash</b><small>${upto ? 'GCash statements up to ' + esc(dLabel(upto)) : 'no GCash statement read yet'} · last ${G.days || 60} days</small></div>`;
   const rc = S.gcrev ? grCounts(S.gcrev.items) : null;   // 🔍 Review chip only when gcash_review is on
-  h += `<div class="cfil">${[...(rc ? [['review', `🔍 Review ${rc.open}${rc.red ? ' · 🔴' + rc.red : ''}`]] : []), ['confirmed', `✅ Confirmed ${c.confirmed}`], ['todo', `💳 To check ${c.todo}`], ['system', `🤖 By the system ${S.gcauto ? (S.gcauto.rows || []).length : c.system}`], ['odd', `⚠ Needs a look ${c.odd}`], ['notfound', `✗ Not found ${c.notfound}`]]
-    .map(([kk, l]) => `<button type="button" class="tpl${k === kk ? ' on' : ''}${kk === 'todo' && c.todo ? ' gchot' : ''}${kk === 'review' && rc.red ? ' grred' : kk === 'review' && rc.open ? ' gchot' : ''}" data-gcf="${kk}" aria-pressed="${k === kk}">${l}</button>`).join('')}</div>`;
+  const xc = S.exc && S.exc.counts ? S.exc.counts : null;   // ⚠ Exceptions chip only when pay_exceptions is on
+  h += `<div class="cfil">${[...(rc ? [['review', `🔍 Review ${rc.open}${rc.red ? ' · 🔴' + rc.red : ''}`]] : []), ...(xc ? [['exc', `⚠ Exceptions ${excOpen(xc)}`]] : []), ['confirmed', `✅ Confirmed ${c.confirmed}`], ['todo', `💳 To check ${c.todo}`], ['system', `🤖 By the system ${S.gcauto ? (S.gcauto.rows || []).length : c.system}`], ['odd', `⚠ Needs a look ${c.odd}`], ['notfound', `✗ Not found ${c.notfound}`]]
+    .map(([kk, l]) => `<button type="button" class="tpl${k === kk ? ' on' : ''}${kk === 'todo' && c.todo ? ' gchot' : ''}${kk === 'review' && rc.red ? ' grred' : kk === 'review' && rc.open ? ' gchot' : ''}${kk === 'exc' && excOpen(xc) ? ' gchot' : ''}" data-gcf="${kk}" aria-pressed="${k === kk}">${l}</button>`).join('')}</div>`;
   if (k === 'review') return h + `<div class="note">Matag GCash sukad ${esc(dLabel(S.gcrev.from))} kinahanglan ma-account: ✅ match, o naay desisyon (<b>Fixed</b> / <b>Explained</b> / <b>Not a customer</b> / <b>🚩 Fraud</b>). 🔴 = si Wendell ra ang maka-clear.</div>` + grHtml();
+  if (k === 'exc') return h + excHtml();
   if (k === 'todo') return h + gpFormHtml() + `<div class="note">GCash refs customers texted or the office added. Reminders are paused meanwhile.</div>` + gcTodoHtml();
   if (k === 'system') return h + gcAutoHtml();
   h += `<input class="q" id="gcq" type="search" placeholder="Search name" aria-label="Search GCash payments" value="${esc(S.gcq || '')}" autocomplete="off">`;
@@ -1741,7 +1848,7 @@ function gcashHtml(){
 }
 $('list').addEventListener('click', e => {
   if (S.tab !== 'gcash') return;
-  const f = e.target.closest('[data-gcf]'); if (f) { S.gcf = f.dataset.gcf; render(); if (S.gcf === 'review') grLoad(); return; }   // 🔍 Review: fresh numbers each time it is opened
+  const f = e.target.closest('[data-gcf]'); if (f) { S.gcf = f.dataset.gcf; render(); if (S.gcf === 'review') grLoad(); if (S.gcf === 'exc') excLoad(); return; }   // 🔍 Review / ⚠ Exceptions: fresh numbers each time they are opened
   if (e.target.closest('[data-cact]')) return;   // Confirmed / Not found buttons: the To check handler does it
   const op = e.target.closest('[data-gopen]'); if (op) goChat(op.dataset.gopen, false);
 });
