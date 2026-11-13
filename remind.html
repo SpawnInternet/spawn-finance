@@ -1730,11 +1730,12 @@ $('list').addEventListener('input', e => { if (S.tab === 'gcash' && e.target.id 
    (confirm / never guess this number / undo); a weak guess is only a suggestion. */
 // exceptions:start
 const EX_LISTS = [['unnamed', '📷 Unnamed', 'Receipts nobody has named yet'], ['conflict', '⚡ Conflicts', 'The staff bubble says one name, the record says another'],
-                  ['unclaimed', '💸 Unclaimed', 'GCash money in that no book row, app record, text or receipt claims'], ['check', '⚠ Checks', 'Claims the GCash export disputes — decided in 🔍 Review']];
+                  ['unclaimed', '💸 Unclaimed', 'GCash money in that no book row, app record, text or receipt claims'], ['check', '⚠ Checks', 'Claims the GCash export disputes — decided in 🔍 Review'],
+                  ['cash_or', '🧾 ORs', 'Paper official receipts photographed in the chat but not written in the book']];
 const EX_GUESS = { override:'✔ answered', blocked:'⛔ never guess this number', learned_strong:'💡 paid before for', phone:'📱 this is the number of', learned_weak:'💭 maybe (paid once for)',
                    shared:'👥 this number pays for several people', ambiguous_phone:'👥 several subscribers have this number', unknown_phone:'❓ number not on file', no_sender:'❓ no sender shown (bank transfer)' };
 const EX_MATCH = { confirmed:'✅ in GCash', amount_diff:'⚠ amount differs', money_out:'🔴 money out', near_match:'≈ near match', wait:'⏳ waiting for export', not_found:'✗ not in GCash', no_ref:'✗ no ref read', not_receipt:'not a receipt', error:'error' };
-const excOpen = c => (c.unnamed || 0) + (c.conflict || 0) + (c.unclaimed || 0);
+const excOpen = c => (c.unnamed || 0) + (c.conflict || 0) + (c.unclaimed || 0) + (c.cash_or || 0);
 const exDay = ts => ts ? dLabel(phDay(ts)) + ' ' + tLabel(ts) : '';
 const exMonths = (a, b) => a ? 'for ' + grMonth(a) + (b && b !== a ? ' – ' + grMonth(b) : '') : '';
 async function excLoad(){
@@ -1781,6 +1782,12 @@ function excHtml(){
       <div class="grwho">${esc(g)}${r.guess_name ? ' <b>' + esc(r.guess_name) + '</b>' + (r.guess_area ? ' (' + esc(r.guess_area) + ')' : '') : ''}${r.map_payments ? ` <small>· ${r.map_payments} payment${r.map_payments > 1 ? 's' : ''} in ${r.map_months} month${r.map_months > 1 ? 's' : ''}</small>` : ''}${r.override_by ? ` <small>· by ${esc(r.override_by)}</small>` : ''}</div>
       ${exPicker(r.ref) || `<div class="acts">${answered ? `<button type="button" class="btn" data-exact="undo">↩ Undo</button>` : `${r.guess_id ? `<button type="button" class="btn send" data-exact="confirm" data-exsub="${r.guess_id}" data-exname="${esc(r.guess_name)}">✔ Yes, ${esc(r.guess_name)}</button>` : ''}${r.last4 ? `<button type="button" class="btn" data-exsearch="1">🔎 Who sent it?</button><button type="button" class="btn danger" data-exact="block">⛔ Never guess this number</button>` : ''}`}</div>`}
     </article>`; }).join('');
+  if (k === 'cash_or') return h + rows.map(r => `<article class="item gr grey" data-exkey="${esc(r.id)}" data-exlist="cash_or">
+      <div class="grh"><span>🧾</span><b>OR ${esc(r.or_no || '?')}${r.date_txt ? ' · dated ' + esc(r.date_txt) : ''}</b></div>
+      <div class="grm">${r.status === 'in_book_far' ? 'In the book, but a month apart — same serial re-used?' : 'Not in the book'} · photo ${esc(exDay(r.at))} · posted by ${esc(r.poster || '?')}${r.duplicate ? ' · 📷 photographed twice' : ''}</div>
+      <small class="grw">Ask the collector who issued it; once it is written in BASHANG this row leaves by itself.</small>
+      <div class="acts"><button type="button" class="btn" data-exact="skip">Not a real gap — skip</button></div>
+    </article>`).join('');
   return h + rows.map(r => `<article class="item gr yellow" data-exkey="${esc(r.key)}" data-exlist="check">
       <div class="grh"><span>⚠</span><b>${esc(EX_MATCH[r.verdict] || r.verdict)}</b></div>
       <div class="grm">${r.claimed != null ? 'claimed ' + peso(r.claimed) : ''}${r.gcash != null ? ' · GCash ' + peso(r.gcash) : ''} · ${esc(r.source)} · ${esc(exDay(r.at))}${r.ref ? ' · ref ' + esc(grLast4(r.ref)) : r.given ? ' · ref on record ' + esc(grLast4(r.given)) : ''}</div>
@@ -1791,7 +1798,7 @@ function excHtml(){
 async function excAct(list, key, action, sub, name){
   try {
     await rpc('pay_exception_v1', { p_pin:S.pin, p_list:list, p_key:String(key), p_subscriber_id:sub || null, p_action:action, p_note:null });
-    toast(action === 'undo' ? 'Undone' : action === 'block' ? 'Saved: never guess this number' : action === 'none' ? 'Skipped' : action === 'book' ? 'Saved: record is right' : `Saved: ${name || 'answered'}`);
+    toast(action === 'undo' ? 'Undone' : action === 'block' ? 'Saved: never guess this number' : action === 'none' || action === 'skip' ? 'Skipped' : action === 'book' ? 'Saved: record is right' : `Saved: ${name || 'answered'}`);
     S.exOpen = null; S.exQ = ''; S.exRes = []; S.exNone = false; await excLoad();
   } catch (x) { toast(x.message, 4000); if (/PIN/.test(x.message)) lock(x.message); else render(); }
 }
