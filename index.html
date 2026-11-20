@@ -541,6 +541,7 @@ details.more{margin-bottom:12px}details.more summary{font-size:13px;font-weight:
 #nb-choose .note{font-size:12px;color:#6b7280;margin-top:10px}
 
 .nb-top{display:flex;align-items:center;gap:6px;margin:0 0 6px}
+.nb-top .nb-for{flex:none;height:32px;max-width:150px;padding:0 8px;border:1px solid #c7d2fe;border-radius:999px;background:#eef2ff;color:#0146a0;font:800 12.5px Inter,system-ui,sans-serif;cursor:pointer}
 .nb-top button.nv{width:32px;height:32px;border-radius:9px;border:1px solid #dde5f2;background:#fff;font-weight:800;cursor:pointer;font-family:inherit;flex:none}
 .nb-top button.nv:disabled{opacity:.3;cursor:default}
 .nb-top .dt{flex:1;min-width:0;font-size:14px;font-weight:800;color:#0f2a5c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -874,6 +875,11 @@ const uuid = () => (crypto.randomUUID ? crypto.randomUUID() :
 function toast(m, ms = 2600){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms); }
 
 const ERR = {
+  entries_on_or_after_date:'There are already lines on or after that date. Pick a date after the last line.',
+  restart_exists:'The book was already restarted on or after that date.',
+  before_opening:'That date is before the book started. Pick a date on or after the start date.',
+  from_unknown:'Pick who is handing over (Ailyn, Joi, …).',
+  owner_only:'Only Sir Wendell can do this.',
   bad_pin:'Wrong PIN. Try again.',
   too_many_attempts:'Too many wrong PINs from this phone. Wait 10 minutes, then try again.',
   day_locked:'That day is already closed. Record this on today instead.',
@@ -924,6 +930,11 @@ function errText(code){
 }
 
 async function rpc(fn, args = {}){
+  // owner writing on behalf of a staff member: the cash is theirs, the line shows who wrote it
+  if (S.forWho && S.user && S.user.is_owner) {
+    if (fn === 'fin_cash_add') args = { ...args, p_detail:{ ...(args.p_detail || {}), custodian:(args.p_detail && args.p_detail.custodian) || S.forWho } };
+    if (fn === 'fin_cash_count') args = { ...args, p_from:args.p_from || S.forWho };
+  }
   let res;
   try {
     res = await fetch(`${SB}/rest/v1/rpc/${fn}`, {
@@ -1015,7 +1026,7 @@ function lockApp(msg){
   clearSess();
   if (X.rows) { stashDraft(); X.rows = null; }
   clearTimeout(S.idle); S.idle = null;
-  S.user = null; S.pin = ''; S.book = null; S.look = null; S.gc = null; S.parts = null; S.workDate = null; S.wdDone = false; closeSheet(); drawDots();
+  S.forWho = null; S.user = null; S.pin = ''; S.book = null; S.look = null; S.gc = null; S.parts = null; S.workDate = null; S.wdDone = false; closeSheet(); drawDots();
   document.querySelectorAll('.acc').forEach(x => x.classList.remove('on')); S.name = null;
   show('pin'); $('pin-err').textContent = msg || '';
 }
@@ -1566,10 +1577,16 @@ function renderSheet(){
   else if (F.kind === 'owner') {
     title = 'Owner settings';
     const cut = S.user.cutover;
-    const hasOpening = S.book.entries.some(e => e.kind === 'opening');
+    const openE = S.book.entries.find(e => e.kind === 'opening'), hasOpening = !!openE || !!S.book.opening_date;
     h += `<div class="sec" style="margin-top:0">Opening balance</div>`;
-    if (hasOpening) h += `<div class="calc"><div><span>Already set</span><b>${peso(S.book.entries.find(e => e.kind === 'opening').amount)}</b></div></div>`;
+    if (hasOpening) h += `<div class="calc"><div><span>${openE ? 'Already set' : 'Book started'}</span><b>${openE ? peso(openE.amount) : esc(dLabel(S.book.opening_date))}</b></div></div>`;
     else h += `<div class="note">Enter the cash the office had at the <b>start</b> of the opening date (the notebook's balance carried in from the day before). The running balance starts from this amount.</div>${money('f-open', 'Cash at the start of the opening date')}<div class="f"><label for="f-odate">Opening date (the first day you will record)</label><input type="date" id="f-odate" max="${todayPH()}" value="${todayPH()}"></div><button class="go" type="button" id="own-open">Set opening balance</button>`;
+    h += `<div class="sec">Start the book again</div>
+      <div class="note">Use this to start fresh on a new date (for example after a deposit of the whole drawer). The book on that date starts at the cash you count. Lines before that date stay as history; new lines can only go on or after it. The book now starts on <b>${esc(dLabel(S.book.opening_date || todayPH()))}</b>.</div>
+      <div class="f"><label for="f-rdate">Start date</label><input type="date" id="f-rdate" max="${todayPH()}" value="${todayPH()}"></div>
+      ${money('f-rcount', 'Cash in the drawer at the start of that date (0 if all deposited)', F.rcount ?? '')}
+      ${text('f-rmemo', 'Note (optional)', F.rmemo || '', 'placeholder="e.g. Drawer deposited to PBB Nov 20 night"')}
+      <button class="go" type="button" id="own-restart">Start the book on this date</button>`;
     h += `<div class="sec">Collector check</div>
       <div class="note">Spawn Harvest's Spawn share (75%) is compared with hand-ins from this date. Harvests before it were handed in through the notebook.</div>
       <div class="f"><label for="f-cstart">Check collectors from</label><input id="f-cstart" type="date" max="${todayPH()}" value="${esc(S.coll ? S.coll.start : todayPH())}"></div>
@@ -1851,6 +1868,7 @@ function wireSheet(){
   }
   body.querySelectorAll('[data-gp]').forEach(b => b.onclick = () => openPaymentVoid(+b.dataset.gp));
   if ($('own-gopen')) $('own-gopen').onclick = ownerGcashOpening;
+  if ($('own-restart')) $('own-restart').onclick = ownerRestart;
   if ($('own-closepast')) $('own-closepast').onclick = async () => {
     const btn = $('own-closepast'), days = openDays().filter(d => d < todayPH());
     if (!confirm(`Close ${days.length} past day(s) from the notebook balances? Lines on those days can no longer be changed.`)) return;
@@ -2195,6 +2213,18 @@ async function ownerOpening(){
     await rpc('fin_cash_add', { p_pin:S.pin, p_client_id:F.cid, p_kind:'opening', p_amount:num(v('f-open')), p_entry_date:v('f-odate') || null, p_detail:{ memo:'Opening count' } });
     toast('Opening balance set.'); closeSheet(); await refresh();
   } catch (e) { say(e.message); busy(btn, false); }
+}
+async function ownerRestart(){
+  const btn = $('own-restart'), F = S.form; F.rcid = F.rcid || uuid();
+  try {
+    if (v('f-rcount') === '') throw new Error('Enter the cash in the drawer (0 is fine).');
+    const d = v('f-rdate') || todayPH(), amt = num(v('f-rcount'));
+    if (!confirm(`Start the book on ${dLabel(d)} with ${peso(amt)} in the drawer?`)) return;
+    busy(btn, true);
+    const r = await rpc('fin_cash_restart', { p_pin:S.pin, p_client_id:F.rcid, p_date:d, p_count:amt, p_memo:v('f-rmemo') || null });
+    toast(`Book starts on ${dLabel(r.restart_date)} with ${peso(r.counted)}.`, 4000);
+    closeSheet(); S.wdDone = true; setWorkDate(r.restart_date); await refresh();
+  } catch (e) { say(e.message); busy(btn, false); F.rcid = null; }
 }
 async function ownerCutover(date){
   const btn = date ? $('own-cut') : $('own-off');
@@ -3223,11 +3253,13 @@ function nbTitle(e){
     case 'sukli_out': return ['Sukli given', m];
     case 'gcash_cashout': return ['GCash → cash', m];
     case 'adjust_in': {
+      if (e.category === 'Book restart') return ['Book started again', m.replace(/^Book restarted — /, '')];
       if (e.category === 'Short paid back') return [`${p} paid back short`, m];
       if (e.category === 'Short found') return [`Short found · ${p}`, m];
       return [`Over · ${p || '?'}`, (m || '').replace(' — ', ' · ')];
     }
-    case 'adjust_out': return [`Short · ${p || '?'}`, (m || '').replace(' — ', ' · ')];
+    case 'adjust_out': if (e.category === 'Book restart') return ['Book started again', m.replace(/^Book restarted — /, '')];
+      return [`Short · ${p || '?'}`, (m || '').replace(' — ', ' · ')];
     case 'other_in': return [m || 'Other cash in', p]; case 'other_out': return [m || 'Other cash out', p];
   }
   return lineText(e);
@@ -3268,6 +3300,7 @@ function renderNote(){
     if (e._short) { title = `Short · ${esc(e.collector || '?')}`; sub = 'harvest hand-in' + (e.memo ? ' · ' + esc(e.memo) : '') + ' · office covered'; }
     if (e._over) { title = `Over · ${esc(e.collector || '?')}`; sub = 'harvest hand-in' + (e.memo ? ' · ' + esc(e.memo) : ''); }
     const amt = (s > 0 ? '+ ' : s < 0 ? '− ' : '') + Number(Math.abs(s)).toLocaleString('en-PH', {maximumFractionDigits:2});
+    if (!e._short && !e._over && e.custodian && e.created_by && e.custodian !== e.created_by) sub = (sub ? sub + ' · ' : '') + `${esc(e.created_by)} for ${esc(e.custodian)}`;
     const isShort = e._short || e._over || /^(adjust_out|adjust_in)$/.test(e.kind) && /Short|Over/.test(e.category || '');
     return `<button type="button" class="ln ${isVoid ? 'void' : ''} ${markE && e.id === markE.id && !isVoid && !e._short && !e._over ? 'mark' : ''}" ${isShort && !isVoid ? 'data-short="1"' : `data-e="${e.id}"`}><b class="${s > 0 ? 'in' : s < 0 ? 'out' : 'zero'}">${amt}</b><span>— ${title}${sub ? ' <small>' + sub + '</small>' : ''}${isVoid ? ' <small>· voided</small>' : ''}</span></button>`;
   };
@@ -3325,6 +3358,7 @@ function renderNote(){
       <button type="button" class="nv" id="nb-prev" aria-label="Previous day" ${d <= mn ? 'disabled' : ''}>◀</button>
       <div class="dt">${d === t ? 'Today' : dLabel(d)} <small>· ${d === t ? dLabel(d) : 'past page'}${lock && lock.locked_at ? ' · closed' : ''} · ${esc((S.user && S.user.name) || '')}</small></div>
       <button type="button" class="nv" id="nb-next" aria-label="Next day" ${d >= t ? 'disabled' : ''}>▶</button>
+      ${S.user && S.user.is_owner ? `<select id="nb-for" class="nb-for" aria-label="Writing for" title="Lines you write count as this person's cash"><option value="">✍ Me</option>${(roster || []).map(a => `<option value="${esc(a.name)}" ${S.forWho === a.name ? 'selected' : ''}>✍ for ${esc(a.name)}</option>`).join('')}</select>` : ''}
       ${showWait ? `<button type="button" class="wait" id="nb-hint" title="${pend.map(x => esc(x.who)).join(', ')} · ${peso(waitT)}">💰 ${pend.length} waiting</button>` : ''}
     </div>
     ${mark}
@@ -3355,6 +3389,7 @@ function renderNote(){
       <div class="st"><i>2</i><span><b>✏️ Write a line</b> — gas, snacks, c/o, cash advance, a deposit, or a subscriber who paid here.</span></div>
       <div class="st"><i>3</i><span><b>🤝 Count &amp; hand over</b> — at the handover, count the drawer and sign. Short or over is written as a line.</span></div></div>` : ''}
     <div class="nb-keys">⌨ <kbd>←</kbd><kbd>→</kbd> day · <kbd>↑</kbd><kbd>↓</kbd> lines · <kbd>Enter</kbd> open · <kbd>W</kbd> write a line · <kbd>H</kbd> hand over · <kbd>Esc</kbd> back</div>`;
+  const nf = $('nb-for'); if (nf) nf.onchange = () => { S.forWho = nf.value || null; toast(S.forWho ? `Writing for ${S.forWho}. Lines count as ${S.forWho}'s cash.` : 'Writing as yourself.'); renderNote(); };
   $('nb-prev').onclick = () => { setWorkDate(addDays(d, -1)); renderNote(); };
   $('nb-next').onclick = () => { setWorkDate(addDays(d, 1)); renderNote(); };
   const hint = $('nb-hint'); if (hint) hint.onclick = () => { NB.tab = 'col'; renderNote(); };
