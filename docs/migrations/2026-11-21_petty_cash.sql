@@ -448,3 +448,24 @@ grant execute on function pc_boot(text), pc_release_add(text,uuid,text,numeric,t
   pc_my_exp_add(text,text,uuid,bigint,numeric,text,text,text,text,date), pc_my_exp_void(text,text,bigint) to anon, authenticated;
 revoke execute on function pc__exp_add(bigint,text,boolean,uuid,numeric,text,text,text,text,date), pc_person(text), pc_person_auth(text,text),
   pc_new_code(), pc_roster_names(), pc_box(), pc_releases_json(bigint,int) from anon, authenticated, public;
+
+-- owner sets a personnel PIN (staff first, else collector). The pin_hash trigger hashes it.
+create or replace function pc_pin_set(p_pin text, p_name text, p_new_pin text) returns jsonb
+language plpgsql security definer set search_path to 'public' as $$
+declare v record; n int := 0;
+begin
+  select * into v from fin_auth(p_pin);
+  if v.o_err is not null then return jsonb_build_object('ok',false,'error',v.o_err); end if;
+  if v.o_role <> 'owner' then raise exception 'owner_only'; end if;
+  if coalesce(btrim(p_new_pin),'') !~ '^[0-9]{4,6}$' then raise exception 'pin_must_be_4_to_6_digits'; end if;
+  update staff set pin = btrim(p_new_pin), updated_at = now()
+   where active and role <> 'wendell' and lower(coalesce(display_name, name)) = lower(btrim(p_name));
+  get diagnostics n = row_count;
+  if n = 0 then
+    update collectors set pin = btrim(p_new_pin), updated_at = now() where active and lower(name) = lower(btrim(p_name));
+    get diagnostics n = row_count;
+  end if;
+  if n = 0 then raise exception 'person_not_found'; end if;
+  return jsonb_build_object('ok',true,'updated',n);
+end $$;
+grant execute on function pc_pin_set(text,text,text) to anon, authenticated;

@@ -4663,7 +4663,11 @@ function render(){
       ${d.is_owner ? `<div class="pc-card" style="margin-top:12px"><h3>Settings</h3><div class="pc-f">
         <label>Fund<input id="ps-fund" inputmode="decimal" value="${esc(d.box.fund)}"></label><label>Alert at<input id="ps-alert" inputmode="decimal" value="${esc(d.box.alert_at)}"></label>
         <label>Warn above (per release)<input id="ps-warn" inputmode="decimal" value="${esc(d.box.warn_release)}"></label><label>Start date<input id="ps-start" type="date" value="${esc(d.box.start_date)}"></label></div>
-        <div class="pc-acts"><button class="pc-btn alt sm" id="ps-save">Save settings</button></div><div class="pc-msg" id="ps-smsg"></div></div>` : ''}
+        <div class="pc-acts"><button class="pc-btn alt sm" id="ps-save">Save settings</button></div><div class="pc-msg" id="ps-smsg"></div></div>
+      <div class="pc-card" style="margin-top:12px"><h3>Personnel PIN</h3><div style="font-size:12.5px;color:var(--ink-2);margin-bottom:8px">Set the PIN a lineman or collector types in Spawn Jobs → 💰 Petty cash. It's the same PIN they use in other Spawn apps (Harvest for collectors).</div>
+        <div class="pc-f"><label>Person<select id="pp-name"><option value="">—</option>${(d.people || []).filter(p => p.kind === 'staff' || p.kind === 'collector').map(p => `<option>${esc(p.name)}</option>`).join('')}</select></label>
+        <label>New PIN<input id="pp-pin" inputmode="numeric" maxlength="6" placeholder="4–6 digits" autocomplete="off"></label></div>
+        <div class="pc-acts"><button class="pc-btn alt sm" id="pp-save">Set PIN</button></div><div class="pc-msg" id="pp-msg"></div></div>` : ''}
     </div></div>`;
   wire();
 }
@@ -4692,6 +4696,10 @@ function wire(){
   W.querySelectorAll('[data-eadd]').forEach(b => b.onclick = () => addExp(+b.dataset.eadd, b));
   W.querySelectorAll('[data-cc],[data-cr],[data-cn]').forEach(i => i.oninput = i.onchange = () => { const id = i.dataset.cc || i.dataset.cr || i.dataset.cn; const f = P.form['c' + id] = P.form['c' + id] || {};
     if (i.dataset.cc) f.chg = i.value; if (i.dataset.cr) f.rec = i.checked; if (i.dataset.cn) f.note = i.value; });
+  const pps = $('pp-save'); if (pps) pps.onclick = async () => { const nm = $('pp-name').value, pin = $('pp-pin').value.trim(), m = $('pp-msg'); m.textContent = '';
+    if (!nm) { m.textContent = 'Pick the person.'; return; } if (!/^\d{4,6}$/.test(pin)) { m.textContent = 'PIN must be 4 to 6 digits.'; return; }
+    if (!confirm(`Set ${nm}'s PIN? Tell ${nm} the new PIN yourself.`)) return;
+    try { await call('pc_pin_set', { p_name:nm, p_new_pin:pin }); $('pp-pin').value = ''; toast(`PIN set for ${nm}.`); } catch (e) { m.textContent = /person_not_found/.test(e.message) ? 'No staff or collector with that name.' : errMsg(e); } };
   const ss = $('ps-save'); if (ss) ss.onclick = async () => { try { await call('pc_config_set', { p_fund:num($('ps-fund').value), p_alert:num($('ps-alert').value), p_warn:num($('ps-warn').value), p_start:$('ps-start').value || null }); toast('Settings saved.'); load(); } catch (e) { $('ps-smsg').textContent = errMsg(e); } };
 }
 
