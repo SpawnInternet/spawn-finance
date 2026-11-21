@@ -4850,7 +4850,7 @@ const ERRS = { not_enough_cash:'Not enough cash in the petty cash box for that a
   nothing_to_replenish:'No confirmed receipts to top up yet.', code_not_found:'No one has that code. Check the 6 letters.', release_closed:'That release is already confirmed.',
   already_replenished:'Already included in a top-up; it cannot be changed.', person_required:'Type who gets the cash.', amount_must_be_positive:'Enter an amount.',
   what_required:'Type what it was for.', reason_required:'Type a reason.', pin_taken:'That PIN is already used by someone else. Choose a different one.', already_opened:'The fund was already set up.', source_required:'Choose where the money came from.',
-  bank_details_required:'For a bank withdrawal, type the bank and the reference number.',
+  bank_details_required:'For a bank withdrawal, type the bank and the reference number.', deposited_by_required:'Type who deposited the money in the petty cash box.',
   pin_must_be_4_digits:'The PIN must be exactly 4 numbers.', steph_only:'Only the Steph account can change office PINs.', name_required:'Type the name.', future_date:'That date is in the future.', bad_settings:'Check the numbers (alert must be below the fund).' };
 const errMsg = e => ERRS[(e && e.message) || ''] || (e && e.message) || 'Something went wrong.';
 async function call(fn, args){
@@ -5246,7 +5246,7 @@ function tabBody(){
         ${d.is_owner || (isSteph() && b.test_mode) ? `${wdFields('tu', {})}
           <div class="pc-acts"><button class="pc-btn gold" id="pf-top" ${Number(b.confirmed) > 0 ? '' : 'disabled'}>Approve top-up of ${pcPeso(b.confirmed)}</button></div><div class="pc-msg" id="pf-msg"></div>`
           : '<div class="pc-note">Sir Wendell approves top-ups.</div>'}</div>
-      <div class="pc-card" style="margin-top:14px"><h3>Fund history</h3>${tops.length ? tops.map(t => `<div class="pc-top"><span>${t.kind === 'opening' ? '<b style="margin:0;color:var(--sg)">Opening</b> · ' : ''}${esc(new Date(t.approved_at).toLocaleDateString('en-PH', {month:'short', day:'numeric'}))} · ${esc(t.source)}${t.bank ? ' · ' + esc(t.bank) : ''}${t.account ? ' (' + esc(t.account) + ')' : ''}${t.ref_no ? ' · ref ' + esc(t.ref_no) : ''}${t.withdrawn_by ? ' · by ' + esc(t.withdrawn_by) : ''}${t.slip_path ? ` · <a href="${imgUrl(t.slip_path)}" target="_blank" rel="noopener">slip</a>` : ''}</span><b>${pcPeso(t.amount)}</b></div>`).join('') : '<div class="pc-empty">No top-ups yet.</div>'}</div>
+      <div class="pc-card" style="margin-top:14px"><h3>Fund history</h3>${tops.length ? tops.map(t => `<div class="pc-top"><span>${t.kind === 'opening' ? '<b style="margin:0;color:var(--sg)">Opening</b> · ' : ''}${esc(new Date(t.approved_at).toLocaleDateString('en-PH', {month:'short', day:'numeric'}))} · ${esc(t.source)}${t.bank ? ' · ' + esc(t.bank) : ''}${t.account ? ' (' + esc(t.account) + ')' : ''}${t.ref_no ? ' · ref ' + esc(t.ref_no) : ''}${t.withdrawn_by ? ' · taken out by ' + esc(t.withdrawn_by) : ''}${t.deposited_by ? ' · deposited by ' + esc(t.deposited_by) : ''}${t.slip_path ? ` · <a href="${imgUrl(t.slip_path)}" target="_blank" rel="noopener">slip</a>` : ''}</span><b>${pcPeso(t.amount)}</b></div>`).join('') : '<div class="pc-empty">No top-ups yet.</div>'}</div>
     </div><div>${d.is_owner ? `<div class="pc-card"><h3>⚙️ Settings</h3><div class="pc-f">
         <label>Fund<input id="ps-fund" inputmode="decimal" value="${esc(b.fund)}"></label><label>Alert at<input id="ps-alert" inputmode="decimal" value="${esc(b.alert_at)}"></label>
         <label>Warn above (per row)<input id="ps-warn" inputmode="decimal" value="${esc(b.warn_release)}"></label><label>Start date<input id="ps-start" type="date" value="${esc(b.start_date)}"></label></div>
@@ -5262,9 +5262,9 @@ function tabBody(){
 const MKEY = 'pc_withdraw_memory_v1';
 function mem(){ let m = {}; try { m = JSON.parse(localStorage.getItem(MKEY) || '{}'); } catch (e) {}
   const last = (P.d && P.d.replenish || []).find(r => r.bank || r.account || r.withdrawn_by) || {};
-  return { source:m.source || last.source || 'Bank withdrawal', bank:m.bank || last.bank || '', account:m.account || last.account || '', by:m.by || last.withdrawn_by || '' }; }
+  return { source:m.source || last.source || 'Bank withdrawal', bank:m.bank || last.bank || '', account:m.account || last.account || '', by:m.by || last.withdrawn_by || '', dep:m.dep || last.deposited_by || '' }; }
 function memSave(o){ try { localStorage.setItem(MKEY, JSON.stringify(o)); } catch (e) {} }
-function memList(k){ const s = new Set(); (P.d && P.d.replenish || []).forEach(r => { if (r[k]) s.add(r[k]); }); const m = mem(); const mk = {bank:'bank', account:'account', withdrawn_by:'by'}[k]; if (m[mk]) s.add(m[mk]); return [...s]; }
+function memList(k){ const s = new Set(); (P.d && P.d.replenish || []).forEach(r => { if (r[k]) s.add(r[k]); }); const m = mem(); const mk = {bank:'bank', account:'account', withdrawn_by:'by', deposited_by:'dep'}[k]; if (m[mk]) s.add(m[mk]); return [...s]; }
 const SOURCES = ['Bank withdrawal', 'Office drawer', "Sir Wendell's cash", 'Other'];
 function wdFields(pre, opts){
   const m = mem(), bank = (m.source || '').toLowerCase().startsWith('bank');
@@ -5276,11 +5276,13 @@ function wdFields(pre, opts){
     <label class="bk-only" ${bank ? '' : 'style="display:none"'}>Account (name or last 4 digits)<input id="${pre}-acct" list="${pre}-accts" autocomplete="off" placeholder="e.g. Spawn Internet · 4417" value="${esc(m.account)}"></label>
     <label class="bk-only" ${bank ? '' : 'style="display:none"'}>Reference / transaction no.<input id="${pre}-ref" autocomplete="off" placeholder="from the withdrawal slip"></label>
     <label>Who took the money out?<input id="${pre}-by" list="${pre}-bys" autocomplete="off" placeholder="name" value="${esc(m.by)}"></label>
+    <label>Who deposited it in the petty cash box?<input id="${pre}-dep" list="${pre}-deps" autocomplete="off" placeholder="name" value="${esc(m.dep)}"></label>
     <label class="wide">Photo of the withdrawal slip (optional)<input id="${pre}-slip" type="file" accept="image/*" capture="environment"></label>
     <label class="wide">Note<input id="${pre}-note" autocomplete="off" placeholder="optional"></label></div>
     <datalist id="${pre}-banks">${memList('bank').map(x => `<option value="${esc(x)}">`).join('')}</datalist>
     <datalist id="${pre}-accts">${memList('account').map(x => `<option value="${esc(x)}">`).join('')}</datalist>
-    <datalist id="${pre}-bys">${memList('withdrawn_by').map(x => `<option value="${esc(x)}">`).join('')}</datalist>`;
+    <datalist id="${pre}-bys">${memList('withdrawn_by').map(x => `<option value="${esc(x)}">`).join('')}</datalist>
+    <datalist id="${pre}-deps">${memList('deposited_by').map(x => `<option value="${esc(x)}">`).join('')}</datalist>`;
 }
 function wdWire(pre){
   const src = $(pre + '-src'); if (!src) return;
@@ -5290,10 +5292,11 @@ async function wdRead(pre){
   const v = id => ($(pre + '-' + id) ? $(pre + '-' + id).value.trim() : '');
   const src = v('src'), bank = src.toLowerCase().startsWith('bank');
   if (bank && (!v('bank') || !v('ref'))) throw new Error('bank_details_required');
+  if (!v('dep')) throw new Error('deposited_by_required');
   const f = $(pre + '-slip') && $(pre + '-slip').files[0];
   const o = { p_source:src, p_bank:bank ? v('bank') : null, p_account:bank ? v('acct') || null : null, p_ref_no:bank ? v('ref') : null,
-    p_withdrawn_by:v('by') || null, p_withdrawn_on:v('date') || null, p_note:v('note') || null, p_slip_path:f ? await upload(f) : null };
-  memSave({ source:src, bank:bank ? v('bank') : mem().bank, account:bank ? v('acct') : mem().account, by:v('by') });
+    p_withdrawn_by:v('by') || null, p_deposited_by:v('dep') || null, p_withdrawn_on:v('date') || null, p_note:v('note') || null, p_slip_path:f ? await upload(f) : null };
+  memSave({ source:src, bank:bank ? v('bank') : mem().bank, account:bank ? v('acct') : mem().account, by:v('by'), dep:v('dep') });
   return o;
 }
 function setupHtml(){
