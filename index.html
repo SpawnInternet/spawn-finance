@@ -4840,7 +4840,8 @@ const ERRS = { not_enough_cash:'Not enough cash in the petty cash box for that a
   note_required_for_difference:'The amounts do not add up. Type a note explaining the difference.', owner_only:'Only Sir Wendell can do this.',
   nothing_to_replenish:'No confirmed receipts to top up yet.', code_not_found:'No one has that code. Check the 6 letters.', release_closed:'That release is already confirmed.',
   already_replenished:'Already included in a top-up; it cannot be changed.', person_required:'Type who gets the cash.', amount_must_be_positive:'Enter an amount.',
-  what_required:'Type what it was for.', reason_required:'Type a reason.', future_date:'That date is in the future.', bad_settings:'Check the numbers (alert must be below the fund).' };
+  what_required:'Type what it was for.', reason_required:'Type a reason.', pin_taken:'That PIN is already used by someone else. Choose a different one.',
+  pin_must_be_4_digits:'The PIN must be exactly 4 numbers.', steph_only:'Only the Steph account can change office PINs.', name_required:'Type the name.', future_date:'That date is in the future.', bad_settings:'Check the numbers (alert must be below the fund).' };
 const errMsg = e => ERRS[(e && e.message) || ''] || (e && e.message) || 'Something went wrong.';
 async function call(fn, args){
   try { return await rpc(fn, Object.assign({ p_pin:S.pin }, args || {})); }
@@ -5244,19 +5245,58 @@ function tabBody(){
       <div class="pc-card" style="margin-top:14px"><h3>🔑 Personnel PIN</h3><div style="font-size:12.5px;color:#4a5468;margin-bottom:10px">Set the PIN a lineman or collector types in Spawn Jobs → 💰 Petty cash. It's the same PIN they use in other Spawn apps.</div>
         <div class="pc-f"><label>Person<select id="pp-name"><option value="">—</option>${(d.people || []).filter(p => p.kind === 'staff' || p.kind === 'collector').map(p => `<option>${esc(p.name)}</option>`).join('')}</select></label>
         <label>New PIN<input id="pp-pin" inputmode="numeric" maxlength="6" placeholder="4–6 digits" autocomplete="off"></label></div>
-        <div class="pc-acts"><button class="pc-btn alt sm" id="pp-save">Set PIN</button></div><div class="pc-msg" id="pp-msg"></div></div>` : '<div class="pc-card"><div class="pc-empty">Settings are for Sir Wendell.</div></div>'}</div></div>`; }
+        <div class="pc-acts"><button class="pc-btn alt sm" id="pp-save">Set PIN</button></div><div class="pc-msg" id="pp-msg"></div></div>` : ''}
+      ${isSteph() ? officePinsHtml() : ''}${!d.is_owner && !isSteph() ? '<div class="pc-card"><div class="pc-empty">Settings are for Sir Wendell.</div></div>' : ''}</div></div>`; }
   return '';
 }
+/* ---------- Office PINs (Steph account only; server checks too) ---------- */
+const isSteph = () => String((P.d && P.d.me) || (S.user && S.user.name) || '').trim().toLowerCase() === 'steph';
+function officePinsHtml(){
+  const list = P.op || null;
+  return `<div class="pc-card" style="margin-top:${P.d.is_owner ? 14 : 0}px"><h3>🔐 Office PINs <small>— who can sign in to SPAWN Finance</small></h3>
+    <div style="font-size:12.5px;color:#4a5468;margin-bottom:10px">Each person signs in with their PIN only, so every PIN must be <b>4 numbers</b> and <b>different from everyone else's</b>. The app checks this for you without showing anyone's PIN.</div>
+    <div id="op-list">${list ? (list.length ? list.map(a => `<button class="pc-top op-row" data-op="${esc(a.name)}" style="width:100%;background:none;border:0;border-bottom:1px solid #f0f2f8;cursor:pointer;text-align:left;font:inherit">
+        <span><b style="color:#1d2540;margin-left:0">${esc(a.name)}</b> <span style="color:#7a8399;font-size:12px">· ${esc(a.role || '')}</span></span>
+        <b style="font-size:12px;color:${a.active && a.has_pin ? 'var(--sg)' : '#b08a00'}">${!a.active ? 'not active' : a.has_pin ? '✓ PIN set' : 'no PIN'}</b></button>`).join('') : '<div class="pc-empty">No office accounts.</div>')
+      : '<div class="pc-empty">Loading…</div>'}</div>
+    <div class="pc-f" style="margin-top:12px"><label>Name<input id="op-name" list="op-names" autocomplete="off" placeholder="e.g. Ma'am Lorna"></label>
+      <label>New PIN<input id="op-pin" inputmode="numeric" maxlength="4" placeholder="4 numbers" autocomplete="off"></label>
+      <label>Role (new person only)<select id="op-role"><option>Staff</option><option>keykeeper</option></select></label></div>
+    <datalist id="op-names">${(list || []).map(a => `<option value="${esc(a.name)}">`).join('')}</datalist>
+    <div class="pc-acts"><button class="pc-btn sm" id="op-save">Save PIN</button></div><div class="pc-msg" id="op-msg"></div>
+    <div style="font-size:12px;color:#7a8399;margin-top:4px">A new name adds a new office account. An existing name changes that person's PIN. Tell them the new PIN yourself.</div></div>`;
+}
+async function loadOfficePins(){
+  try { const r = await call('fin_office_pins'); P.op = r.accounts || []; } catch (e) { P.op = []; const m = $('op-msg'); if (m) m.textContent = errMsg(e); }
+  const box = $('op-list'); if (box && P.tab === 'topup') render();
+}
+function wireOfficePins(){
+  if (!$('op-save')) return;
+  if (!P.op && !P.opLoading) { P.opLoading = true; loadOfficePins().finally(() => { P.opLoading = false; }); }
+  $('pc-wrap').querySelectorAll('[data-op]').forEach(b => b.onclick = () => { $('op-name').value = b.dataset.op; $('op-pin').focus(); });
+  $('op-pin').oninput = e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); };
+  $('op-save').onclick = async () => {
+    const nm = $('op-name').value.trim(), pin = $('op-pin').value.trim(), m = $('op-msg'), btn = $('op-save'); m.textContent = '';
+    if (!nm) { m.textContent = 'Type the name.'; return; }
+    if (!/^\d{4}$/.test(pin)) { m.textContent = 'The PIN must be exactly 4 numbers.'; return; }
+    btn.disabled = true;
+    try { const r = await call('fin_office_pin_set', { p_name:nm, p_new_pin:pin, p_role:$('op-role').value });
+      toast(r.added ? `${r.name} added. Tell them their PIN.` : `PIN changed for ${r.name}.`, 3500); P.op = null; render(); }
+    catch (e) { m.textContent = errMsg(e); btn.disabled = false; }
+  };
+}
+
 function render(){
   hideSug();
   const d = P.d, rel = d.releases || [];
   const wait = rel.filter(r => r.status !== 'closed' && r.status !== 'void'), flagged = wait.filter(r => r.status === 'flagged').length;
-  const tabs = [['encode', '✍️ Encode'], ['wait', '⏳ Waiting', wait.length, flagged], ['hist', '📚 History'], ['scan', '📷 Scan QR'], ['topup', d.is_owner ? '🔁 Top-up & settings' : '🔁 Top-ups']];
+  const tabs = [['encode', '✍️ Encode'], ['wait', '⏳ Waiting', wait.length, flagged], ['hist', '📚 History'], ['scan', '📷 Scan QR'], ['topup', d.is_owner ? '🔁 Top-up & settings' : isSteph() ? '🔁 Top-ups & PINs' : '🔁 Top-ups']];
   $('pc-wrap').innerHTML = heroHtml() + `<nav class="pc-nav"><button id="pc-home" class="home" title="Back to the dashboard">🏠 Home</button>${tabs.map(([k, l, n, fl]) => `<button data-tab="${k}" class="${P.tab === k ? 'on' : ''}">${l}${n != null ? `<span class="n ${fl ? 'red' : ''}">${n}</span>` : ''}</button>`).join('')}
       <span class="sp"></span><button id="pc-reload" title="Reload">↻</button></nav>` + tabBody();
   P.flash = false;
   wire();
   if (P.tab === 'encode') { wireGrid(); }
+  if (P.tab === 'topup') wireOfficePins();
   setTimeout(() => { P.fresh = {}; }, 4000);
 }
 
