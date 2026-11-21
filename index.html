@@ -4789,6 +4789,12 @@ body:has(#v-petty:not(.hide)) .stripe,body:has(#v-dash:not(.hide)) .stripe{displ
 .pc-scan video{width:100%;max-height:300px;border-radius:14px;background:#000;object-fit:cover}
 .pc-top{font-size:13.5px;border-bottom:1px solid #f0f2f8;padding:9px 0;display:flex;gap:10px}
 .pc-top b{margin-left:auto;font-variant-numeric:tabular-nums}
+.pc-test{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border-radius:14px;font-weight:800;font-size:14px;color:#5a3a00;
+  background:repeating-linear-gradient(135deg,#FFD25E 0 14px,#FFC23A 14px 28px);box-shadow:0 8px 20px -12px rgba(240,138,28,.8)}
+.pc-test span{font-weight:600;font-size:13px}
+.pc-test button{margin-left:auto}
+.pc-sw{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pc-sw .st{font-weight:800;font-size:14px}
 .pc-how{counter-reset:s;display:grid;gap:10px;font-size:13.5px;color:#4a5468}
 .pc-how div{display:flex;gap:10px;align-items:flex-start}
 .pc-how div::before{counter-increment:s;content:counter(s);flex:0 0 26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font:900 12.5px 'Jakarta',system-ui,sans-serif;background:var(--c)}
@@ -4908,7 +4914,7 @@ function heroHtml(){
   const spentToday = (P.d.releases || []).reduce((s, r) => s + (r.status === 'void' ? 0 : (r.expenses || []).filter(e => e.date === P.d.today).reduce((t, e) => t + Number(e.amount), 0)), 0);
   return `<div class="pc-hero ${b.alert ? 'al' : ''}"><div class="pc-hin">
       <div class="pc-ring" style="--p:${pct.toFixed(1)}"><img src="spawn-globe.png" alt="Spawn"><b>${Math.round(pct)}% left</b></div>
-      <div class="pc-ht"><small>Spawn petty cash · cash in the box</small><div class="big">${pcPeso(b.cash)}</div>
+      <div class="pc-ht"><small>${b.test_mode ? '🧪 TEST · ' : ''}Spawn petty cash · cash in the box</small><div class="big">${pcPeso(b.cash)}</div>
         <div class="sub">of the ${pk(b.fund)} fund · alert at ${pk(b.alert_at)} · ${esc(dLabel(P.d.today))}</div></div>
       <div class="pc-stats">
         <div class="pc-stat"><small><i style="background:#FFB725"></i>With personnel</small><b>${pcPeso(b.pending)}</b><span>${b.n_pending} not yet confirmed</span></div>
@@ -4948,7 +4954,7 @@ function gridHtml(){
       <div class="pg-mode" role="tablist"><button data-mode="exp" class="${ex ? 'on' : ''}">🧾 Office paid</button><button data-mode="rel" class="${ex ? '' : 'on'}">💸 Release cash</button></div>
       <div class="pg-date"><button id="pg-prev" title="Day before">‹</button><input type="date" id="pg-date" max="${d.today}" value="${P.date}"><button id="pg-next" title="Next day" ${P.date >= d.today ? 'disabled' : ''}>›</button></div></div>
     <div class="pg-help">${ex ? '🧾 <b>Office paid</b>: the office already bought it with petty cash. One row per item.'
-      : '💸 <b>Release cash</b>: you give cash to a person now; they bring receipts and change back later (see ⏳ Waiting).'}</div>
+      : '💸 <b>Release cash</b>: give cash to anyone who needs it (lineman, field personnel, office staff). They bring receipts and change back later (see ⏳ Waiting).'}</div>
     <div class="pg ${ex ? 'exp' : 'rel'}" id="pg">
       <div class="pg-head">${ex ? '<span>#</span><span>Particulars / description</span><span>Name (c/o — released to)</span><span>Expense type</span><span>Amount</span><span>Receipt</span><span></span>'
         : '<span>#</span><span>Who gets the cash</span><span>For what</span><span>Amount</span><span></span>'}</div>
@@ -5228,16 +5234,16 @@ function tabBody(){
       <div id="ps-vid" style="margin-top:10px;${P.scan && P.scan.on ? '' : 'display:none'}"><video id="ps-video" playsinline muted></video></div>
       <div class="pc-msg" id="ps-msg"></div><div id="ps-res">${P.scan && P.scan.res ? scanResHtml(P.scan.res) : ''}</div></div>
     <div class="pc-card"><h3>How it works</h3><div class="pc-how">
-      <div style="--c:#025AC6"><span><b>Release cash</b> to the lineman or staff (Encode → 💸 Release cash). It goes on their account.</span></div>
+      <div style="--c:#025AC6"><span><b>Release cash</b> to anyone who needs it: linemen, field personnel, collectors or office staff (Encode → 💸 Release cash). It goes on their account.</span></div>
       <div style="--c:#028867"><span>They upload each receipt in <b>Spawn Jobs</b> → 💰 Petty cash.</span></div>
       <div style="--c:#C01176"><span>Next day they bring the receipts and change: <b>scan their QR</b> here and confirm.</span></div>
       <div style="--c:#FFB725"><span>When the box reaches ${pk(b.alert_at)}, Sir Wendell approves the <b>top-up</b>.</span></div></div>
-      <div class="pc-note">Linemen app: <b>spawninternet.github.io/VendoMonitor/lineman.html</b></div></div></div>`;
+      <div class="pc-note">Personnel upload receipts in Spawn Jobs: <b>spawninternet.github.io/VendoMonitor/lineman.html</b> (anyone with a staff, collector or office PIN). No PIN? The office adds their receipts in ⏳ Waiting.</div></div></div>`;
   if (P.tab === 'topup') { const tops = d.replenish || [];
     return `<div class="pc-two eq"><div>
       <div class="pc-card"><h3>🔁 Top up the petty cash box</h3>
         <div class="pc-sum"><span>Confirmed receipts <b>${pcPeso(b.confirmed)}</b> (${b.n_confirmed})</span><span>Box after top-up <b>${pcPeso(Number(b.cash) + Number(b.confirmed))}</b></span></div>
-        ${d.is_owner ? `${wdFields('tu', {})}
+        ${d.is_owner || (isSteph() && b.test_mode) ? `${wdFields('tu', {})}
           <div class="pc-acts"><button class="pc-btn gold" id="pf-top" ${Number(b.confirmed) > 0 ? '' : 'disabled'}>Approve top-up of ${pcPeso(b.confirmed)}</button></div><div class="pc-msg" id="pf-msg"></div>`
           : '<div class="pc-note">Sir Wendell approves top-ups.</div>'}</div>
       <div class="pc-card" style="margin-top:14px"><h3>Fund history</h3>${tops.length ? tops.map(t => `<div class="pc-top"><span>${t.kind === 'opening' ? '<b style="margin:0;color:var(--sg)">Opening</b> · ' : ''}${esc(new Date(t.approved_at).toLocaleDateString('en-PH', {month:'short', day:'numeric'}))} · ${esc(t.source)}${t.bank ? ' · ' + esc(t.bank) : ''}${t.account ? ' (' + esc(t.account) + ')' : ''}${t.ref_no ? ' · ref ' + esc(t.ref_no) : ''}${t.withdrawn_by ? ' · by ' + esc(t.withdrawn_by) : ''}${t.slip_path ? ` · <a href="${imgUrl(t.slip_path)}" target="_blank" rel="noopener">slip</a>` : ''}</span><b>${pcPeso(t.amount)}</b></div>`).join('') : '<div class="pc-empty">No top-ups yet.</div>'}</div>
@@ -5245,11 +5251,11 @@ function tabBody(){
         <label>Fund<input id="ps-fund" inputmode="decimal" value="${esc(b.fund)}"></label><label>Alert at<input id="ps-alert" inputmode="decimal" value="${esc(b.alert_at)}"></label>
         <label>Warn above (per row)<input id="ps-warn" inputmode="decimal" value="${esc(b.warn_release)}"></label><label>Start date<input id="ps-start" type="date" value="${esc(b.start_date)}"></label></div>
         <div class="pc-acts"><button class="pc-btn alt sm" id="ps-save">Save settings</button></div><div class="pc-msg" id="ps-smsg"></div></div>
-      <div class="pc-card" style="margin-top:14px"><h3>🔑 Personnel PIN</h3><div style="font-size:12.5px;color:#4a5468;margin-bottom:10px">Set the PIN a lineman or collector types in Spawn Jobs → 💰 Petty cash. It's the same PIN they use in other Spawn apps.</div>
+      <div class="pc-card" style="margin-top:14px"><h3>🔑 Personnel PIN</h3><div style="font-size:12.5px;color:#4a5468;margin-bottom:10px">Set the PIN a lineman, field staff or collector types in Spawn Jobs → 💰 Petty cash. It's the same PIN they use in other Spawn apps.</div>
         <div class="pc-f"><label>Person<select id="pp-name"><option value="">—</option>${(d.people || []).filter(p => p.kind === 'staff' || p.kind === 'collector').map(p => `<option>${esc(p.name)}</option>`).join('')}</select></label>
         <label>New PIN<input id="pp-pin" inputmode="numeric" maxlength="6" placeholder="4–6 digits" autocomplete="off"></label></div>
         <div class="pc-acts"><button class="pc-btn alt sm" id="pp-save">Set PIN</button></div><div class="pc-msg" id="pp-msg"></div></div>` : ''}
-      ${isSteph() ? officePinsHtml() : ''}${!d.is_owner && !isSteph() ? '<div class="pc-card"><div class="pc-empty">Settings are for Sir Wendell.</div></div>' : ''}</div></div>`; }
+      ${isSteph() ? officePinsHtml() : ''}${canAdmin() ? testCardHtml() : ''}${!d.is_owner && !isSteph() ? '<div class="pc-card"><div class="pc-empty">Settings are for Sir Wendell.</div></div>' : ''}</div></div>`; }
   return '';
 }
 /* ---------- Fund setup (first time) + withdrawal details, remembered on this device ---------- */
@@ -5296,17 +5302,20 @@ function setupHtml(){
       <div class="pc-ht"><small>Spawn petty cash</small><div class="big" style="font-size:36px">Let's set up the fund</div>
       <div class="sub">Before anyone can release or record petty cash, record where the fund money came from.</div></div><div></div></div></div>
     <nav class="pc-nav"><button id="pc-home" class="home">🏠 Home</button><span class="sp"></span><button id="pc-reload" title="Reload">↻</button></nav>
-    <div class="pc-two eq"><div class="pc-card"><h3>💼 Opening fund</h3>
+    ${testBanner()}
+    <div class="pc-two eq"><div class="pc-card"><h3>💼 Opening fund${P.d.box.test_mode ? ' <small>— test fund (practice)</small>' : ''}</h3>
       ${can ? `${wdFields('fo', { amount:P.d.box.fund || 50000 })}
         <div class="pc-acts"><button class="pc-btn teal" id="fo-save">Start petty cash</button></div><div class="pc-msg" id="fo-msg"></div>`
         : `<div class="pc-note">Sir Wendell needs to set up the fund first (where the money came from). Petty cash opens as soon as that's done.</div>`}</div>
     <div class="pc-card"><h3>What happens next</h3><div class="pc-how">
       <div style="--c:#025AC6"><span>The fund goes into the petty cash box, held by the office.</span></div>
-      <div style="--c:#028867"><span>Linemen ask the office for cash; the office records it (<b>Release cash</b>). It goes on the lineman's account.</span></div>
-      <div style="--c:#C01176"><span>The lineman photographs each receipt in <b>Spawn Jobs</b>, then hands the receipts and change to the office the same day.</span></div>
-      <div style="--c:#FFB725"><span>When the box runs low, Sir Wendell approves a <b>top-up</b>, recording the withdrawal the same way.</span></div></div></div></div>`;
+      <div style="--c:#028867"><span>Anyone who needs cash (linemen, field personnel, other staff) asks the office; the office records it (<b>Release cash</b>). It goes on that person's account.</span></div>
+      <div style="--c:#C01176"><span>They photograph each receipt in <b>Spawn Jobs</b>, then hand the receipts and change to the office the same day.</span></div>
+      <div style="--c:#FFB725"><span>When the box runs low, Sir Wendell approves a <b>top-up</b>, recording the withdrawal the same way.</span></div></div>
+      ${can && !P.d.box.test_mode ? '<div class="pc-note">Want to try everything first? <button class="pc-btn gold sm" id="pt-on" style="margin-left:6px">🧪 Turn on test mode</button></div>' : ''}</div></div>`;
 }
 function wireSetup(){
+  wireTest();
   const hm = $('pc-home'); if (hm) hm.onclick = () => window.dashOpen();
   const rl = $('pc-reload'); if (rl) rl.onclick = load;
   wdWire('fo');
@@ -5322,6 +5331,28 @@ function wireSetup(){
 }
 
 /* ---------- Office PINs (Steph account only; server checks too) ---------- */
+const canAdmin = () => !!(P.d && (P.d.is_owner || isSteph()));
+function testBanner(){
+  if (!(P.d && P.d.box && P.d.box.test_mode)) return '';
+  return `<div class="pc-test">🧪 TEST MODE <span>Practice only. Everything entered now is marked TEST and kept apart from the real petty cash.</span>
+    ${canAdmin() ? '<button class="pc-btn sm" id="pt-off" style="background:#3b2a00">Turn off test mode</button>' : ''}</div>`;
+}
+function testCardHtml(){
+  const on = !!P.d.box.test_mode;
+  return `<div class="pc-card" style="margin-top:14px"><h3>🧪 Test mode</h3>
+    <div style="font-size:12.5px;color:#4a5468;margin-bottom:10px">Try the whole flow (fund setup, releases, receipts in Spawn Jobs, end-of-day, top-up) without touching the real records. Test vouchers are numbered TEST-0001 and are hidden when test mode is off.</div>
+    <div class="pc-sw"><span class="st" style="color:${on ? '#b06b00' : 'var(--sg)'}">${on ? '🧪 Test mode is ON' : '✅ Real mode (test mode is off)'}</span>
+      <button class="pc-btn sm ${on ? '' : 'gold'}" id="pt-toggle">${on ? 'Turn off: back to real' : 'Turn on test mode'}</button>
+      ${on ? '<button class="pc-btn red sm" id="pt-clear">Clear all test data</button>' : ''}</div><div class="pc-msg" id="pt-msg"></div></div>`;
+}
+function wireTest(){
+  const set = async on => { try { await call('pc_test_set', { p_on:on }); toast(on ? 'Test mode is ON. Practice away.' : 'Back to real petty cash.', 3000); P.op = P.op; await load(); } catch (e) { toast(errMsg(e), 4000); } };
+  const off = $('pt-off'); if (off) off.onclick = () => set(false);
+  const tg = $('pt-toggle'); if (tg) tg.onclick = () => set(!P.d.box.test_mode);
+  const on = $('pt-on'); if (on) on.onclick = () => set(true);
+  const cl = $('pt-clear'); if (cl) cl.onclick = async () => { if (!confirm('Delete ALL test data (TEST vouchers, test receipts, test fund)? Real records are not touched.')) return;
+    try { const r = await call('pc_test_clear'); toast(`Test data cleared (${r.releases} vouchers).`, 3000); await load(); } catch (e) { $('pt-msg').textContent = errMsg(e); } };
+}
 const isSteph = () => String((P.d && P.d.me) || (S.user && S.user.name) || '').trim().toLowerCase() === 'steph';
 function officePinsHtml(){
   const list = P.op || null;
@@ -5365,11 +5396,12 @@ function render(){
   const wait = rel.filter(r => r.status !== 'closed' && r.status !== 'void'), flagged = wait.filter(r => r.status === 'flagged').length;
   const tabs = [['encode', '✍️ Encode'], ['wait', '⏳ Waiting', wait.length, flagged], ['hist', '📚 History'], ['scan', '📷 Scan QR'], ['topup', d.is_owner ? '🔁 Top-up & settings' : isSteph() ? '🔁 Top-ups & PINs' : '🔁 Top-ups']];
   $('pc-wrap').innerHTML = heroHtml() + `<nav class="pc-nav"><button id="pc-home" class="home" title="Back to the dashboard">🏠 Home</button>${tabs.map(([k, l, n, fl]) => `<button data-tab="${k}" class="${P.tab === k ? 'on' : ''}">${l}${n != null ? `<span class="n ${fl ? 'red' : ''}">${n}</span>` : ''}</button>`).join('')}
-      <span class="sp"></span><button id="pc-reload" title="Reload">↻</button></nav>` + tabBody();
+      <span class="sp"></span><button id="pc-reload" title="Reload">↻</button></nav>` + testBanner() + tabBody();
   P.flash = false;
   wire();
   if (P.tab === 'encode') { wireGrid(); }
   if (P.tab === 'topup') wireOfficePins();
+  wireTest();
   setTimeout(() => { P.fresh = {}; }, 4000);
 }
 
