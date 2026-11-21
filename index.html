@@ -1178,6 +1178,9 @@ async function pinKey(k){
   }
 }
 const SESS = 'sf-sess';
+/* One-time sign-out so every device sees the new login (bump LOGIN_V to force it again). */
+const LOGIN_V = '2';
+try { if (localStorage.getItem('sf-login-v') !== LOGIN_V) { localStorage.removeItem(SESS); sessionStorage.removeItem(SESS); localStorage.setItem('sf-login-v', LOGIN_V); } } catch (e) {}
 function saveSess(){ try { if (S.user && S.pin) { if (!S.loginAt) S.loginAt = Date.now(); localStorage.setItem(SESS, JSON.stringify({ n:S.name, p:S.pin, t:S.loginAt })); } } catch (e) {} }
 function clearSess(){ S.loginAt = null; try { localStorage.removeItem(SESS); sessionStorage.removeItem(SESS); } catch (e) {} }
 function resumeSess(){
