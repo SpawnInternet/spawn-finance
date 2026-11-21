@@ -951,13 +951,16 @@ async function rpc(fn, args = {}){
 }
 
 /* ---------- views ---------- */
+/* Petty cash first: every other screen is hidden (not deleted). Set to false to bring them back. */
+const PETTY_ONLY = true;
 function show(v){
-  ['pin','home','book','exp','match','gcheck','note','books'].forEach(x => $('v-' + x).classList.toggle('hide', x !== v));
+  ['pin','home','book','exp','match','gcheck','note','books','petty'].forEach(x => $('v-' + x).classList.toggle('hide', x !== v));
   $('btn-home').classList.toggle('hide', !['book','exp','match','gcheck','books'].includes(v) && !(v === 'home' && NB.layout === 'note') && !(v === 'note' && NB.layout === 'tiles'));
   $('btn-user').classList.toggle('hide', v === 'pin');
-  $('btn-books').classList.toggle('hide', v === 'pin' || v === 'books');
-  $('laysw').classList.toggle('hide', v === 'pin');
-  $('bar-sub').textContent = v === 'books' ? 'Books · accounting' : v === 'book' ? 'Book' : v === 'exp' ? 'Expenses' : v === 'match' ? 'Match names' : v === 'gcheck' ? 'GCash & bank check' : v === 'note' ? (S.user ? S.user.name + ' · logbook' + (S.loginAt ? ' · until ' + signedUntil() : '') : 'Logbook') : 'Cash book';
+  $('btn-books').classList.toggle('hide', PETTY_ONLY || v === 'pin' || v === 'books');
+  $('laysw').classList.toggle('hide', PETTY_ONLY || v === 'pin');
+  if (PETTY_ONLY) $('btn-home').classList.add('hide');
+  $('bar-sub').textContent = v === 'petty' ? 'Petty cash' : v === 'books' ? 'Books · accounting' : v === 'book' ? 'Book' : v === 'exp' ? 'Expenses' : v === 'match' ? 'Match names' : v === 'gcheck' ? 'GCash & bank check' : v === 'note' ? (S.user ? S.user.name + ' · logbook' + (S.loginAt ? ' · until ' + signedUntil() : '') : 'Logbook') : 'Cash book';
   window.scrollTo(0, 0);
 }
 
@@ -3152,7 +3155,7 @@ if ('serviceWorker' in navigator) {
 /* ===================== NOTEBOOK v2.0 ===================== */
 const NB = { tab:'book', layout:(() => { try { return localStorage.getItem('sf-layout') || 'note'; } catch (e) { return 'note'; } })() };
 const NB_TABS = [['book','📒','Logbook','#2d3748'],['col','💰','Collect','#0f9f8a'],['g','📱','GCash','#025ac6'],['dep','🏦','Deposit','#2b7be8'],['parts','📦','Parts','#1e7a6a'],['appr','✅','Approve','#16a34a'],['more','⋯','More','#7c4dbc']];
-function nbEnter(){ if (NB.layout === 'tiles') { show('home'); renderHome(); } else { show('note'); renderNote(); } nbLaySw(); }
+function nbEnter(){ if (PETTY_ONLY) { pettyOpen(); return; } if (NB.layout === 'tiles') { show('home'); renderHome(); } else { show('note'); renderNote(); } nbLaySw(); }
 function nbLaySw(){ $('laysw').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.lay === NB.layout)); }
 $('laysw').addEventListener('click', e => {
   const b = e.target.closest('[data-lay]'); if (!b || !S.user) return;
@@ -4428,6 +4431,363 @@ function rAccounts(){const own=BK.boot.is_owner;
 window.booksOpen=open;
 })();
 </script>
+
+<!-- ==================== PETTY CASH (office) ==================== -->
+<style>
+#v-petty{padding:14px 14px 90px;max-width:1180px;margin:0 auto}
+.pc-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;align-items:start}
+.pc-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.pc-box .top{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.pc-box .top small{display:block;font:700 12px Inter,system-ui,sans-serif;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.pc-box .top b{font:900 34px Inter,system-ui,sans-serif;color:var(--ink)}
+.pc-box .top span{color:var(--muted);font-weight:600}
+.pc-box.al{border-color:#f3b3b3;background:#fffafa}
+.pc-box.al .top b{color:var(--red)}
+.pc-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--line);margin:12px 0 8px}
+.pc-bar i{display:block;height:100%}
+.pc-leg{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink-2)}
+.pc-leg b{font-variant-numeric:tabular-nums}
+.pc-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.pc-alert{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--red-l);color:#8f1f1f;font-weight:700;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pc-note{margin-top:10px;padding:8px 11px;border-radius:9px;background:var(--blue-l);color:#1f3f86;font-size:13px}
+.pc-acts{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.pc-btn{border:0;border-radius:10px;padding:10px 14px;font:800 14px Inter,system-ui,sans-serif;cursor:pointer;background:var(--blue);color:#fff}
+.pc-btn.alt{background:var(--blue-l);color:#1f3f86}
+.pc-btn.teal{background:var(--teal)} .pc-btn.gold{background:var(--gold);color:#3b2a00} .pc-btn.red{background:var(--red-l);color:var(--red)}
+.pc-btn.on{outline:3px solid #9db7ef}
+.pc-btn:disabled{opacity:.45;cursor:not-allowed}
+.pc-btn.sm{padding:6px 10px;font-size:13px}
+.pc-panel{border:1px solid #c9d7f3;background:#f7f9ff}
+.pc-panel h3,.pc-card h3{margin:0 0 10px;font:800 15px Inter,system-ui,sans-serif;color:var(--ink);display:flex;align-items:center;gap:8px}
+.pc-f{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.pc-f label{display:flex;flex-direction:column;gap:4px;font:700 12px Inter,system-ui,sans-serif;color:var(--ink-2)}
+.pc-f input,.pc-f select,.pc-f textarea{border:1px solid var(--line);border-radius:9px;padding:9px 10px;font:500 15px Inter,system-ui,sans-serif;color:var(--ink);background:#fff;width:100%;box-sizing:border-box}
+.pc-f .wide{grid-column:1/-1}
+.pc-msg{color:var(--red);font-weight:700;font-size:13px;min-height:18px;margin-top:6px}
+.pc-warn{color:#8a5a00;font-size:12.5px;font-weight:600}
+.pc-chips{display:flex;gap:6px;flex-wrap:wrap}
+.pc-chips button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 10px;font:700 12.5px Inter,system-ui,sans-serif;color:var(--ink-2);cursor:pointer}
+.pc-chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pc-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.pc-tabs button{border:0;background:transparent;padding:7px 12px;border-radius:9px;font:800 13.5px Inter,system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.pc-tabs button.on{background:var(--ink);color:#fff}
+.pc-tabs .n{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--red);color:#fff;font-size:11px}
+.pc-row{border:1px solid var(--line);border-radius:11px;margin-bottom:8px;background:#fff}
+.pc-row>.h{display:grid;grid-template-columns:86px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 12px;cursor:pointer;border:0;background:none;width:100%;text-align:left;font:inherit;color:inherit}
+.pc-row .pcv{font:800 12px ui-monospace,Menlo,monospace;color:var(--blue)}
+.pc-row .pcv small{display:block;font:600 11.5px Inter,system-ui,sans-serif;color:var(--muted)}
+.pc-row .who b{display:block;font-size:14.5px}
+.pc-row .who span{display:block;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-row .am{text-align:right;font-variant-numeric:tabular-nums}
+.pc-row .am b{display:block;font-size:15px}
+.pc-st{display:inline-block;font:800 11px Inter,system-ui,sans-serif;padding:2px 8px;border-radius:999px;margin-top:3px}
+.pc-st.open{background:var(--blue-l);color:#1f3f86}.pc-st.uploaded{background:var(--teal-l);color:#14695f}.pc-st.flagged{background:var(--gold-l);color:#7a4b00}
+.pc-st.closed{background:#eef1f5;color:var(--ink-2)}.pc-st.void{background:var(--red-l);color:var(--red)}
+.pc-flag{color:#7a4b00;font-weight:700}
+.pc-det{border-top:1px dashed var(--line);padding:10px 12px 12px}
+.pc-sum{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);margin-bottom:8px}
+.pc-sum b{font-variant-numeric:tabular-nums;color:var(--ink)}
+.pc-exp{display:grid;grid-template-columns:52px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #f0f2f6;font-size:13.5px}
+.pc-exp img,.pc-exp .noimg{width:52px;height:52px;border-radius:8px;object-fit:cover;background:#f2f4f8;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);text-align:center}
+.pc-exp small{display:block;color:var(--muted);font-size:12px}
+.pc-exp .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px}
+.pc-close{margin-top:10px;padding:10px;border-radius:10px;background:#f6f8fb}
+.pc-mini{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px;margin-top:8px}
+.pc-scan video{width:100%;max-height:260px;border-radius:10px;background:#000;object-fit:cover}
+.pc-top{font-size:13px;border-bottom:1px solid #f0f2f6;padding:7px 0;display:flex;gap:10px}
+.pc-top b{margin-left:auto;font-variant-numeric:tabular-nums}
+.pc-empty{color:var(--muted);font-size:13.5px;padding:8px 2px}
+@media (max-width:900px){.pc-grid{grid-template-columns:1fr}#v-petty{padding:10px 10px 90px}.pc-box .top b{font-size:28px}}
+</style>
+<section id="v-petty" class="hide"><div id="pc-wrap"><div class="pc-card">Loading petty cash…</div></div></section>
+<script>
+(function(){
+'use strict';
+const CATS = ['Gas','Meals / snacks','Materials','Office supplies','Transport / fare','Repairs','Other'];
+const P = { d:null, tab:'wait', panel:null, open:{}, form:{}, scan:null, busy:false };
+const pcPeso = n => (Number(n) < 0 ? '−' : '') + '₱' + Math.abs(Number(n || 0)).toLocaleString('en-PH', {maximumFractionDigits:2});
+const num = v => { const n = parseFloat(String(v ?? '').replace(/[,₱\s]/g, '')); return isFinite(n) ? n : 0; };
+const imgUrl = p => `${SB}/storage/v1/object/public/pc-receipts/${p}`;
+const guessCat = t => { t = (t || '').toLowerCase();
+  if (/gas|fuel|diesel|oil/.test(t)) return 'Gas'; if (/snack|lunch|dinner|meal|food|kape|coffee|water/.test(t)) return 'Meals / snacks';
+  if (/fiber|connector|bolt|screw|tape|drill|blade|cable|clamp|splitter|router|onu|wire|pole/.test(t)) return 'Materials';
+  if (/wrapper|paper|pen|marker|ink|bond/.test(t)) return 'Office supplies'; if (/fare|tricycle|habal|bus|ticket|toll|parking/.test(t)) return 'Transport / fare';
+  if (/repair|vulcan|tire|change oil|parts/.test(t)) return 'Repairs'; return ''; };
+const ERRS = { not_enough_cash:'Not enough cash in the petty cash box for that amount.', receipt_or_reason_required:'Add a receipt photo, or type why there is no receipt.',
+  note_required_for_difference:'The amounts do not add up. Type a note explaining the difference.', owner_only:'Only Sir Wendell can do this.',
+  nothing_to_replenish:'No confirmed receipts to top up yet.', code_not_found:'No one has that code. Check the 6 letters.', release_closed:'That release is already confirmed.',
+  already_replenished:'Already included in a top-up; it cannot be changed.', person_required:'Pick who receives the cash.', amount_must_be_positive:'Enter an amount.',
+  what_required:'Type what it was for.', reason_required:'Type a reason.', future_date:'That date is in the future.', bad_settings:'Check the numbers (alert must be below the fund).' };
+const errMsg = e => ERRS[(e && e.message) || ''] || (e && e.message) || 'Something went wrong.';
+async function call(fn, args){
+  try { return await rpc(fn, Object.assign({ p_pin:S.pin }, args || {})); }
+  catch (e) { const m = String(e.message || ''); const k = Object.keys(ERRS).find(x => m.includes(x)); if (k) throw new Error(k); throw e; }
+}
+
+/* shrink a photo to ~1280px JPEG and upload it to the receipts folder */
+async function shrink(file){
+  const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('Could not read that photo.')); i.src = URL.createObjectURL(file); });
+  const s = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.72));
+}
+async function upload(file){
+  const blob = await shrink(file), path = `${todayPH().slice(0, 7)}/${uuid()}.jpg`;
+  let r; try { r = await fetch(`${SB}/storage/v1/object/pc-receipts/${path}`, { method:'POST', headers:{ apikey:KEY, 'Content-Type':'image/jpeg' }, body:blob }); }
+  catch (e) { throw new Error('No signal. The photo was not sent; try again.'); }
+  if (!r.ok) throw new Error('Photo upload failed (' + r.status + '). Try again.');
+  return path;
+}
+
+async function load(){
+  try { P.d = await call('pc_boot'); } catch (e) { $('pc-wrap').innerHTML = `<div class="pc-card">${esc(errMsg(e))} <button class="pc-btn sm" id="pc-retry">Retry</button></div>`; $('pc-retry').onclick = load; return; }
+  render();
+}
+function open(){ show('petty'); $('bar-sub').textContent = 'Petty cash' + (S.user ? ' · ' + S.user.name : ''); load(); }
+
+function boxHtml(){
+  const b = P.d.box, f = Number(b.fund) || 1, w = x => Math.max(0, Math.min(100, Number(x) / f * 100)).toFixed(2) + '%';
+  const notStarted = b.start_date && P.d.today < b.start_date;
+  return `<div class="pc-card pc-box ${b.alert ? 'al' : ''}">
+    <div class="top"><div><small>Cash in the petty cash box</small><b>${pcPeso(b.cash)}</b></div><span>of the ${pcPeso(b.fund)} fund · alert at ${pcPeso(b.alert_at)}</span></div>
+    <div class="pc-bar" title="Cash in box · with personnel · receipts to top up"><i style="width:${w(b.cash)};background:var(--teal)"></i><i style="width:${w(b.pending)};background:var(--gold)"></i><i style="width:${w(b.confirmed)};background:var(--blue)"></i></div>
+    <div class="pc-leg"><span><i style="background:var(--teal)"></i>In the box <b>${pcPeso(b.cash)}</b></span>
+      <span><i style="background:var(--gold)"></i>With personnel <b>${pcPeso(b.pending)}</b> (${b.n_pending})</span>
+      <span><i style="background:var(--blue)"></i>Confirmed receipts to top up <b>${pcPeso(b.confirmed)}</b> (${b.n_confirmed})</span></div>
+    ${b.alert ? `<div class="pc-alert">⚠ Only ${pcPeso(b.cash)} left. Top up ${pcPeso(b.confirmed)} from the office drawer.${Number(b.pending) > 0 ? ` (${pcPeso(b.pending)} is still with personnel, not yet confirmed.)` : ''}
+       ${P.d.is_owner ? `<button class="pc-btn gold sm" data-p="topup">Approve top-up</button>` : '<span style="font-weight:600">Sir Wendell approves the top-up.</span>'}</div>` : ''}
+    ${notStarted ? `<div class="pc-note">Petty cash starts on <b>${esc(dLabel(b.start_date))}</b>. You can already try it; anything written now counts.</div>` : ''}
+  </div>`;
+}
+
+function panelHtml(){
+  const F = P.form, ppl = P.d.people || [];
+  if (P.panel === 'release') return `<div class="pc-card pc-panel"><h3>💸 Release cash</h3><div class="pc-f">
+      <label>Who receives it<input id="pf-person" list="pc-people" autocomplete="off" placeholder="Name" value="${esc(F.person || '')}"></label>
+      <label>Amount<input id="pf-amt" inputmode="decimal" placeholder="0" value="${esc(F.amt || '')}"></label>
+      <label>Date<input id="pf-date" type="date" max="${P.d.today}" value="${esc(F.date || P.d.today)}"></label>
+      <label class="wide">For what (job order, errand…)<input id="pf-purpose" autocomplete="off" placeholder="e.g. Gas + connectors for JO Gulayon" value="${esc(F.purpose || '')}"></label>
+    </div><div class="pc-warn" id="pf-warn"></div><datalist id="pc-people">${ppl.map(p => `<option value="${esc(p.name)}">`).join('')}</datalist>
+    <div class="pc-acts"><button class="pc-btn" id="pf-save">Release</button><button class="pc-btn alt" data-p="">Cancel</button></div><div class="pc-msg" id="pf-msg"></div></div>`;
+  if (P.panel === 'direct') return `<div class="pc-card pc-panel"><h3>🧾 Office paid it directly</h3><div class="pc-f">
+      <label>Amount<input id="pf-amt" inputmode="decimal" placeholder="0" value="${esc(F.amt || '')}"></label>
+      <label class="wide">What was bought<input id="pf-what" autocomplete="off" placeholder="e.g. Coin wrapper 2 packs" value="${esc(F.what || '')}"></label>
+      <label>Category<select id="pf-cat"><option value="">—</option>${CATS.map(c => `<option ${F.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
+      <label>Date<input id="pf-date" type="date" max="${P.d.today}" value="${esc(F.date || P.d.today)}"></label>
+      <label class="wide">Receipt photo<input id="pf-photo" type="file" accept="image/*" capture="environment"></label>
+      <label class="wide">No receipt? Type why<input id="pf-nor" autocomplete="off" placeholder="Leave empty if there is a photo" value="${esc(F.nor || '')}"></label>
+    </div><div class="pc-acts"><button class="pc-btn teal" id="pf-save">Save expense</button><button class="pc-btn alt" data-p="">Cancel</button></div><div class="pc-msg" id="pf-msg"></div></div>`;
+  if (P.panel === 'scan') return `<div class="pc-card pc-panel pc-scan"><h3>📷 Scan QR or type the code</h3>
+      <div class="pc-mini"><button class="pc-btn sm" id="ps-cam">${P.scan && P.scan.on ? 'Stop camera' : 'Open camera'}</button>
+        <input id="ps-code" maxlength="20" placeholder="6-letter code" style="border:1px solid var(--line);border-radius:9px;padding:8px 10px;font:700 15px ui-monospace,monospace;text-transform:uppercase;width:150px">
+        <button class="pc-btn alt sm" id="ps-find">Find</button><button class="pc-btn alt sm" data-p="">Close</button></div>
+      <div id="ps-vid" style="margin-top:10px;${P.scan && P.scan.on ? '' : 'display:none'}"><video id="ps-video" playsinline muted></video></div>
+      <div class="pc-msg" id="ps-msg"></div>
+      <div id="ps-res">${P.scan && P.scan.res ? scanResHtml(P.scan.res) : ''}</div></div>`;
+  if (P.panel === 'topup') { const b = P.d.box;
+    return `<div class="pc-card pc-panel"><h3>🔁 Top up the petty cash box</h3>
+      <div class="pc-sum"><span>Confirmed receipts <b>${pcPeso(b.confirmed)}</b> (${b.n_confirmed} release${b.n_confirmed == 1 ? '' : 's'})</span><span>Box after top-up <b>${pcPeso(Number(b.cash) + Number(b.confirmed))}</b></span></div>
+      <div class="pc-f"><label>Cash comes from<select id="pf-src"><option>Office drawer</option><option>PBB withdrawal</option><option>Sir Wendell</option></select></label>
+      <label class="wide">Note<input id="pf-note" autocomplete="off" placeholder="optional"></label></div>
+      <div class="pc-acts"><button class="pc-btn gold" id="pf-save" ${Number(b.confirmed) > 0 ? '' : 'disabled'}>Approve top-up of ${pcPeso(b.confirmed)}</button><button class="pc-btn alt" data-p="">Cancel</button></div><div class="pc-msg" id="pf-msg"></div></div>`; }
+  return '';
+}
+
+function expHtml(e, canDel){
+  return `<div class="pc-exp">${e.receipt_path ? `<a href="${imgUrl(e.receipt_path)}" target="_blank" rel="noopener"><img src="${imgUrl(e.receipt_path)}" alt="Receipt"></a>` : '<span class="noimg">no receipt</span>'}
+    <span>${esc(e.what)}<small>${esc(dLabel(e.date))}${e.category ? ' · ' + esc(e.category) : ''} · ${e.by_self ? 'uploaded by ' + esc(e.entered_by) : 'written by ' + esc(e.entered_by)}${e.no_receipt_reason ? ' · no receipt: ' + esc(e.no_receipt_reason) : ''}</small></span>
+    <b>${pcPeso(e.amount)}</b>${canDel ? `<button class="x" data-xe="${e.id}" title="Remove this expense" aria-label="Remove">✕</button>` : '<span></span>'}</div>`;
+}
+function detHtml(r){
+  const live = r.status !== 'closed' && r.status !== 'void', due = Number(r.amount) - Number(r.spent);
+  const f = P.form['c' + r.id] || {};
+  let h = `<div class="pc-det"><div class="pc-sum"><span>Released <b>${pcPeso(r.amount)}</b> by ${esc(r.released_by)}</span><span>Spent <b>${pcPeso(r.spent)}</b></span>
+    <span>${due >= 0 ? 'Change due' : 'Office owes'} <b>${pcPeso(Math.abs(due))}</b></span>${r.flag_reason ? `<span class="pc-flag">⚠ ${esc(r.flag_reason)}</span>` : ''}</div>`;
+  h += (r.expenses || []).length ? r.expenses.map(e => expHtml(e, live)).join('') : '<div class="pc-empty">No expenses uploaded yet.</div>';
+  if (live) {
+    h += `<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--blue)">＋ Add an expense for ${esc(r.person)}</summary>
+      <div class="pc-f" style="margin-top:8px"><label>Amount<input data-ea="${r.id}" inputmode="decimal"></label><label class="wide">What<input data-ew="${r.id}" autocomplete="off"></label>
+      <label class="wide">Receipt photo<input data-ef="${r.id}" type="file" accept="image/*" capture="environment"></label><label class="wide">No receipt? Why<input data-en="${r.id}" autocomplete="off"></label></div>
+      <div class="pc-mini"><button class="pc-btn sm" data-eadd="${r.id}">Add expense</button></div></details>`;
+    const chg = f.chg ?? (due > 0 ? due : due < 0 ? due : 0);
+    h += `<div class="pc-close"><b style="font-size:13.5px">Confirm: physical receipts and change are back</b>
+      <div class="pc-mini"><label>Change returned ₱ <input data-cc="${r.id}" inputmode="decimal" value="${esc(chg)}" style="width:110px;border:1px solid var(--line);border-radius:8px;padding:6px 8px"></label>
+      <label><input type="checkbox" data-cr="${r.id}" ${f.rec ? 'checked' : ''}> Physical receipts received</label></div>
+      <div class="pc-mini"><input data-cn="${r.id}" placeholder="Note (needed if amounts don't add up)" value="${esc(f.note || '')}" style="flex:1;min-width:200px;border:1px solid var(--line);border-radius:8px;padding:6px 8px"></div>
+      <div class="pc-mini"><button class="pc-btn teal sm" data-close="${r.id}">✅ Confirm and close</button>
+      <button class="pc-btn red sm" data-void="${r.id}">Void release</button></div><div class="pc-msg" id="pm-${r.id}"></div>
+      ${due < 0 ? `<div class="pc-warn">Spent more than released: a negative change means the office pays ${esc(r.person)} the extra ${pcPeso(-due)} from the box.</div>` : ''}</div>`;
+  } else if (r.status === 'closed') {
+    h += `<div class="pc-mini">✅ Confirmed by ${esc(r.closed_by || '')}${r.closed_at ? ' · ' + new Date(r.closed_at).toLocaleString('en-PH', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : ''} · change returned ${pcPeso(r.change_returned)} · receipts ${r.receipts_ok ? 'received' : '<b style="color:var(--red)">not received</b>'}${r.close_note ? ' · ' + esc(r.close_note) : ''}
+      ${r.replenish_id ? ' · topped up' : `<button class="pc-btn alt sm" data-reopen="${r.id}">Reopen</button>`}</div>`;
+  } else h += `<div class="pc-mini">Voided by ${esc(r.voided_by || '')}: ${esc(r.void_reason || '')}</div>`;
+  return h + '</div>';
+}
+function rowHtml(r){
+  const isOpen = !!P.open[r.id];
+  return `<div class="pc-row"><button class="h" data-row="${r.id}" aria-expanded="${isOpen}"><span class="pcv">${esc(r.pcv_no)}<small>${esc(dLabel(r.release_date))}</small></span>
+    <span class="who"><b>${esc(r.person)}${r.direct ? ' · office paid' : ''}</b><span>${esc(r.purpose || '')}${r.flag_reason ? ' · <span class="pc-flag">' + esc(r.flag_reason) + '</span>' : ''}</span></span>
+    <span class="am"><b>${pcPeso(r.amount)}</b><span class="pc-st ${r.status}">${({open:'Released', uploaded:'Receipts uploaded', flagged:'Check', closed:'Confirmed', void:'Void'})[r.status] || r.status}</span></span></button>
+    ${isOpen ? detHtml(r) : ''}</div>`;
+}
+function scanResHtml(res){
+  if (!res.releases.length) return `<div class="pc-empty">${esc(res.person)} has nothing waiting to confirm.</div>`;
+  res.releases.forEach(r => { P.open[r.id] = true; });
+  return `<h3 style="margin-top:10px">${esc(res.person)} · ${res.releases.length} to confirm</h3>` + res.releases.map(rowHtml).join('');
+}
+
+function render(){
+  const d = P.d, rel = d.releases || [];
+  const wait = rel.filter(r => r.status !== 'closed' && r.status !== 'void'), closed = rel.filter(r => r.status === 'closed'), voids = rel.filter(r => r.status === 'void');
+  const flagged = wait.filter(r => r.status === 'flagged').length;
+  const list = P.tab === 'wait' ? wait : P.tab === 'closed' ? closed : voids;
+  const tabs = [['wait', 'Waiting', wait.length, flagged], ['closed', 'Confirmed', closed.length], ['void', 'Voided', voids.length]];
+  const tops = d.replenish || [];
+  $('pc-wrap').innerHTML = `<div class="pc-grid"><div>
+      ${boxHtml()}
+      <div class="pc-acts"><button class="pc-btn ${P.panel === 'release' ? 'on' : ''}" data-p="release">💸 Release cash</button>
+        <button class="pc-btn teal ${P.panel === 'direct' ? 'on' : ''}" data-p="direct">🧾 Office paid directly</button>
+        <button class="pc-btn alt ${P.panel === 'scan' ? 'on' : ''}" data-p="scan">📷 Scan QR / code</button>
+        <button class="pc-btn alt" id="pc-reload" title="Reload">↻</button></div>
+      ${panelHtml()}
+      <div class="pc-card" style="margin-top:12px"><div class="pc-tabs">${tabs.map(([k, l, n, fl]) => `<button data-tab="${k}" class="${P.tab === k ? 'on' : ''}">${l} · ${n}${fl ? `<span class="n">${fl}</span>` : ''}</button>`).join('')}</div>
+        ${list.length ? list.map(rowHtml).join('') : `<div class="pc-empty">${P.tab === 'wait' ? 'No cash out with personnel.' : 'Nothing here yet.'}</div>`}</div>
+    </div><div>
+      <div class="pc-card"><h3>How it works</h3><div style="font-size:13px;color:var(--ink-2);line-height:1.6">
+        1. <b>Release cash</b> to the lineman or staff; it goes on their account.<br>2. They upload each receipt in <b>Spawn Jobs</b> (💰 Petty cash).<br>
+        3. Next day they bring the receipts and change; <b>scan their QR</b> and confirm.<br>4. When the box reaches ${pcPeso(d.box.alert_at)}, Sir Wendell approves the <b>top-up</b>.</div>
+        <div class="pc-note">Linemen upload receipts in <b>Spawn Jobs</b> → 💰 Petty cash<br><span style="font-size:12px">spawninternet.github.io/VendoMonitor/lineman.html</span></div></div>
+      <div class="pc-card" style="margin-top:12px"><h3>Top-ups</h3>${tops.length ? tops.map(t => `<div class="pc-top"><span>${esc(new Date(t.approved_at).toLocaleDateString('en-PH', {month:'short', day:'numeric'}))} · ${esc(t.source)} · ${esc(t.approved_by)}</span><b>${pcPeso(t.amount)}</b></div>`).join('') : '<div class="pc-empty">No top-ups yet.</div>'}
+        ${d.is_owner ? `<div class="pc-acts"><button class="pc-btn gold sm" data-p="topup">Top up now</button></div>` : ''}</div>
+      ${d.is_owner ? `<div class="pc-card" style="margin-top:12px"><h3>Settings</h3><div class="pc-f">
+        <label>Fund<input id="ps-fund" inputmode="decimal" value="${esc(d.box.fund)}"></label><label>Alert at<input id="ps-alert" inputmode="decimal" value="${esc(d.box.alert_at)}"></label>
+        <label>Warn above (per release)<input id="ps-warn" inputmode="decimal" value="${esc(d.box.warn_release)}"></label><label>Start date<input id="ps-start" type="date" value="${esc(d.box.start_date)}"></label></div>
+        <div class="pc-acts"><button class="pc-btn alt sm" id="ps-save">Save settings</button></div><div class="pc-msg" id="ps-smsg"></div></div>` : ''}
+    </div></div>`;
+  wire();
+}
+
+function wire(){
+  const W = $('pc-wrap');
+  W.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { stopCam(); P.panel = b.dataset.p === P.panel ? null : (b.dataset.p || null); P.form = {}; if (P.panel !== 'scan') P.scan = null; render(); if (P.panel) { const f = W.querySelector('.pc-panel input'); if (f) f.focus(); } });
+  W.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { P.tab = b.dataset.tab; render(); });
+  W.querySelectorAll('[data-row]').forEach(b => b.onclick = () => { const id = b.dataset.row; P.open[id] = !P.open[id]; render(); });
+  const rl = $('pc-reload'); if (rl) rl.onclick = load;
+  const amt = $('pf-amt'), warn = $('pf-warn');
+  if (amt && warn) amt.oninput = () => { const a = num(amt.value), b = P.d.box; warn.textContent = a > Number(b.cash) ? `Only ${pcPeso(b.cash)} in the box.` : a > Number(b.warn_release) ? `That's more than ${pcPeso(b.warn_release)}. Make sure it's really petty cash.` : ''; };
+  const what = $('pf-what'), cat = $('pf-cat');
+  if (what && cat) what.oninput = () => { if (!cat.dataset.touched) { const g = guessCat(what.value); if (g) cat.value = g; } };
+  if (cat) cat.onchange = () => { cat.dataset.touched = '1'; };
+  const save = $('pf-save'); if (save) save.onclick = () => savePanel(save);
+  // scan
+  const cam = $('ps-cam'); if (cam) cam.onclick = () => (P.scan && P.scan.on) ? (stopCam(), render()) : startCam();
+  const fnd = $('ps-find'); if (fnd) fnd.onclick = () => findCode($('ps-code').value);
+  const pc = $('ps-code'); if (pc) pc.onkeydown = e => { if (e.key === 'Enter') findCode(pc.value); };
+  // release details
+  W.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closeRel(+b.dataset.close, b));
+  W.querySelectorAll('[data-void]').forEach(b => b.onclick = () => voidRel(+b.dataset.void, b));
+  W.querySelectorAll('[data-reopen]').forEach(b => b.onclick = () => act('pc_reopen', { p_release_id:+b.dataset.reopen }, 'Reopened.'));
+  W.querySelectorAll('[data-xe]').forEach(b => b.onclick = () => { if (confirm('Remove this expense?')) act('pc_exp_void_office', { p_id:+b.dataset.xe }, 'Expense removed.'); });
+  W.querySelectorAll('[data-eadd]').forEach(b => b.onclick = () => addExp(+b.dataset.eadd, b));
+  W.querySelectorAll('[data-cc],[data-cr],[data-cn]').forEach(i => i.oninput = i.onchange = () => { const id = i.dataset.cc || i.dataset.cr || i.dataset.cn; const f = P.form['c' + id] = P.form['c' + id] || {};
+    if (i.dataset.cc) f.chg = i.value; if (i.dataset.cr) f.rec = i.checked; if (i.dataset.cn) f.note = i.value; });
+  const ss = $('ps-save'); if (ss) ss.onclick = async () => { try { await call('pc_config_set', { p_fund:num($('ps-fund').value), p_alert:num($('ps-alert').value), p_warn:num($('ps-warn').value), p_start:$('ps-start').value || null }); toast('Settings saved.'); load(); } catch (e) { $('ps-smsg').textContent = errMsg(e); } };
+}
+
+async function act(fn, args, ok){
+  try { await call(fn, args); toast(ok); await reloadKeepScan(); } catch (e) { toast(errMsg(e), 4000); }
+}
+async function reloadKeepScan(){
+  if (P.scan && P.scan.res) { try { P.scan.res = await call('pc_by_code', { p_code:P.scan.res.code }); } catch (e) { P.scan.res = null; } }
+  await load();
+}
+async function savePanel(btn){
+  const msg = $('pf-msg'), F = P.form; msg.textContent = '';
+  if (P.busy) return; P.busy = true; btn.disabled = true;
+  try {
+    if (P.panel === 'release') {
+      const amt = num($('pf-amt').value), person = $('pf-person').value.trim();
+      if (!person) throw new Error('person_required'); if (!(amt > 0)) throw new Error('amount_must_be_positive');
+      F.cid = F.cid || uuid();
+      const r = await call('pc_release_add', { p_client_id:F.cid, p_person:person, p_amount:amt, p_purpose:$('pf-purpose').value || null, p_date:$('pf-date').value || null });
+      toast(`PCV-${String(r.pcv).padStart(4, '0')} · ${pcPeso(amt)} to ${r.person || person}`, 3500);
+    } else if (P.panel === 'direct') {
+      const amt = num($('pf-amt').value), what = $('pf-what').value.trim(), file = $('pf-photo').files[0], nor = $('pf-nor').value.trim();
+      if (!(amt > 0)) throw new Error('amount_must_be_positive'); if (!what) throw new Error('what_required'); if (!file && !nor) throw new Error('receipt_or_reason_required');
+      btn.textContent = file ? 'Sending photo…' : 'Saving…';
+      F.path = F.path || (file ? await upload(file) : null); F.cid = F.cid || uuid();
+      await call('pc_direct_add', { p_client_id:F.cid, p_amount:amt, p_what:what, p_category:$('pf-cat').value || null, p_receipt_path:F.path, p_no_receipt:nor || null, p_date:$('pf-date').value || null });
+      toast('Expense saved.');
+    } else if (P.panel === 'topup') {
+      F.cid = F.cid || uuid();
+      const r = await call('pc_replenish_add', { p_client_id:F.cid, p_source:$('pf-src').value, p_note:$('pf-note').value || null });
+      toast(`Top-up of ${pcPeso(r.amount || 0)} approved. Put the cash in the petty cash box.`, 4500);
+    }
+    P.panel = null; P.form = {}; await load();
+  } catch (e) { msg.textContent = errMsg(e); btn.disabled = false; btn.textContent = btn.textContent.replace(/Sending photo…|Saving…/, 'Try again'); }
+  P.busy = false;
+}
+async function addExp(id, btn){
+  const W = $('pc-wrap'), q = s => W.querySelector(s), m = $('pm-' + id);
+  const amt = num(q(`[data-ea="${id}"]`).value), what = q(`[data-ew="${id}"]`).value.trim(), file = q(`[data-ef="${id}"]`).files[0], nor = q(`[data-en="${id}"]`).value.trim();
+  try {
+    if (!(amt > 0)) throw new Error('amount_must_be_positive'); if (!what) throw new Error('what_required'); if (!file && !nor) throw new Error('receipt_or_reason_required');
+    btn.disabled = true; btn.textContent = file ? 'Sending photo…' : 'Saving…';
+    const path = file ? await upload(file) : null;
+    await call('pc_exp_add_office', { p_client_id:uuid(), p_release_id:id, p_amount:amt, p_what:what, p_category:guessCat(what) || null, p_receipt_path:path, p_no_receipt:nor || null });
+    toast('Expense added.'); await reloadKeepScan();
+  } catch (e) { if (m) m.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Add expense'; }
+}
+async function closeRel(id, btn){
+  const f = P.form['c' + id] || {}, W = $('pc-wrap'), m = $('pm-' + id);
+  const chg = num(W.querySelector(`[data-cc="${id}"]`).value), rec = W.querySelector(`[data-cr="${id}"]`).checked, note = W.querySelector(`[data-cn="${id}"]`).value.trim();
+  if (!rec && !note) { m.textContent = 'Tick "Physical receipts received", or type a note why not.'; return; }
+  try { btn.disabled = true; const r = await call('pc_close', { p_release_id:id, p_change_returned:chg, p_receipts_ok:rec, p_note:note || null });
+    toast(Number(r.short) ? `Confirmed. Difference ${pcPeso(r.short)} noted.` : 'Confirmed and closed.'); delete P.form['c' + id]; await reloadKeepScan(); }
+  catch (e) { m.textContent = errMsg(e); btn.disabled = false; }
+}
+async function voidRel(id, btn){
+  const reason = prompt('Why void this release? (wrong amount, cancelled…)'); if (!reason) return;
+  act('pc_release_void', { p_release_id:id, p_reason:reason }, 'Release voided.');
+}
+
+/* ---------- QR scan: BarcodeDetector when the browser has it, otherwise jsQR ---------- */
+let jsqrP = null;
+function loadJsQR(){ return jsqrP || (jsqrP = new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'; s.onload = () => ok(window.jsQR); s.onerror = () => no(new Error('Could not load the scanner. Type the code instead.')); document.head.appendChild(s); })); }
+async function startCam(){
+  const msg = $('ps-msg'); msg.textContent = '';
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
+    P.scan = Object.assign(P.scan || {}, { on:true, stream }); render();
+    const v = $('ps-video'); v.srcObject = stream; await v.play();
+    let det = null; if ('BarcodeDetector' in window) { try { det = new BarcodeDetector({ formats:['qr_code'] }); } catch (e) { det = null; } }
+    const jsqr = det ? null : await loadJsQR();
+    const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently:true });
+    const tick = async () => {
+      if (!P.scan || !P.scan.on) return;
+      try {
+        let txt = null;
+        if (det) { const r = await det.detect(v); if (r && r[0]) txt = r[0].rawValue; }
+        else if (v.videoWidth) { cv.width = v.videoWidth; cv.height = v.videoHeight; cx.drawImage(v, 0, 0); const im = cx.getImageData(0, 0, cv.width, cv.height); const r = jsqr(im.data, cv.width, cv.height); if (r) txt = r.data; }
+        if (txt) { stopCam(); return findCode(txt); }
+      } catch (e) {}
+      P.scan.t = setTimeout(tick, 250);
+    };
+    tick();
+  } catch (e) { stopCam(); render(); const m = $('ps-msg'); if (m) m.textContent = e.name === 'NotAllowedError' ? 'Camera not allowed. Type the code instead.' : (e.message || 'Camera not available. Type the code instead.'); }
+}
+function stopCam(){ if (P.scan) { P.scan.on = false; clearTimeout(P.scan.t); if (P.scan.stream) P.scan.stream.getTracks().forEach(t => t.stop()); P.scan.stream = null; } }
+async function findCode(code){
+  const msg = $('ps-msg'); if (msg) msg.textContent = '';
+  try { const res = await call('pc_by_code', { p_code:code }); P.scan = { on:false, res }; render(); }
+  catch (e) { P.scan = { on:false }; render(); const m = $('ps-msg'); if (m) m.textContent = errMsg(e); }
+}
+
+window.pettyOpen = open;
+})();
+</script>
+<!-- ==================== /PETTY CASH ==================== -->
 
 </body>
 </html>
